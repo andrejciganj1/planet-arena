@@ -73,3 +73,6 @@ export const PADS = [
 export const PAD = { touch: 1.2, lockout: 1 };
 // pathEvery: keep one predicted point every this many ticks for drawing.
 export const PAD_CUE = { refresh: 0.25, predict: 20, showPathWithin: 15, pathEvery: 6 };
+
+// mouse: radians of turn per pixel of mouse movement.
+export const CONTROLS = { mouse: 0.0022 };

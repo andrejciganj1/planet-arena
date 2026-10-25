@@ -50,7 +50,7 @@ const homeOf = (world, e) => (e.kind === "dummy" ? world.tuning.DUMMY.body : wor
 function spawn(world, e) {
   const { pos, up } = spawnPoint(world, homeOf(world, e), e.id);
   world.spawns++;
-  Object.assign(e, createEntity(e.id, e.kind, pos, up));
+  Object.assign(e, createEntity(e.id, e.kind, pos, up), { prev: null });
   standOn(e, homeOf(world, e));
 }
 
@@ -84,6 +84,7 @@ export function stepWorld(world, inputs, dt) {
   for (const e of entities) {
     if (!e.alive) continue;
     const input = inputs[e.id] || NO_INPUT;
+    e.prev = { pos: e.pos, up: e.up }; // the renderer draws between this and the new state
     stepEntity(world, e, input, dt);
     if (input.weapon) e.weapon = input.weapon;
     if (input.fire) fire(world, e);

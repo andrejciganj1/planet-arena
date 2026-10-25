@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planet Arena</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #05060d; font-family: system-ui, sans-serif; }
+  canvas { display: block; width: 100%; height: 100%; }
+  .hud { position: fixed; pointer-events: none; color: #f4f1e8; text-shadow: 0 1px 2px #000a; }
+  .crosshair { left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; }
+  .crosshair::before, .crosshair::after { content: ""; position: absolute; background: #fff; box-shadow: 0 0 2px #000; }
+  .crosshair::before { left: 6px; top: 0; width: 2px; height: 14px; }
+  .crosshair::after { top: 6px; left: 0; height: 2px; width: 14px; }
+  .bottom { left: 24px; bottom: 22px; font-size: 18px; font-weight: 600; }
+  .bar { width: 180px; height: 10px; border: 2px solid #fff8; border-radius: 6px; overflow: hidden; margin-top: 6px; }
+  .bar > div { height: 100%; background: #ffb43d; }
+  .dummy { right: 24px; top: 20px; font-size: 16px; text-align: right; }
+  .dummy .bar > div { background: #ff5d5d; }
+  .toast { left: 0; right: 0; top: 28%; text-align: center; font-size: 46px; font-weight: 800; color: #ffd84a;
+           opacity: 0; transition: opacity 0.4s; }
+  .toast.on { opacity: 1; transition: none; }
+  .play { inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column;
+          background: #05060d88; font-size: 30px; font-weight: 700; }
+  .play small { font-size: 15px; font-weight: 400; margin-top: 14px; opacity: 0.85; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="src/client/main.js"></script>
+</body>
+</html>

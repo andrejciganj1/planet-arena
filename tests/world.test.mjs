@@ -124,3 +124,18 @@ test("touching the sun's surface is enough to die", () => {
   stepWorld(w, {}, TICK);
   assert.equal(deaths(w)[0]?.cause, "sun");
 });
+
+test("each tick keeps the previous position and up for drawing between ticks; a respawn has none", () => {
+  const w = createWorld(tuning);
+  const p = w.entities.player;
+  stepWorld(w, {}, TICK);
+  const pos = [...p.pos], up = [...p.up];
+  stepWorld(w, { player: { ...NO_INPUT, move: [0, 1] } }, TICK);
+  assert.deepEqual(p.prev.pos, pos);
+  assert.deepEqual(p.prev.up, up);
+  const d = w.entities.dummy;
+  d.health = 0;
+  stepWorld(w, {}, TICK);
+  while (!d.alive) stepWorld(w, {}, TICK);
+  assert.equal(d.prev, null);
+});

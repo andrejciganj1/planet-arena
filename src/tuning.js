@@ -12,7 +12,7 @@ export const BODIES = [
   { id: "tiny", kind: "planet", radius: 6, g: 4, reach: 6, orbit: { around: "sun", radius: 70, period: 120, phase: 0 }, color: 0x7fd36b },
   { id: "mid", kind: "planet", radius: 12, g: 9, reach: 12, orbit: { around: "sun", radius: 120, period: 200, phase: 2.1 }, color: 0x4f9de8 },
   { id: "heavy", kind: "planet", radius: 18, g: 13, reach: 18, orbit: { around: "sun", radius: 200, period: 300, phase: 4.2 }, color: 0xd9744a },
-  { id: "moon", kind: "moon", radius: 5, g: 3, reach: 5, orbit: { around: "heavy", radius: 45, period: 90, phase: 0 }, color: 0xc9c4bd },
+  { id: "moon", kind: "moon", radius: 5, g: 3, reach: 5, orbit: { around: "heavy", radius: 55, period: 90, phase: 0 }, color: 0xc9c4bd },
   { id: "station", kind: "station", size: [24, 2, 16], g: 3, reach: 8, orbit: null, pos: [0, 8, -92], color: 0xb8c2cc },
 ];
 

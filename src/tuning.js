@@ -48,18 +48,28 @@ export const DUMMY = { health: 100, respawn: 3, body: "tiny" };
 
 export const PLAYER_BODY = "mid"; // where the player starts and respawns
 
-// Pads: `dir` is a unit vector in world axes (nothing spins), both where the pad sits on its body and
-// which way it launches.
+// Pads: `dir` is the launch direction in world axes (nothing spins); the pad sits on its body out along
+// `at`, or along `dir` when there is no `at`. heading(a, el) is the unit vector at `a` degrees round the
+// orbital plane (from +x towards +z) and `el` degrees above it. The layout was searched so every pad has a
+// launch window of at least 5 s and every planet has one at least once a minute (tests/pads.test.mjs).
+const heading = (a, el = 0) => {
+  const r = Math.PI / 180, c = Math.cos(el * r);
+  return [c * Math.cos(a * r), Math.sin(el * r), c * Math.sin(a * r)];
+};
 export const PADS = [
-  { id: "tiny-a", body: "tiny", dir: [1, 0, 0], speed: 28 },
-  { id: "tiny-b", body: "tiny", dir: [-1, 0, 0], speed: 28 },
-  { id: "mid-a", body: "mid", dir: [0, 0, 1], speed: 28 },
-  { id: "mid-b", body: "mid", dir: [0, 0, -1], speed: 28 },
-  { id: "heavy-a", body: "heavy", dir: [1, 0, 0], speed: 28 },
-  { id: "heavy-b", body: "heavy", dir: [-1, 0, 0], speed: 28 },
-  { id: "station-a", body: "station", dir: [0, 1, 0], speed: 28 },
+  { id: "tiny-a", body: "tiny", dir: heading(30), speed: 28 },
+  { id: "tiny-b", body: "tiny", dir: heading(135), speed: 28 },
+  { id: "tiny-c", body: "tiny", dir: heading(300), speed: 28 },
+  { id: "mid-a", body: "mid", dir: heading(120), speed: 28 },
+  { id: "mid-b", body: "mid", dir: heading(255), speed: 28 },
+  { id: "mid-c", body: "mid", dir: heading(345), speed: 28 },
+  { id: "heavy-a", body: "heavy", dir: heading(105), speed: 28 },
+  { id: "heavy-b", body: "heavy", dir: heading(225), speed: 28 },
+  { id: "heavy-c", body: "heavy", dir: heading(345), speed: 28 },
+  { id: "station-a", body: "station", at: [0, 1, 0], dir: heading(165, 5), speed: 28 },
 ];
 
 // touch: feet within this of a pad launch; lockout: no relaunch for this long.
 export const PAD = { touch: 1.2, lockout: 1 };
-export const PAD_CUE = { refresh: 0.25, predict: 20, showPathWithin: 15 };
+// pathEvery: keep one predicted point every this many ticks for drawing.
+export const PAD_CUE = { refresh: 0.25, predict: 20, showPathWithin: 15, pathEvery: 6 };

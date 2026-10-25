@@ -3,7 +3,7 @@
 import { createSystem, posesAt } from "./system.js";
 import { createEntity, standOn, stepEntity, hitCentre, NO_INPUT } from "./entity.js";
 import { surfaceInfo, sphereContacts } from "./collide.js";
-import { padPos } from "./pads.js";
+import { padPos, touchPads, refreshCues } from "./pads.js";
 import { fire, stepProjectiles } from "./weapons.js";
 import { add, scale, dist, norm, anyPerpendicular } from "./vec.js";
 
@@ -87,8 +87,10 @@ export function stepWorld(world, inputs, dt) {
     stepEntity(world, e, input, dt);
     if (input.weapon) e.weapon = input.weapon;
     if (input.fire) fire(world, e);
+    touchPads(world, e);
   }
   stepProjectiles(world, dt);
+  refreshCues(world);
 
   const sun = world.system.bodies.find((b) => b.kind === "sun");
   for (const e of entities) {

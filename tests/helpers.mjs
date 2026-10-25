@@ -42,3 +42,11 @@ export function directions(n) {
   }
   return out;
 }
+
+// Jumps a world's clock to t. Orbits are scripted, so this is exact for the bodies; entities are not
+// carried along, so callers re-place the ones they use.
+export function skipTo(world, t) {
+  world.t = t;
+  world.poses = world.prevPoses = posesAt(world.system, t);
+  world.cues = {};
+}

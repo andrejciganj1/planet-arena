@@ -9,7 +9,9 @@ import { add, sub, scale, norm, dist, dot, len, projectOnPlane } from "../src/si
 
 const { TICK, ROCKET, PISTOL, PLAYER } = tuning;
 
-// A world with the dummy and the player moved to stand on chosen bodies at direction u.
+// A world without pads, so a blast or a landing can't hit one by chance (pads have their own tests).
+const padless = () => ({ ...createWorld(tuning), pads: [] });
+// The dummy and the player moved to stand on chosen bodies at direction u.
 function put(w, id, bodyId, u) {
   const b = w.system.byId[bodyId], e = w.entities[id];
   Object.assign(e, createEntity(e.id, e.kind, add(w.poses[bodyId].pos, scale(u, b.radius)), u));
@@ -82,7 +84,7 @@ test("splash damage falls off with distance and stops at the radius", () => {
 });
 
 test("a rocket jump on the heavy planet lifts the player and lands them back", () => {
-  const w = createWorld(tuning);
+  const w = padless();
   park(w, "dummy");
   w.entities.dummy.pos = add(w.entities.dummy.pos, [0, 0, 0]);
   const p = put(w, "player", "heavy", norm([0, 1, 1]));
@@ -105,7 +107,7 @@ const blastUnder = (w, e, owner) => explode(w, sub(e.pos, e.up), owner);
 
 test("a rocket under the dummy on the tiny planet sends it into the sun", () => {
   for (const t of [0, 45, 90]) {
-    const w = createWorld(tuning);
+    const w = padless();
     run(w, t);
     put(w, "player", "mid", [0, 1, 0]);
     const d = put(w, "dummy", "tiny", sunward(w, "tiny"));
@@ -117,7 +119,7 @@ test("a rocket under the dummy on the tiny planet sends it into the sun", () => 
 });
 
 test("the same blast on the heavy planet doesn't throw the dummy off", () => {
-  const w = createWorld(tuning);
+  const w = padless();
   const d = put(w, "dummy", "heavy", sunward(w, "heavy"));
   blastUnder(w, d, "player");
   assert.equal(d.groundId, null);
@@ -127,7 +129,7 @@ test("the same blast on the heavy planet doesn't throw the dummy off", () => {
 
 test("thrown off the tiny planet, a full booster can bring you back", () => {
   for (const t of [0, 45, 90]) {
-    const w = createWorld(tuning);
+    const w = padless();
     run(w, t);
     park(w, "dummy");
     const p = put(w, "player", "tiny", sunward(w, "tiny"));

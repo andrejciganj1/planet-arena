@@ -5,7 +5,7 @@
 // Anything that leaves the ground (jump, pad, blast, running off an edge) adds the body's velocity.
 import { PLAYER, BOOST, DUMMY } from "../tuning.js";
 import { add, sub, scale, dot, cross, len, norm, projectOnPlane, rotateAxis, rotateFromTo, clampLen, anyPerpendicular } from "./vec.js";
-import { gravityAt, bodyPull, dominantBody } from "./gravity.js";
+import { bodyPull, shapedGravity } from "./gravity.js";
 import { surfaceInfo, sphereContacts } from "./collide.js";
 
 export const NO_INPUT = Object.freeze({ move: [0, 0], jump: false, boost: false, fire: false, weapon: null, yawDelta: 0, pitchDelta: 0 });
@@ -65,7 +65,10 @@ export function stepEntity(world, e, input, dt) {
   if (wasGround) e.pos = add(e.pos, sub(poses[wasGround].pos, prev[wasGround].pos));
 
   // 3. Gravity: only the ground body's while standing, so the sun can't drag you across the surface.
-  e.vel = add(e.vel, scale(gravityAt(system, poses, hitCentre(e), wasGround), dt));
+  // In the air the body pulling hardest also sets where "up" turns to (step 9).
+  const air = wasGround ? null : shapedGravity(system, poses, hitCentre(e));
+  const grav = air ? air.acc : bodyPull(system.byId[wasGround], poses[wasGround], hitCentre(e));
+  e.vel = add(e.vel, scale(grav, dt));
 
   const [strafe, ahead] = input.move;
   const moving = strafe !== 0 || ahead !== 0;
@@ -137,7 +140,7 @@ export function stepEntity(world, e, input, dt) {
 
   // 9. Turn up towards the ground's normal, or away from the body you are falling to.
   const c = hitCentre(e);
-  const towards = groundId || dominantBody(system, poses, c);
+  const towards = groundId || (air ? air.dominant : shapedGravity(system, poses, c).dominant);
   const target = groundId
     ? surfaceInfo(system.byId[groundId], poses[groundId], c).normal
     : norm(scale(bodyPull(system.byId[towards], poses[towards], c), -1));

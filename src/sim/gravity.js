@@ -48,17 +48,21 @@ function pulls(system, poses, p) {
 
 export function gravityAt(system, poses, p, onlyId = null) {
   if (onlyId) return bodyPull(system.byId[onlyId], poses[onlyId], p);
-  let acc = [0, 0, 0];
-  for (const { v } of pulls(system, poses, p)) acc = add(acc, v);
-  return acc;
+  return shapedGravity(system, poses, p).acc;
 }
 
 // The body with the strongest shaped pull: what you are falling to.
 export function dominantBody(system, poses, p) {
-  let best = null, bestG = -1;
+  return shapedGravity(system, poses, p).dominant;
+}
+
+// Both at once, for the physics step that needs both.
+export function shapedGravity(system, poses, p) {
+  let acc = [0, 0, 0], dominant = null, bestG = -1;
   for (const { id, v } of pulls(system, poses, p)) {
+    acc = add(acc, v);
     const g = len(v);
-    if (g > bestG) (best = id), (bestG = g);
+    if (g > bestG) (dominant = id), (bestG = g);
   }
-  return best;
+  return { acc, dominant };
 }

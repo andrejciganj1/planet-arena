@@ -6,6 +6,7 @@ import { padPos } from "../src/sim/pads.js";
 import { NO_INPUT, hitCentre } from "../src/sim/entity.js";
 import { sphereContacts, surfaceInfo } from "../src/sim/collide.js";
 import { add, dist } from "../src/sim/vec.js";
+import { skipTo } from "./helpers.mjs";
 
 const { TICK, MAX_TICKS, VOID_RADIUS, DUMMY, PLAYER } = tuning;
 const deaths = (w) => w.events.filter((e) => e.type === "death");
@@ -67,7 +68,8 @@ test("the dead are not stepped", () => {
 test("respawn points are on the surface, clear of pads, not inside a body", () => {
   for (const t of [0, 77, 250]) {
     const w = createWorld(tuning);
-    while (w.t < t) stepWorld(w, {}, TICK);
+    skipTo(w, t);
+    w.entities.dummy.pos = spawnPoint(w, "tiny", "dummy").pos;
     for (const b of tuning.BODIES.filter((b) => b.kind !== "sun")) {
       for (let k = 0; k < 6; k++) {
         const { pos, up } = spawnPoint(w, b.id, "player");

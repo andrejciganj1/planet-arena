@@ -6,8 +6,12 @@ export const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 export const scale = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
 export const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 export const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-export const len = (a) => Math.hypot(a[0], a[1], a[2]);
-export const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+// Math.sqrt rather than Math.hypot: hypot is several times slower and these run in every physics step.
+export const len = (a) => Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+export function dist(a, b) {
+  const x = a[0] - b[0], y = a[1] - b[1], z = a[2] - b[2];
+  return Math.sqrt(x * x + y * y + z * z);
+}
 export const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
 // A zero vector stays zero rather than becoming NaN, so a degenerate direction can't poison a frame.

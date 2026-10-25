@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { BODIES } from "../src/tuning.js";
 import { createSystem, posesAt } from "../src/sim/system.js";
 import { bodyPull, gravityAt, dominantBody } from "../src/sim/gravity.js";
-import { add, scale, len, dist, norm, dot } from "../src/sim/vec.js";
+import { surfaceInfo } from "../src/sim/collide.js";
+import { add, sub, scale, len, dist, norm, dot } from "../src/sim/vec.js";
 
 const system = createSystem(BODIES);
 const byId = system.byId;
@@ -96,4 +97,21 @@ test("gravityAt sums every pull", () => {
   const poses = posesAt(system, 3), p = [50, 4, 30];
   const sum = BODIES.reduce((acc, b) => add(acc, bodyPull(b, poses[b.id], p)), [0, 0, 0]);
   assert.ok(dist(gravityAt(system, poses, p), sum) < 1e-12);
+});
+
+test("inside a body's hold only its own pull counts; beyond twice the hold every pull counts", () => {
+  const poses = posesAt(system, 20);
+  // Clear of every other body's hold, so only b's hold is in play.
+  const clear = (b, p) => BODIES.every((o) => o === b || !(o.hold > 0) || surfaceInfo(o, poses[o.id], p).dist > 2 * o.hold);
+  for (const b of BODIES.filter((b) => b.hold > 0 && b.radius)) {
+    const at = (u, h) => add(poses[b.id].pos, scale(u, b.radius + h));
+    const u = directions(20).find((u) => clear(b, at(u, b.hold * 0.9)) && clear(b, at(u, b.hold * 2.1)));
+    const inside = at(u, b.hold * 0.9);
+    assert.ok(dist(gravityAt(system, poses, inside), bodyPull(b, poses[b.id], inside)) < 1e-12, b.id);
+    assert.equal(dominantBody(system, poses, inside), b.id);
+    const beyond = at(u, b.hold * 2.1);
+    const sum = BODIES.reduce((acc, o) => add(acc, bodyPull(o, poses[o.id], beyond)), [0, 0, 0]);
+    assert.ok(dist(gravityAt(system, poses, beyond), sum) < 1e-12, b.id);
+  }
+  assert.ok(BODIES.filter((b) => b.hold > 0).length >= 3);
 });

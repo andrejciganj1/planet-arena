@@ -6,14 +6,16 @@ export const MAX_TICKS = 5; // per frame; a slow frame or hidden tab drops time 
 export const VOID_RADIUS = 400; // from the sun; beyond it you are lost in space
 
 // g is the full pull within `reach` of the core, falling off as g * (reach / d)^2 beyond. For spheres
-// reach is the radius. Orbits are circles in the XZ plane, angle = phase + 2 pi t / period.
+// reach is the radius. Within `hold` metres of a body's surface only that body pulls; the others fade back
+// in over the next `hold` metres (see gravity.js). Orbits are circles in the XZ plane,
+// angle = phase + 2 pi t / period.
 export const BODIES = [
-  { id: "sun", kind: "sun", radius: 18, g: 22, reach: 18, orbit: null, pos: [0, 0, 0], color: 0xffc23d },
-  { id: "tiny", kind: "planet", radius: 6, g: 4, reach: 6, orbit: { around: "sun", radius: 70, period: 120, phase: 0 }, color: 0x7fd36b },
-  { id: "mid", kind: "planet", radius: 12, g: 9, reach: 12, orbit: { around: "sun", radius: 120, period: 200, phase: 2.1 }, color: 0x4f9de8 },
-  { id: "heavy", kind: "planet", radius: 18, g: 13, reach: 18, orbit: { around: "sun", radius: 200, period: 300, phase: 4.2 }, color: 0xd9744a },
-  { id: "moon", kind: "moon", radius: 5, g: 3, reach: 5, orbit: { around: "heavy", radius: 55, period: 90, phase: 0 }, color: 0xc9c4bd },
-  { id: "station", kind: "station", size: [24, 2, 16], g: 3, reach: 8, orbit: null, pos: [0, 8, -92], color: 0xb8c2cc },
+  { id: "sun", kind: "sun", radius: 18, g: 22, reach: 18, hold: 0, orbit: null, pos: [0, 0, 0], color: 0xffc23d },
+  { id: "tiny", kind: "planet", radius: 6, g: 8, reach: 6, hold: 8, orbit: { around: "sun", radius: 70, period: 120, phase: 0 }, color: 0x7fd36b },
+  { id: "mid", kind: "planet", radius: 12, g: 10, reach: 12, hold: 8, orbit: { around: "sun", radius: 120, period: 200, phase: 2.1 }, color: 0x4f9de8 },
+  { id: "heavy", kind: "planet", radius: 18, g: 13, reach: 18, hold: 10, orbit: { around: "sun", radius: 200, period: 300, phase: 4.2 }, color: 0xd9744a },
+  { id: "moon", kind: "moon", radius: 5, g: 3, reach: 5, hold: 4, orbit: { around: "heavy", radius: 40, period: 90, phase: 0 }, color: 0xc9c4bd },
+  { id: "station", kind: "station", size: [24, 2, 16], g: 3, reach: 8, hold: 6, orbit: null, pos: [0, 8, -92], color: 0xb8c2cc },
 ];
 
 export const PLAYER = {

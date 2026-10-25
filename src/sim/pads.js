@@ -1,7 +1,8 @@
 // Jump pads: fixed directions on their bodies (nothing spins), launching whoever steps on them. Whether
 // a launch reaches another body depends on where the bodies are, so each pad shows a cue computed by
-// flying a stand-in with the game's own physics: the cue can't lie.
-import { add, scale, dist } from "./vec.js";
+// flying a stand-in from the pad's centre with the game's own physics. Real launches start from the
+// centre too; only a cue refreshed a fraction of a second ago can differ, at the very edge of a window.
+import { add, scale, dist, rotateFromTo } from "./vec.js";
 import { posesAt } from "./system.js";
 import { createEntity, standOn, stepEntity, unground, hitCentre, NO_INPUT } from "./entity.js";
 import { surfaceInfo } from "./collide.js";
@@ -27,7 +28,12 @@ export function launch(world, e, pad) {
 export function touchPads(world, e) {
   if (!e.groundId || world.t < e.padLockUntil) return;
   for (const pad of world.pads) {
-    if (pad.body === e.groundId && dist(e.pos, padPos(world, pad, world.poses)) < world.tuning.PAD.touch) {
+    const at = padPos(world, pad, world.poses);
+    if (pad.body === e.groundId && dist(e.pos, at) < world.tuning.PAD.touch) {
+      // Launch from the pad's centre, exactly as the cue's stand-in does, so the cue holds for runners.
+      const up = surfaceInfo(world.system.byId[pad.body], world.poses[pad.body], at).normal;
+      e.forward = rotateFromTo(e.forward, e.up, up);
+      Object.assign(e, { pos: at, up });
       launch(world, e, pad);
       return;
     }

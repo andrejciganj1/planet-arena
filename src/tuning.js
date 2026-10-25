@@ -31,6 +31,7 @@ export const PLAYER = {
   groundAngle: 45, // degrees from up that still counts as standing
   health: 100,
   respawn: 3, // s
+  adrift: 25, // s in the air before you count as lost in space (pad flights land within 20 s)
   spawnFromPad: 4, // m, spawn points keep this clear of pads
   spawnFromOther: 20, // m, a respawning player keeps this far from the other entity
 };
@@ -40,7 +41,7 @@ export const BOOST = { accel: 12, fuel: 1.5, refill: 0.5 };
 export const PISTOL = { speed: 120, damage: 10, cooldown: 0.35 };
 
 // Splash damage and knockback fall off linearly to zero at `splash`, measured to the hit sphere centre.
-export const ROCKET = { speed: 30, cooldown: 0.9, splash: 4, damage: 90, knockback: 18, self: 0.5, showFor: 0.5 };
+export const ROCKET = { speed: 30, cooldown: 0.9, splash: 4, damage: 90, knockback: 15, self: 0.5, showFor: 0.5 };
 
 export const SHOT = { ownerGrace: 0.1 }; // s a projectile can't hit its own shooter
 

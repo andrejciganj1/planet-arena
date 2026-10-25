@@ -5,7 +5,7 @@ import { createWorld, stepWorld } from "../src/sim/world.js";
 import { padPos, predictLaunch } from "../src/sim/pads.js";
 import { createEntity, standOn, NO_INPUT } from "../src/sim/entity.js";
 import { surfaceInfo } from "../src/sim/collide.js";
-import { add, scale } from "../src/sim/vec.js";
+import { add, sub, scale, norm, dot, projectOnPlane } from "../src/sim/vec.js";
 import { directions, skipTo } from "./helpers.mjs";
 
 const { TICK, PADS, PAD_CUE } = tuning;
@@ -131,4 +131,41 @@ test("a pad doesn't relaunch during its lockout", () => {
   Object.assign(p, { pos: padPos(w, pad, w.poses), groundId: pad.body, vel: [0, 0, 0] });
   stepWorld(w, {}, TICK);
   assert.equal(w.events.filter((e) => e.type === "launch").length, 1);
+});
+
+test("a runner who steps onto the pad off-centre while the cue is on lands on the predicted body", () => {
+  // Every 2 s inside each pad's windows (1 s clear of their edges), feet 1.1 m off-centre on four sides.
+  // Only this pad is in the world, so a landing is a landing and the run is quick.
+  for (const pad of PADS) {
+    const tl = timeline[pad.id];
+    const times = [];
+    tl.forEach((x, i) => {
+      const t = i * STEP;
+      if (x && t % 2 === 0 && tl[i - 2] === x && tl[i + 2] === x) times.push(t);
+    });
+    for (const t of times) {
+      for (const side of [0, 1, 2, 3]) {
+        const w = { ...createWorld(tuning), pads: [pad] };
+        skipTo(w, t);
+        w.entities.dummy.alive = false;
+        w.entities.dummy.respawnAt = Infinity;
+        const body = w.system.byId[pad.body], c = w.poses[pad.body].pos;
+        const centre = padPos(w, pad, w.poses), up = surfaceInfo(body, w.poses[pad.body], centre).normal;
+        const k = [[1, 0, 0], [0, 0, 1], [-1, 0, 0], [0, 0, -1]][side];
+        const offset = scale(norm(projectOnPlane(Math.abs(dot(k, up)) > 0.9 ? [0, 1, 0] : k, up)), 1.1);
+        const feet = body.radius ? add(c, scale(norm(add(sub(centre, c), offset)), body.radius)) : add(centre, offset);
+        const p = w.entities.player;
+        Object.assign(p, createEntity("player", "player", feet, surfaceInfo(body, w.poses[pad.body], feet).normal));
+        standOn(p, pad.body);
+        const want = tl[t / STEP];
+        let landed = null, launched = false;
+        for (let i = 0; i < PAD_CUE.predict / TICK + 60 && !landed && p.alive; i++) {
+          stepWorld(w, {}, TICK);
+          launched ||= !p.groundId;
+          if (launched && p.groundId) landed = p.groundId;
+        }
+        assert.equal(landed, want, `${pad.id} at ${t} s, side ${side}`);
+      }
+    }
+  }
 });

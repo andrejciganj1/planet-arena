@@ -47,7 +47,7 @@ export function createInput() {
       const input = {
         ...NO_INPUT,
         move: [axis("KeyD", "KeyA"), axis("KeyW", "KeyS")],
-        jump: jumped || keys.has("Space"),
+        jump: jumped, // a fresh press only: holding space to boost down onto a surface must not bounce you off
         boost: keys.has("Space"),
         fire: firing,
         weapon,

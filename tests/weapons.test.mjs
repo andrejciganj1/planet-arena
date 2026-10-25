@@ -102,8 +102,8 @@ test("a rocket jump on the heavy planet lifts the player and lands them back", (
   assert.ok(p.health < PLAYER.health && p.health > 0);
 });
 
-// The blast the signature moment needs: a rocket bursting 1 m below the feet.
-const blastUnder = (w, e, owner) => explode(w, sub(e.pos, e.up), owner);
+// The strongest blast a real rocket delivers: bursting on the ground at the feet.
+const blastUnder = (w, e, owner) => explode(w, e.pos, owner);
 
 test("a rocket under the dummy on the tiny planet sends it into the sun", () => {
   for (const t of [0, 45, 90]) {

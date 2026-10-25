@@ -139,3 +139,28 @@ test("each tick keeps the previous position and up for drawing between ticks; a 
   while (!d.alive) stepWorld(w, {}, TICK);
   assert.equal(d.prev, null);
 });
+
+test("the dummy never respawns next to the player, even on the tiny planet", () => {
+  for (let k = 0; k < 6; k++) {
+    for (const u of [[1, 0, 0], [0, 1, 0], [0, 0, 1], [-1, 0, 0], [0, -1, 0], [0.6, 0.8, 0]]) {
+      const w = createWorld(tuning);
+      w.spawns = k;
+      const tiny = w.system.byId.tiny, p = w.entities.player;
+      p.pos = add(w.poses.tiny.pos, u.map((x) => x * tiny.radius));
+      const { pos } = spawnPoint(w, "tiny", "dummy");
+      assert.ok(dist(pos, p.pos) >= 8, `k=${k} u=${u}: ${dist(pos, p.pos).toFixed(2)} m`);
+    }
+  }
+});
+
+test("an entity adrift too long is lost to the void", () => {
+  const w = createWorld(tuning);
+  const d = w.entities.dummy;
+  d.groundId = null;
+  d.pos = [0, 300, 0]; // far above the plane, falling slowly
+  d.vel = [0, 0, 0];
+  let t = 0;
+  while (d.alive && t < tuning.PLAYER.adrift + 1) stepWorld(w, {}, TICK), (t += TICK);
+  assert.deepEqual(deaths(w), [{ type: "death", id: "dummy", cause: "void" }]);
+  assert.ok(t >= tuning.PLAYER.adrift - 2 * TICK, `died after ${t}`);
+});

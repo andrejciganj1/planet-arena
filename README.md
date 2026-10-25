@@ -23,7 +23,8 @@ Then open http://localhost:8100 in a desktop browser and click the page to captu
 | Left mouse | Fire |
 | 1 / 2 / wheel | Pistol / rocket launcher |
 
-- The bar bottom left is the booster's fuel. It refills while you stand on anything.
+- Bottom left: your health (your own rockets hurt you too) and the booster's fuel, which refills while you
+  stand on anything.
 - Jump pads are the discs with an arrow. Green means a launch right now lands on another body; red means
   it won't. Stand near one to see the predicted path.
 - The dummy (orange, with a face) lives on the tiny green planet and comes back 3 s after it dies.
@@ -50,7 +51,7 @@ save you, pads have launch windows).
 Things worth knowing:
 
 - Gravity weakens with height from right at a body's surface, so high jumps and rocket jumps feel
-  floaty (a rocket jump on the heavy planet climbs about 20 m). Raising a planet's `reach` above its
+  floaty (a rocket jump on the heavy planet climbs about 11 m). Raising a planet's `reach` above its
   `radius` keeps the full pull for longer, which makes jumps snappier.
 - Near a body only that body pulls (its `hold`). Without that, the sun would drag an ordinary jump off the
   tiny planet.

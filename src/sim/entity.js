@@ -18,7 +18,7 @@ export function createEntity(id, kind, pos, up) {
     id, kind, pos: [...pos], vel: [0, 0, 0], up: u, forward: anyPerpendicular(u), pitch: 0,
     groundId: null, fuel: BOOST.fuel, health: kind === "dummy" ? DUMMY.health : PLAYER.health,
     alive: true, respawnAt: 0, weapon: "pistol", cooldown: 0, lastHitBy: null, lastHitAt: -Infinity,
-    boostLock: false, padLockUntil: -Infinity,
+    boostLock: false, padLockUntil: -Infinity, airTime: 0,
   };
 }
 
@@ -137,6 +137,7 @@ export function stepEntity(world, e, input, dt) {
   }
   e.groundId = groundId;
   e.vel = groundId ? sub(wv, poses[groundId].vel) : wv;
+  e.airTime = groundId ? 0 : e.airTime + dt;
 
   // 9. Turn up towards the ground's normal, or away from the body you are falling to.
   const c = hitCentre(e);

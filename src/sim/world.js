@@ -22,7 +22,8 @@ function candidates(world, body) {
   return out;
 }
 
-// A point on bodyId's surface clear of pads and other bodies, and for the player far from the others.
+// A point on bodyId's surface clear of pads and other bodies, and far from the other entities: at least
+// PLAYER.spawnFromOther, or as far as the body allows (the tiny planet is smaller than that).
 // Tries candidates in a fixed order, starting further along after each spawn, so the same world always
 // gives the same point but respawns don't all land on one spot.
 export function spawnPoint(world, bodyId, forId = null) {
@@ -39,7 +40,7 @@ export function spawnPoint(world, bodyId, forId = null) {
     const centre = add(cand.pos, scale(cand.up, PLAYER.radius));
     if (sphereContacts(world.system, world.poses, centre, PLAYER.radius).some((c) => c.depth > 1e-6)) continue;
     const gap = Math.min(Infinity, ...others.map((e) => dist(e.pos, cand.pos)));
-    if (forId !== "player" || gap >= PLAYER.spawnFromOther) return { pos: cand.pos, up: cand.up };
+    if (gap >= PLAYER.spawnFromOther) return { pos: cand.pos, up: cand.up };
     if (gap > bestGap) (best = cand), (bestGap = gap);
   }
   return best ? { pos: best.pos, up: best.up } : list[0];
@@ -98,7 +99,7 @@ export function stepWorld(world, inputs, dt) {
     if (!e.alive) continue;
     const c = hitCentre(e);
     if (dist(c, world.poses[sun.id].pos) < sun.radius + PLAYER.radius + 1e-6) die(world, e, "sun");
-    else if (dist(c, world.poses[sun.id].pos) > VOID_RADIUS) die(world, e, "void");
+    else if (dist(c, world.poses[sun.id].pos) > VOID_RADIUS || e.airTime > PLAYER.adrift) die(world, e, "void");
     else if (e.health <= 0) die(world, e, "damage");
   }
   for (const e of entities) {

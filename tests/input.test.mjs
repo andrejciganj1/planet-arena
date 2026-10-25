@@ -49,7 +49,7 @@ test("space jumps once per press and boosts while held; a tap between ticks stil
   i.onKey("Space", true);
   const b = i.take();
   assert.equal(b.boost, true);
-  assert.equal(b.jump, true);
+  assert.equal(b.jump, true); // a fresh press
 });
 
 test("left mouse fires while held; 1, 2 and the wheel pick weapons", () => {
@@ -68,4 +68,12 @@ test("left mouse fires while held; 1, 2 and the wheel pick weapons", () => {
   assert.equal(i.take().weapon, "rocket");
   i.onWheel(1);
   assert.equal(i.take().weapon, "pistol");
+});
+
+test("holding space jumps once, so landing while boosting doesn't bounce you off", () => {
+  const i = createInput();
+  i.onKey("Space", true);
+  assert.equal(i.take().jump, true);
+  assert.equal(i.take().jump, false);
+  assert.equal(i.take().boost, true);
 });

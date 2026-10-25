@@ -4,6 +4,7 @@ import { createSystem, posesAt } from "./system.js";
 import { createEntity, standOn, stepEntity, hitCentre, NO_INPUT } from "./entity.js";
 import { surfaceInfo, sphereContacts } from "./collide.js";
 import { padPos } from "./pads.js";
+import { fire, stepProjectiles } from "./weapons.js";
 import { add, scale, dist, norm, anyPerpendicular } from "./vec.js";
 
 // Spawn candidates: an evenly spread, fixed list of directions (Fibonacci sphere).
@@ -80,7 +81,14 @@ export function stepWorld(world, inputs, dt) {
   world.tick++;
   world.poses = posesAt(world.system, world.t);
   const entities = Object.values(world.entities);
-  for (const e of entities) if (e.alive) stepEntity(world, e, inputs[e.id] || NO_INPUT, dt);
+  for (const e of entities) {
+    if (!e.alive) continue;
+    const input = inputs[e.id] || NO_INPUT;
+    stepEntity(world, e, input, dt);
+    if (input.weapon) e.weapon = input.weapon;
+    if (input.fire) fire(world, e);
+  }
+  stepProjectiles(world, dt);
 
   const sun = world.system.bodies.find((b) => b.kind === "sun");
   for (const e of entities) {

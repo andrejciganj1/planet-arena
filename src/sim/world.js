@@ -6,6 +6,7 @@ import { surfaceInfo, sphereContacts } from "./collide.js";
 import { padPos, touchPads, refreshCues } from "./pads.js";
 import { fire, stepProjectiles } from "./weapons.js";
 import { stepPickups } from "./pickups.js";
+import { stepHook } from "./hook.js";
 import { add, scale, dist, norm, anyPerpendicular } from "./vec.js";
 
 // Spawn candidates: an evenly spread, fixed list of directions (Fibonacci sphere).
@@ -74,6 +75,7 @@ export function createWorld(tuning) {
 
 function die(world, e, cause) {
   e.alive = false;
+  e.hook = null;
   e.respawnAt = world.t + (e.kind === "dummy" ? world.tuning.DUMMY.respawn : world.tuning.PLAYER.respawn);
   world.events.push({ type: "death", id: e.id, cause });
 }
@@ -90,6 +92,7 @@ export function stepWorld(world, inputs, dt) {
     const input = inputs[e.id] || NO_INPUT;
     e.prev = { pos: e.pos, up: e.up }; // the renderer draws between this and the new state
     stepEntity(world, e, input, dt);
+    stepHook(world, e, !!input.hook, dt);
     if (input.weapon && e.weapons.includes(input.weapon)) e.weapon = input.weapon;
     if (input.fire) fire(world, e);
     touchPads(world, e);

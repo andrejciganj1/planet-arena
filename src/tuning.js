@@ -108,6 +108,12 @@ export const PADS = [
   { id: "giant-c", body: "giant", dir: heading(330), speed: 36 },
 ];
 
+// The hook. range: m along the view it reaches; pull: m/s^2 towards the caught point, applied only while
+// closing slower than `speed` m/s; steady: 1/s, how fast sideways motion relative to the caught body dies
+// away, so the rope reels you in instead of swinging you round it; cooldown: s after letting go (or a
+// miss) before it fires again.
+export const HOOK = { range: 25, pull: 30, speed: 15, steady: 3, cooldown: 0.5 };
+
 // Pickups. touch: feet within this of one take it; health: points a pack restores; fuelMax: the fuel
 // pickup fills the booster to this many tanks (the extra is used up, never refilled by standing);
 // respawn: seconds until a taken pickup comes back, by kind.

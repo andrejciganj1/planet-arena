@@ -16,6 +16,9 @@ const planets = tuning.BODIES.filter((b) => b.kind === "planet").map((b) => b.id
 const STEP = 0.5, SPAN = 600;
 const world = createWorld(tuning);
 const timeline = Object.fromEntries(PADS.map((pad) => [pad.id, Array.from({ length: SPAN / STEP + 1 }, (_, i) => predictLaunch(world, pad, i * STEP).landsOn)]));
+// The window guarantees count landings on planets and the moon only: a cue that lands on a passing comet
+// is a true prediction, but pads don't rely on comets.
+const solid = (landsOn) => landsOn && world.system.byId[landsOn].kind !== "comet";
 
 test("pads sit on their bodies' surfaces; two to three per planet, none on the moon", () => {
   for (const pad of PADS) {
@@ -32,7 +35,7 @@ test("pads sit on their bodies' surfaces; two to three per planet, none on the m
 test("every pad has at least one 5 s window in the first 10 minutes", () => {
   for (const pad of PADS) {
     let run = 0, best = 0;
-    for (const landsOn of timeline[pad.id]) best = Math.max(best, (run = landsOn ? run + 1 : 0));
+    for (const landsOn of timeline[pad.id]) best = Math.max(best, (run = solid(landsOn) ? run + 1 : 0));
     assert.ok((best - 1) * STEP >= 5, `${pad.id}: longest window ${(best - 1) * STEP} s`);
   }
 });
@@ -42,7 +45,7 @@ test("from every planet, some pad's cue is on at least once a minute", () => {
     const pads = PADS.filter((p) => p.body === id);
     let last = 0, gap = 0;
     timeline[pads[0].id].forEach((_, i) => {
-      if (pads.some((p) => timeline[p.id][i])) (gap = Math.max(gap, i * STEP - last)), (last = i * STEP);
+      if (pads.some((p) => solid(timeline[p.id][i]))) (gap = Math.max(gap, i * STEP - last)), (last = i * STEP);
     });
     gap = Math.max(gap, SPAN - last);
     assert.ok(gap <= 60, `${id}: longest gap ${gap} s`);
@@ -140,7 +143,7 @@ test("a runner who steps onto the pad off-centre while the cue is on lands on th
     const times = [];
     tl.forEach((x, i) => {
       const t = i * STEP;
-      if (x && t % 2 === 0 && tl[i - 2] === x && tl[i + 2] === x) times.push(t);
+      if (x && t % 2 === 0 && [-2, -1, 1, 2].every((k) => tl[i + k] === x)) times.push(t);
     });
     for (const t of times) {
       for (const side of [0, 1, 2, 3]) {

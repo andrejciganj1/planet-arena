@@ -15,7 +15,7 @@ function el(parent, cls, html = "") {
 export function createHud(root) {
   el(root, "hud crosshair");
   // Health matters even alone: your own rockets hurt you.
-  const bottom = el(root, "hud bottom", `<div class="health">Health<div class="bar"><div></div></div></div><div class="weapon"></div><div class="fuel bar"><div></div></div>`);
+  const bottom = el(root, "hud bottom", `<div class="health">Health<div class="bar"><div></div></div></div><div class="weapon"></div><div class="fuel">Booster<div class="bar"><div></div></div></div>`);
   const dummy = el(root, "hud dummy", `Dummy<div class="bar"><div></div></div>`);
   const toast = el(root, "hud toast");
   const play = el(root, "hud play", `Click to play<small>WASD move · mouse look · space jump, hold in the air to boost · click fire · 1 / 2 / wheel weapons</small>`);
@@ -35,7 +35,7 @@ export function createHud(root) {
     update(world, locked, now) {
       const p = world.entities.player, d = world.entities.dummy;
       bottom.querySelector(".weapon").textContent = NAMES[p.weapon];
-      bottom.querySelector(".fuel > div").style.width = `${(100 * p.fuel) / BOOST.fuel}%`;
+      bottom.querySelector(".fuel .bar > div").style.width = `${(100 * p.fuel) / BOOST.fuel}%`;
       bottom.querySelector(".health .bar > div").style.width = `${p.alive ? (100 * Math.max(0, p.health)) / PLAYER.health : 0}%`;
       dummy.querySelector(".bar > div").style.width = `${d.alive ? (100 * Math.max(0, d.health)) / DUMMY.health : 0}%`;
       play.style.display = locked ? "none" : "flex";

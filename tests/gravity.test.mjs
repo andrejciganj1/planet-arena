@@ -5,10 +5,11 @@ import { createSystem, posesAt } from "../src/sim/system.js";
 import { bodyPull, gravityAt, dominantBody } from "../src/sim/gravity.js";
 import { surfaceInfo } from "../src/sim/collide.js";
 import { add, sub, scale, len, dist, norm, dot } from "../src/sim/vec.js";
+import { TEST_STATION as station, WITH_STATION } from "./helpers.mjs";
 
 const system = createSystem(BODIES);
+const withStation = createSystem(WITH_STATION);
 const byId = system.byId;
-const station = BODIES.find((b) => b.kind === "station");
 const spheres = BODIES.filter((b) => b.radius);
 
 // Evenly spread unit directions (Fibonacci sphere), deterministic.
@@ -36,7 +37,8 @@ test("on each body's surface its pull is its g", () => {
       assert.ok(Math.abs(len(bodyPull(b, poses[b.id], p)) - b.g) < 1e-9, b.id);
     }
   }
-  for (const p of deckPoints(0)) assert.ok(Math.abs(len(bodyPull(station, poses.station, p)) - station.g) < 1e-9);
+  const sp = posesAt(withStation, 10).station;
+  for (const p of deckPoints(0)) assert.ok(Math.abs(len(bodyPull(station, sp, p)) - station.g) < 1e-9);
 });
 
 test("the tiny planet pulls least at its surface of all planets", () => {
@@ -54,16 +56,17 @@ test("1 m above every planet, moon and station deck, that body dominates", () =>
         assert.equal(dominantBody(system, poses, p), b.id, `${b.id} at t=${t}`);
       }
     }
-    for (const p of deckPoints(1)) assert.equal(dominantBody(system, poses, p), "station", `deck at t=${t}`);
+    const sp = posesAt(withStation, t);
+    for (const p of deckPoints(1)) assert.equal(dominantBody(withStation, sp, p), "station", `deck at t=${t}`);
   }
 });
 
 test("on the station deck, down is straight into the deck, also at its corners", () => {
-  const poses = posesAt(system, 0);
+  const poses = posesAt(withStation, 0);
   for (const p of deckPoints(0.5)) {
     const down = norm(bodyPull(station, poses.station, p));
     assert.ok(Math.acos(Math.min(1, dot(down, [0, -1, 0]))) < Math.PI / 180, JSON.stringify(p));
-    assert.deepEqual(gravityAt(system, poses, p, "station"), bodyPull(station, poses.station, p));
+    assert.deepEqual(gravityAt(withStation, poses, p, "station"), bodyPull(station, poses.station, p));
   }
 });
 
@@ -74,8 +77,8 @@ test("between the tiny and mid orbits, far from both, the sun dominates", () => 
     const poses = posesAt(system, t);
     for (let k = 0; k < 36; k++) {
       const a = (k / 36) * 2 * Math.PI, p = [r * Math.cos(a), 0, r * Math.sin(a)];
-      // "Far" is four radii from a planet centre (and 30 m from the station).
-      if (dist(p, poses.tiny.pos) < 4 * byId.tiny.radius || dist(p, poses.mid.pos) < 4 * byId.mid.radius || dist(p, poses.station.pos) < 30) continue;
+      // "Far" is four times a planet's reach (how far its full pull lasts) from its centre.
+      if (dist(p, poses.tiny.pos) < 4 * byId.tiny.reach || dist(p, poses.mid.pos) < 4 * byId.mid.reach) continue;
       assert.equal(dominantBody(system, poses, p), "sun");
       checked++;
     }

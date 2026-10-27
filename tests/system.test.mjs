@@ -2,17 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BODIES } from "../src/tuning.js";
 import { createSystem, posesAt } from "../src/sim/system.js";
-import { dist, sub, scale, len } from "../src/sim/vec.js";
+import { dist, sub, scale } from "../src/sim/vec.js";
+import { TEST_STATION as station, WITH_STATION } from "./helpers.mjs";
 
 const system = createSystem(BODIES);
 const spheres = BODIES.filter((b) => b.radius);
-const station = BODIES.find((b) => b.kind === "station");
-
-// Gap between a sphere's surface and an axis-aligned box.
-function boxGap(centre, radius, boxPos, size) {
-  const d = centre.map((c, i) => Math.max(Math.abs(c - boxPos[i]) - size[i] / 2, 0));
-  return len(d) - radius;
-}
 
 test("a planet returns to its start after one period", () => {
   for (const b of spheres.filter((b) => b.orbit && b.orbit.around === "sun")) {
@@ -31,7 +25,7 @@ test("the moon keeps its distance from its planet", () => {
 
 test("the station never moves", () => {
   for (const t of [0, 13.5, 300]) {
-    const p = posesAt(system, t).station;
+    const p = posesAt(createSystem(WITH_STATION), t).station;
     assert.deepEqual(p.pos, station.pos);
     assert.deepEqual(p.vel, [0, 0, 0]);
   }
@@ -56,8 +50,6 @@ test("no two bodies ever touch", () => {
         const gap = dist(p[spheres[i].id].pos, p[spheres[j].id].pos) - spheres[i].radius - spheres[j].radius;
         assert.ok(gap > 3, `${spheres[i].id}/${spheres[j].id} at ${t}: ${gap}`);
       }
-      const gap = boxGap(p[spheres[i].id].pos, spheres[i].radius, station.pos, station.size);
-      assert.ok(gap > 3, `${spheres[i].id}/station at ${t}: ${gap}`);
     }
   }
 });

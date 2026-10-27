@@ -17,7 +17,7 @@ const STEP = 0.5, SPAN = 600;
 const world = createWorld(tuning);
 const timeline = Object.fromEntries(PADS.map((pad) => [pad.id, Array.from({ length: SPAN / STEP + 1 }, (_, i) => predictLaunch(world, pad, i * STEP).landsOn)]));
 
-test("pads sit on their bodies' surfaces; two to three per planet, one on the station, none on the moon", () => {
+test("pads sit on their bodies' surfaces; two to three per planet, none on the moon", () => {
   for (const pad of PADS) {
     const b = world.system.byId[pad.body];
     assert.ok(Math.abs(surfaceInfo(b, world.poses[b.id], padPos(world, pad, world.poses)).dist) < 1e-9, pad.id);
@@ -26,7 +26,6 @@ test("pads sit on their bodies' surfaces; two to three per planet, one on the st
     const n = PADS.filter((p) => p.body === id).length;
     assert.ok(n >= 2 && n <= 3, `${id} has ${n}`);
   }
-  assert.equal(PADS.filter((p) => world.system.byId[p.body].kind === "station").length, 1);
   assert.equal(PADS.filter((p) => world.system.byId[p.body].kind === "moon").length, 0);
 });
 

@@ -1,11 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BODIES, PISTOL, TICK } from "../src/tuning.js";
+import { PISTOL, TICK } from "../src/tuning.js";
 import { createSystem, posesAt } from "../src/sim/system.js";
 import { surfaceInfo, sphereContacts, segmentHit, segmentHitsSphere } from "../src/sim/collide.js";
 import { add, scale, dist, sub, len } from "../src/sim/vec.js";
+import { WITH_STATION } from "./helpers.mjs";
 
-const system = createSystem(BODIES);
+const system = createSystem(WITH_STATION);
 const poses = posesAt(system, 42);
 const { tiny, mid, station } = system.byId;
 const near = (a, b, eps = 1e-9) => assert.ok(dist(a, b) < eps, `${JSON.stringify(a)} != ${JSON.stringify(b)}`);

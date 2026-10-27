@@ -64,9 +64,9 @@ region serves everyone with low lag.
 - **Moons** orbit some planets. They have weak gravity and stay close to their planet, so a jump from a
   moon always reaches its planet. They are high perches and a second place where knockback can throw
   someone off.
-- **Space stations** are static: they don't orbit. They hold the weapon and health pickups and make safe
-  sniping perches, so players keep flying to them and fighting over them. They have their own weak
-  gravity, so you can stand on them and jump off again.
+- **Space stations** (from stage 2, with the pickups) are static: they don't orbit. They hold the weapon
+  and health pickups and make safe sniping perches, so players keep flying to them and fighting over
+  them. They have their own weak gravity, so you can stand on them and jump off again.
 - Planets don't spin, to keep it simple at first.
 - Standing on a planet you see the others moving across the sky and the sun at the centre. You ride along
   with your planet without noticing its motion.
@@ -166,9 +166,11 @@ right mouse to zoom the sniper, number keys and mouse wheel to change weapons.
 
 ## Order of work
 
-1. **Prototype (single player, no server).** One sun, three planets, one moon, one station, jump pads,
+1. **Prototype (single player, no server).** One sun, five planets, one moon, jump pads,
    the booster, the pistol and the rocket launcher, and a dummy target that can be blasted into the sun. Done when the
-   owner finds running, jumping and flying between planets fun.
+   owner finds running, jumping and flying between planets fun. (Changed after the first playtest: it began
+   with three planets and a station; the owner swapped the station for two more planets. Stations come in
+   stage 2, where their pickups give them a purpose.)
 2. **The full game alone.** Four to six planets, moons, stations, all four weapons, pickups, health, the
    rules and score, bots.
 3. **Online.** The server, rooms by link, prediction and smoothing, lag compensation, hosting. Done when

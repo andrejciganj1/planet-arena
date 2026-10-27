@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BOOST, TICK, PLAYER } from "../src/tuning.js";
 import { createEntity, standOn, stepEntity, viewDir, worldVel, NO_INPUT } from "../src/sim/entity.js";
-import { makeWorld, assertFrame, directions } from "./helpers.mjs";
+import { makeWorld, assertFrame, directions, WITH_STATION } from "./helpers.mjs";
 import { add, sub, scale, norm, dist, len, dot } from "../src/sim/vec.js";
 
 // An entity standing on body `id` at unit direction u from its centre.
@@ -66,7 +66,8 @@ test("running on the tiny planet doesn't fling you off", () => {
 test("the booster empties after 1.5 s of thrust and refills on the ground", () => {
   const world = makeWorld(0);
   const u = norm([0, 1, 1]);
-  const at = add(world.poses.mid.pos, scale(u, 40));
+  // Far out, where gravity barely changes over the booster's 13 m, so a and b feel the same pull.
+  const at = add(world.poses.mid.pos, scale(u, 100));
   const a = (world.entities.a = createEntity("a", "player", at, u));
   const b = (world.entities.b = createEntity("b", "player", at, u));
   const n = Math.round(BOOST.fuel / TICK);
@@ -117,7 +118,7 @@ test("up flipping to its opposite leaves a valid frame, no NaN", () => {
 });
 
 test("standing on the station deck's corner and on the moon is stable", () => {
-  const world = makeWorld(0);
+  const world = makeWorld(0, WITH_STATION);
   const st = world.system.byId.station, s = world.poses.station.pos, top = s[1] + st.size[1] / 2;
   const corners = [[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([sx, sz], i) => {
     const e = createEntity("c" + i, "player", [s[0] + sx * (st.size[0] / 2 - 0.1), top, s[2] + sz * (st.size[2] / 2 - 0.1)], [0, 1, 0]);

@@ -1,8 +1,12 @@
 # Planet Arena: prototype
 
-A single-player prototype of a physics arena shooter across a small solar system: one sun, three
-planets, a moon and a station. Every body has its own gravity. Blast the dummy off the tiny green planet
-and watch it fall into the sun.
+A single-player prototype of a physics arena shooter across a small solar system: one sun, five planets
+and a moon. Every body has its own gravity. Blast the dummy off the tiny green planet and watch it fall
+into the sun.
+
+From the sun outwards: the hot red planet (close to the sun, so watch your footing), the tiny green
+planet, the mid blue planet where you start, the heavy orange planet with its moon, and the big, light
+purple giant.
 
 ## Start it
 
@@ -24,7 +28,8 @@ Then open http://localhost:8100 in a desktop browser and click the page to captu
 | 1 / 2 / wheel | Pistol / rocket launcher |
 
 - Bottom left: your health (your own rockets hurt you too) and the booster's fuel, which refills while you
-  stand on anything.
+  stand on anything. A full booster burn adds 18 m/s, more than it takes to leave most planets, so boost
+  with care.
 - Jump pads are the discs with an arrow. Green means a launch right now lands on another body; red means
   it won't. Stand near one to see the predicted path.
 - The dummy (orange, with a face) lives on the tiny green planet and comes back 3 s after it dies.
@@ -46,13 +51,16 @@ save you, pads have launch windows).
 | How strong a body is | its `g` (pull at the surface) and `reach` (how far the full pull lasts) in `BODIES` |
 | Where a body's own pull shields you from the sun | its `hold` in `BODIES` (metres above the surface) |
 | Orbit speed | `orbit.period` in `BODIES` (seconds per lap) |
-| Pad launch speed and direction | `PADS` (re-run the tests: pads must keep their launch windows) |
+| Pad launch speed and direction | `PADS` (re-run the tests: pads must keep their launch windows; a pad needs to be faster than it takes to leave its planet) |
 
 Things worth knowing:
 
-- Gravity weakens with height from right at a body's surface, so high jumps and rocket jumps feel
-  floaty (a rocket jump on the heavy planet climbs about 11 m). Raising a planet's `reach` above its
-  `radius` keeps the full pull for longer, which makes jumps snappier.
+- Planets and the moon keep their full pull up to 1.75 times their radius (`reach`), so a rocket blast
+  rarely throws you off the mid, heavy or giant planet. The tiny planet still throws you, mostly into the
+  sun.
+- A body's overall pull grows with `g` times `reach` squared. The sun has to outweigh the planets for
+  things knocked loose to fall into it, which is why it is big; raising a big planet's `g` or `reach` can
+  make it pull harder than the sun.
 - Near a body only that body pulls (its `hold`). Without that, the sun would drag an ordinary jump off the
   tiny planet.
 

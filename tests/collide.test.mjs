@@ -49,3 +49,9 @@ test("a segment that misses returns null", () => {
   assert.equal(segmentHitsSphere([5, 0, 0], [10, 0, 0], [5, 0, 0], 1), 0);
 });
 
+
+test("a shot at a comet hits the comet", () => {
+  const c = system.byId["comet-a"], at = poses["comet-a"].pos;
+  const from = add(at, [c.radius + 10, 0, 0]);
+  assert.equal(segmentHit(system, poses, from, at)?.id, "comet-a");
+});

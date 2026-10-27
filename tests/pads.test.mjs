@@ -29,6 +29,13 @@ test("pads sit on their bodies' surfaces; two to three per planet, none on the m
   assert.equal(PADS.filter((p) => world.system.byId[p.body].kind === "moon").length, 0);
 });
 
+test("a cue never promises a comet: comets are too small and quick for a cue to hold", () => {
+  for (const pad of PADS) {
+    const comets = timeline[pad.id].filter((landsOn) => landsOn && world.system.byId[landsOn].kind === "comet");
+    assert.deepEqual(comets, [], pad.id);
+  }
+});
+
 test("every pad has at least one 5 s window in the first 10 minutes", () => {
   for (const pad of PADS) {
     let run = 0, best = 0;
@@ -140,7 +147,7 @@ test("a runner who steps onto the pad off-centre while the cue is on lands on th
     const times = [];
     tl.forEach((x, i) => {
       const t = i * STEP;
-      if (x && t % 2 === 0 && tl[i - 2] === x && tl[i + 2] === x) times.push(t);
+      if (x && t % 2 === 0 && [-2, -1, 1, 2].every((k) => tl[i + k] === x)) times.push(t);
     });
     for (const t of times) {
       for (const side of [0, 1, 2, 3]) {

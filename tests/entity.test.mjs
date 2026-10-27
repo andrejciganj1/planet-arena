@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { BOOST, TICK, PLAYER } from "../src/tuning.js";
 import { createEntity, standOn, stepEntity, viewDir, worldVel, NO_INPUT } from "../src/sim/entity.js";
 import { makeWorld, assertFrame, directions } from "./helpers.mjs";
-import { add, sub, scale, norm, dist, len, dot } from "../src/sim/vec.js";
+import { add, sub, scale, norm, dist, len, dot, cross } from "../src/sim/vec.js";
+import { posesAt } from "../src/sim/system.js";
 
 // An entity standing on body `id` at unit direction u from its centre.
 function placeOn(world, id, u, name = "p") {
@@ -149,4 +150,33 @@ test("worldVel adds the ground body's velocity", () => {
   assert.deepEqual(worldVel(world, e), world.poses.mid.vel);
   stepEntity(world, e, NO_INPUT, TICK);
   assert.ok(dist(worldVel(world, e), world.poses.mid.vel) < 1e-6);
+});
+
+test("drifting into a comet side-on and glancing, fast, you land on it", () => {
+  const comet = makeWorld(0).system.byId["comet-a"];
+  // Perihelion, where it is fastest, and two other moments.
+  let peri = 0;
+  for (let t = 0, best = Infinity; t < comet.orbit.period; t += 0.5) {
+    const d = len(posesAt(makeWorld(0).system, t)["comet-a"].pos);
+    if (d < best) (best = d), (peri = t);
+  }
+  for (const t0 of [peri, 60, 150]) {
+    for (const d of [[1, 0, 0], [0, 0, 1], [-1, 0, 0], [0, 1, 0]]) {
+      const world = makeWorld(t0);
+      const c = world.poses["comet-a"];
+      // Up at right angles to the approach: the comet's surface is a wall, not a floor.
+      const up = norm(cross(d, Math.abs(d[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0]));
+      const centre = sub(c.pos, scale(d, comet.radius + 2 + PLAYER.radius));
+      const e = (world.entities.e = createEntity("e", "player", sub(centre, scale(up, PLAYER.radius)), up));
+      // 12 m/s in and 6 m/s along the surface, as when boosting at a passing comet: fast enough to skim
+      // off unless the comet catches you.
+      e.vel = add(c.vel, add(scale(d, 12), scale(norm(cross(d, up)), 6)));
+      world.step(60);
+      assert.equal(e.groundId, "comet-a", `t=${t0} d=${d}: caught`);
+      world.step(60);
+      assert.equal(e.groundId, "comet-a", `t=${t0} d=${d}: stays`);
+      const n = norm(sub(e.pos, world.poses["comet-a"].pos));
+      assert.ok(dot(e.up, n) > Math.cos((10 * Math.PI) / 180), `t=${t0} d=${d}: up ${e.up}`);
+    }
+  }
 });

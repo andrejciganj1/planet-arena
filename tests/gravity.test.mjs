@@ -49,15 +49,15 @@ test("1 m above every planet and the moon, that body dominates", () => {
   }
 });
 
-test("between the tiny and mid orbits, far from both, the sun dominates", () => {
+test("between the tiny and mid orbits, far from every other body, the sun dominates", () => {
   const r = (byId.tiny.orbit.radius + byId.mid.orbit.radius) / 2;
   let checked = 0;
   for (const t of times) {
     const poses = posesAt(system, t);
     for (let k = 0; k < 36; k++) {
       const a = (k / 36) * 2 * Math.PI, p = [r * Math.cos(a), 0, r * Math.sin(a)];
-      // "Far" is four times a planet's reach (how far its full pull lasts) from its centre.
-      if (dist(p, poses.tiny.pos) < 4 * byId.tiny.reach || dist(p, poses.mid.pos) < 4 * byId.mid.reach) continue;
+      // "Far" is four times a body's reach (how far its full pull lasts) from its centre; comets pass here too.
+      if (BODIES.some((b) => b.kind !== "sun" && dist(p, poses[b.id].pos) < 4 * b.reach)) continue;
       assert.equal(dominantBody(system, poses, p), "sun");
       checked++;
     }

@@ -16,8 +16,26 @@ export const BODIES = [
   { id: "mid", kind: "planet", radius: 12, g: 10, reach: 21, hold: 8, orbit: { around: "sun", radius: 120, period: 200, phase: 2.1 }, color: 0x4f9de8 },
   { id: "heavy", kind: "planet", radius: 18, g: 13, reach: 31.5, hold: 10, orbit: { around: "sun", radius: 200, period: 300, phase: 4.2 }, color: 0xd9744a },
   { id: "moon", kind: "moon", radius: 5, g: 3, reach: 8.75, hold: 4, orbit: { around: "heavy", radius: 40, period: 90, phase: 0 }, color: 0xc9c4bd },
-  { id: "giant", kind: "planet", radius: 22, g: 9, reach: 38.5, hold: 10, orbit: { around: "sun", radius: 290, period: 420, phase: 5.6 }, color: 0x8a6fd6 },
+  { id: "giant", kind: "planet", radius: 22, g: 9, reach: 38.5, hold: 10, orbit: { around: "sun", radius: 290, period: 420, phase: 5.6 }, color: 0x8a6fd6, ring: { inner: 1.4, outer: 2.3, tilt: 18 } },
+  // Comets: tilted ellipses, peri and apo in metres from the sun, inc/node/arg in degrees, phase in radians
+  // (see system.js). Searched so that over the full CYCLE no comet comes within 3 m of any body and some
+  // comet passes close to some planet at least every 120 s (tests/system.test.mjs). Two fast ones meet the
+  // inner planets often; the slow one passes the heavy planet about every five minutes (the giant only rarely).
+  { id: "comet-a", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 38.8, apo: 260.3, period: 240, phase: 3.39, inc: 12.4, node: 37, arg: 219 }, color: 0xbfe8ff },
+  { id: "comet-b", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 48.8, apo: 256.6, period: 240, phase: 0.019, inc: 22.6, node: 134, arg: 289 }, color: 0xbfe8ff },
+  { id: "comet-c", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 38, apo: 281.7, period: 600, phase: 5.894, inc: 8.1, node: 61, arg: 239 }, color: 0xbfe8ff },
 ];
+
+// Looks only, no collisions or gravity: you fly straight through both. The giant's `ring` is in multiples
+// of its radius, tilted `tilt` degrees from the orbital plane. The belt is a band of rocks round the sun
+// between the mid and heavy planets' paths (radii in m, `size` the range of rock sizes in m, one lap per
+// `period` s).
+export const BELT = { inner: 138, outer: 150, thick: 4, rocks: 500, size: [0.4, 1.8], period: 260 };
+
+// s; every orbit period divides it, so the whole system repeats exactly and can be checked over one cycle.
+export const CYCLE = 25200;
+// close: metres between a comet's and a planet's surfaces that count as a close pass (a chance to hop on or off).
+export const COMET = { close: 10 };
 
 export const PLAYER = {
   radius: 0.5, // hit sphere, centred radius above the feet

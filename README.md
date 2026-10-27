@@ -8,6 +8,15 @@ From the sun outwards: the hot red planet (close to the sun, so watch your footi
 planet, the mid blue planet where you start, the heavy orange planet with its moon, and the big, light
 purple giant.
 
+Three comets loop round the sun on tilted, stretched paths, fast near the sun and slow far out. Fly into
+one (or let it sweep into you) and you land on it; ride it, and jump off when it passes near a planet.
+The two fast comets pass the hot and tiny planets often, but hopping off near the sun takes good
+boosting. The slow one passes the heavy planet about every five minutes (the giant only rarely), where
+a plain jump gets you off. Stay on too long and it carries you close to the sun.
+
+The asteroid belt between the mid and heavy planets' paths and the giant's ring are scenery: you fly
+straight through them.
+
 ## Start it
 
 ```

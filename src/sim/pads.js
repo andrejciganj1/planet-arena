@@ -59,7 +59,10 @@ export function predictLaunch(world, pad, t) {
     if (toSun < sun.radius + PLAYER.radius + 1e-6 || toSun > VOID_RADIUS) break;
     if (e.groundId) {
       path.push([...e.pos]);
-      return { landsOn: e.groundId === pad.body ? null : e.groundId, path };
+      // Pads ignore comets: a comet window lasts a second or so, shorter than a cue stays fresh, so a cue
+      // that promised one would mostly lie. Landing on a comet shows as no landing (red).
+      const mine = e.groundId === pad.body || world.system.byId[e.groundId].kind === "comet";
+      return { landsOn: mine ? null : e.groundId, path };
     }
   }
   path.push([...e.pos]);

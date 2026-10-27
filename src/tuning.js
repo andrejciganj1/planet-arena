@@ -20,7 +20,7 @@ export const BODIES = [
   // Comets: tilted ellipses, peri and apo in metres from the sun, inc/node/arg in degrees, phase in radians
   // (see system.js). Searched so that over the full CYCLE no comet comes within 3 m of any body and some
   // comet passes close to some planet at least every 120 s (tests/system.test.mjs). Two fast ones meet the
-  // inner planets often; the slow one swings past the heavy and giant planets every few minutes.
+  // inner planets often; the slow one passes the heavy planet about every five minutes (the giant only rarely).
   { id: "comet-a", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 38.8, apo: 260.3, period: 240, phase: 3.39, inc: 12.4, node: 37, arg: 219 }, color: 0xbfe8ff },
   { id: "comet-b", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 48.8, apo: 256.6, period: 240, phase: 0.019, inc: 22.6, node: 134, arg: 289 }, color: 0xbfe8ff },
   { id: "comet-c", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 38, apo: 281.7, period: 600, phase: 5.894, inc: 8.1, node: 61, arg: 239 }, color: 0xbfe8ff },

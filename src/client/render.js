@@ -173,7 +173,8 @@ export function createRenderer(world, canvas, fixedView = null) {
   });
   const pathGeo = new THREE.BufferGeometry();
   pathGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * 1024), 3));
-  const pathMat = new THREE.LineBasicMaterial({ color: 0x3ee05a });
+  // Dashed, so a cue can't be mistaken for an orbit line.
+  const pathMat = new THREE.LineDashedMaterial({ color: 0x3ee05a, dashSize: 1, gapSize: 0.7 });
   const path = new THREE.Line(pathGeo, pathMat);
   path.frustumCulled = false;
   scene.add(path);
@@ -252,6 +253,7 @@ export function createRenderer(world, canvas, fixedView = null) {
         for (let i = 0; i < n; i++) arr.set(cue.path[i], 3 * i);
         pathGeo.attributes.position.needsUpdate = true;
         pathGeo.setDrawRange(0, n);
+        path.computeLineDistances(); // dashes follow the new path
         pathMat.color.setHex(cue.landsOn ? 0x3ee05a : 0xe0443e);
       }
 

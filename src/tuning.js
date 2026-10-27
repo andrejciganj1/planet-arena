@@ -108,6 +108,39 @@ export const PADS = [
   { id: "giant-c", body: "giant", dir: heading(330), speed: 36 },
 ];
 
+// Pickups. touch: feet within this of one take it; health: points a pack restores; fuelMax: the fuel
+// pickup fills the booster to this many tanks (the extra is used up, never refilled by standing);
+// respawn: seconds until a taken pickup comes back, by kind.
+export const PICKUP = { touch: 1.2, health: 25, fuelMax: 2, respawn: { health: 20, ammo: 15, weapon: 30, fuel: 40 } };
+// Fixed spots, the same every match, so players learn routes. The sniper rifle and railgun sit on the
+// moon and the hot planet, the hard places to reach (tests/pickups.test.mjs checks the layout rules).
+export const PICKUPS = [
+  { id: "hot-railgun", body: "hot", dir: heading(0, 50), kind: "weapon", weapon: "railgun" },
+  { id: "hot-health", body: "hot", dir: heading(120, -45), kind: "health" },
+  { id: "hot-fuel", body: "hot", dir: heading(240, 45), kind: "fuel" },
+  { id: "tiny-shotgun", body: "tiny", dir: heading(0, 50), kind: "weapon", weapon: "shotgun" },
+  { id: "tiny-health", body: "tiny", dir: heading(180, -50), kind: "health" },
+  { id: "tiny-shotgun-ammo", body: "tiny", dir: heading(90, -50), kind: "ammo", weapon: "shotgun" },
+  { id: "mid-minigun", body: "mid", dir: heading(90, 45), kind: "weapon", weapon: "minigun" },
+  { id: "mid-health", body: "mid", dir: heading(270, -45), kind: "health" },
+  { id: "mid-health-2", body: "mid", dir: heading(300, 60), kind: "health" },
+  { id: "mid-minigun-ammo", body: "mid", dir: heading(150, -40), kind: "ammo", weapon: "minigun" },
+  { id: "mid-shotgun-ammo", body: "mid", dir: heading(200, 40), kind: "ammo", weapon: "shotgun" },
+  { id: "heavy-rocket", body: "heavy", dir: heading(60, 40), kind: "weapon", weapon: "rocket" },
+  { id: "heavy-health", body: "heavy", dir: heading(200, -40), kind: "health" },
+  { id: "heavy-rocket-ammo", body: "heavy", dir: heading(300, 35), kind: "ammo", weapon: "rocket" },
+  { id: "heavy-minigun-ammo", body: "heavy", dir: heading(0, -35), kind: "ammo", weapon: "minigun" },
+  { id: "moon-sniper", body: "moon", dir: heading(0, 40), kind: "weapon", weapon: "sniper" },
+  { id: "moon-sniper-ammo", body: "moon", dir: heading(180, -40), kind: "ammo", weapon: "sniper" },
+  { id: "giant-minigun", body: "giant", dir: heading(30, 40), kind: "weapon", weapon: "minigun" },
+  { id: "giant-health", body: "giant", dir: heading(150, -40), kind: "health" },
+  { id: "giant-health-2", body: "giant", dir: heading(270, 50), kind: "health" },
+  { id: "giant-fuel", body: "giant", dir: heading(90, -50), kind: "fuel" },
+  { id: "giant-rocket-ammo", body: "giant", dir: heading(210, 35), kind: "ammo", weapon: "rocket" },
+  { id: "giant-sniper-ammo", body: "giant", dir: heading(330, -35), kind: "ammo", weapon: "sniper" },
+  { id: "giant-railgun-ammo", body: "giant", dir: heading(0, 60), kind: "ammo", weapon: "railgun" },
+];
+
 // touch: feet within this of a pad launch; lockout: no relaunch for this long.
 export const PAD = { touch: 1.2, lockout: 1 };
 // pathEvery: keep one predicted point every this many ticks for drawing.

@@ -5,6 +5,7 @@ import { createEntity, standOn, stepEntity, hitCentre, NO_INPUT } from "./entity
 import { surfaceInfo, sphereContacts } from "./collide.js";
 import { padPos, touchPads, refreshCues } from "./pads.js";
 import { fire, stepProjectiles } from "./weapons.js";
+import { stepPickups } from "./pickups.js";
 import { add, scale, dist, norm, anyPerpendicular } from "./vec.js";
 
 // Spawn candidates: an evenly spread, fixed list of directions (Fibonacci sphere).
@@ -62,7 +63,7 @@ export function createWorld(tuning) {
   const poses = posesAt(system, 0);
   const world = {
     tuning, system, t: 0, tick: 0, poses, prevPoses: poses, entities: {}, projectiles: [], explosions: [], beams: [],
-    pads: tuning.PADS, cues: {}, events: [], spawns: 0, rand: seeded(1),
+    pads: tuning.PADS, cues: {}, events: [], spawns: 0, rand: seeded(1), pickups: {},
   };
   for (const [id, kind] of [["dummy", "dummy"], ["player", "player"]]) {
     world.entities[id] = createEntity(id, kind, [0, 0, 0], [0, 1, 0]);
@@ -93,6 +94,7 @@ export function stepWorld(world, inputs, dt) {
     if (input.fire) fire(world, e);
     touchPads(world, e);
   }
+  stepPickups(world);
   stepProjectiles(world, dt);
   refreshCues(world);
 

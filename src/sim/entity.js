@@ -87,7 +87,8 @@ export function stepEntity(world, e, input, dt) {
       vt = scale(vt, Math.max(0, 1 - PLAYER.friction * dt));
     }
     e.vel = add(vt, scale(n, vn));
-    e.fuel = Math.min(BOOST.fuel, e.fuel + BOOST.refill * dt);
+    // Refill towards the usual tank, never lowering extra fuel from a pickup.
+    if (e.fuel < BOOST.fuel) e.fuel = Math.min(BOOST.fuel, e.fuel + BOOST.refill * dt);
     if (input.jump) {
       e.vel = add(vt, scale(e.up, PLAYER.jump));
       unground(world, e);

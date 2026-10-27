@@ -79,3 +79,7 @@ Things worth knowing:
 - Are jumps and the booster right?
 - Is the sun kill satisfying?
 - Are the pad windows too rare?
+
+## Licence
+
+MIT, see `LICENSE`.

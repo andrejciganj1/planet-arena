@@ -319,8 +319,13 @@ export function createRenderer(world, canvas, fixedView = null) {
       const cue = nearest && world.cues[nearest.pd.pad.id];
       path.visible = !!cue;
       if (cue) {
+        // The cue was computed up to a quarter second ago, and the pad's planet has moved on since. Carry
+        // the path along with the planet, so it starts on the pad every frame instead of drifting off and
+        // snapping back at each refresh (which looks like flicker up close).
+        const body = nearest.pd.pad.body;
+        const shift = sub(poses[body], posesAt(world.system, cue.at)[body].pos);
         const arr = pathGeo.attributes.position.array, n = Math.min(cue.path.length, 1024);
-        for (let i = 0; i < n; i++) arr.set(cue.path[i], 3 * i);
+        for (let i = 0; i < n; i++) arr.set(add(cue.path[i], shift), 3 * i);
         pathGeo.attributes.position.needsUpdate = true;
         pathGeo.setDrawRange(0, n);
         path.computeLineDistances(); // dashes follow the new path

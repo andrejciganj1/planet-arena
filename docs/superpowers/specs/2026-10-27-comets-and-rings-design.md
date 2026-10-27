@@ -5,7 +5,8 @@ spec), whose constraints all still hold.
 
 ## Intent
 
-The owner wants the solar system to look and feel more alive. Three additions:
+The owner wants the solar system to look and feel more alive. Three additions, and one small change to
+the jump pads:
 
 - **Comets** you can ride. A comet swings past on a long, stretched path; a player drifting in space
   can bump into it, land on it and ride along, then jump off when it passes near a planet. The owner's
@@ -14,6 +15,8 @@ The owner wants the solar system to look and feel more alive. Three additions:
 - **An asteroid belt**: one loose band of rocks circling the sun between two planets' paths. For looks
   only.
 - **A ringed planet**: one planet gets a flat ring like Saturn's. For looks only.
+- **Dashed pad cues**: a jump pad's predicted path is drawn dashed, so it can't be mistaken for an orbit
+  line.
 
 Success: in the prototype, the owner can catch a comet (by booster, or because it sweeps into them),
 ride it, and hop off onto a planet; and the system looks richer with the belt, the ring and the comets'
@@ -44,8 +47,12 @@ The owner agreed to all of this; items marked *builder's call* were proposed by 
 
 - **What a comet is:** a small rock with a glowing tail. It is a body like the moon: it has its own weak
   gravity, so you can stand on it, run on it and jump off it. Standing on it refills the booster, and a
-  rocket can blast someone off it. *Builder's call: a few metres across; one or two comets.*
-- **Its path:** a long, stretched loop round the sun. It passes fast and close by the sun, then swings
+  rocket can blast someone off it. *Builder's call: a few metres across.*
+- **Three comets** (owner's choice): two fast ones on 4-minute laps, which meet the inner planets (hot
+  and tiny) often, for frequent and risky rides near the sun; and one slow one on a 10-minute lap, which
+  swings past the outer planets every few minutes, for easy rides out there.
+- **Its path:** a long, stretched loop round the sun, tilted out of the planets' plane (the owner's
+  idea; it also keeps comets from hitting planets). It passes fast and close by the sun, then swings
   slowly out beyond the planets and comes back. Like everything else it is scripted from the match
   clock, so every machine agrees where it is. *Builder's call: faster near the sun and slower far out,
   as real comets move.*
@@ -81,7 +88,8 @@ From the main spec and the project's `CLAUDE.md`:
 
 Specific to this work:
 
-- No body, comets included, ever touches another body.
+- No body, comets included, ever touches another body. Every orbit period divides 25 200 s (7 hours), so
+  the whole system repeats exactly and this can be checked over one full cycle.
 - Everything stays inside the void radius (400 m from the sun), and riding a comet never counts as
   being lost in space.
 - Jump pads keep their launch windows (every pad at least 5 s, every planet at least once a minute).

@@ -42,6 +42,12 @@ export function spawnPoint(world, bodyId, forId = null) {
   return best ? { pos: best.pos, up: best.up } : list[0];
 }
 
+// The simulation's only randomness (weapon spread), seeded so every run, and later every machine, agrees.
+export function seeded(seed) {
+  let s = seed >>> 0;
+  return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
+}
+
 const homeOf = (world, e) => (e.kind === "dummy" ? world.tuning.DUMMY.body : world.tuning.PLAYER_BODY);
 
 function spawn(world, e) {
@@ -55,8 +61,8 @@ export function createWorld(tuning) {
   const system = createSystem(tuning.BODIES);
   const poses = posesAt(system, 0);
   const world = {
-    tuning, system, t: 0, tick: 0, poses, prevPoses: poses, entities: {}, projectiles: [], explosions: [],
-    pads: tuning.PADS, cues: {}, events: [], spawns: 0,
+    tuning, system, t: 0, tick: 0, poses, prevPoses: poses, entities: {}, projectiles: [], explosions: [], beams: [],
+    pads: tuning.PADS, cues: {}, events: [], spawns: 0, rand: seeded(1),
   };
   for (const [id, kind] of [["dummy", "dummy"], ["player", "player"]]) {
     world.entities[id] = createEntity(id, kind, [0, 0, 0], [0, 1, 0]);

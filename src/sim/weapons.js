@@ -1,22 +1,28 @@
-// The pistol and the rocket launcher. Every projectile falls with the same shaped gravity as players,
-// and is swept along its tick segment so fast bullets can't pass through thin chords of a planet.
+// The weapons. Every projectile falls with the same shaped gravity as players, and is swept along its
+// tick segment so fast bullets can't pass through thin chords of a planet.
 import { add, sub, scale, dist, norm } from "./vec.js";
 import { gravityAt } from "./gravity.js";
 import { segmentHit, segmentHitsSphere } from "./collide.js";
 import { viewDir, worldVel, hitCentre, unground } from "./entity.js";
 
-const specOf = (world, kind) => (kind === "rocket" ? world.tuning.ROCKET : world.tuning.PISTOL);
+const specOf = (world, kind) => world.tuning.WEAPONS[kind];
 
-// Fires e's weapon from the eye along the view, adding e's own velocity. False while cooling down.
+// Fires e's weapon from the eye along the view, adding e's own velocity. False while cooling down or
+// out of ammo. Spends a round; an emptied weapon hands you the pistol, which never runs out.
 export function fire(world, e) {
   if (e.cooldown > 0 || !e.alive) return false;
   const spec = specOf(world, e.weapon);
+  if (spec.ammo && !(e.ammo[e.weapon] > 0)) {
+    e.weapon = "pistol";
+    return false;
+  }
   world.projectiles.push({
     kind: e.weapon, owner: e.id, age: 0,
     pos: add(e.pos, scale(e.up, world.tuning.PLAYER.eye)),
     vel: add(scale(viewDir(e), spec.speed), worldVel(world, e)),
   });
   e.cooldown = spec.cooldown;
+  if (spec.ammo && --e.ammo[e.weapon] <= 0) e.weapon = "pistol";
   return true;
 }
 

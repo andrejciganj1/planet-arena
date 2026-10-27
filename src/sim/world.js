@@ -83,7 +83,7 @@ export function stepWorld(world, inputs, dt) {
     const input = inputs[e.id] || NO_INPUT;
     e.prev = { pos: e.pos, up: e.up }; // the renderer draws between this and the new state
     stepEntity(world, e, input, dt);
-    if (input.weapon) e.weapon = input.weapon;
+    if (input.weapon && e.weapons.includes(input.weapon)) e.weapon = input.weapon;
     if (input.fire) fire(world, e);
     touchPads(world, e);
   }

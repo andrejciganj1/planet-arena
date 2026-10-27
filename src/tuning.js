@@ -57,10 +57,23 @@ export const PLAYER = {
 
 export const BOOST = { accel: 12, fuel: 1.5, refill: 0.5 };
 
-export const PISTOL = { speed: 120, damage: 10, cooldown: 0.35 };
-
-// Splash damage and knockback fall off linearly to zero at `splash`, measured to the hit sphere centre.
-export const ROCKET = { speed: 30, cooldown: 0.9, splash: 4, damage: 90, knockback: 15, self: 0.5, showFor: 0.5 };
+// Weapons, keyed by name. type: "bullet" (falls with gravity), "rocket" (bullet that explodes) or "ray"
+// (instant and straight). spread: half-angle of the cone in degrees. ammo: { pickup: rounds a weapon pickup
+// gives, box: rounds an ammo box gives, max: the most you carry }; null means unlimited (the pistol).
+// Rocket: splash damage and knockback fall off linearly to zero at `splash`, measured to the hit sphere
+// centre; `self` scales damage to the shooter.
+export const WEAPONS = {
+  pistol: { type: "bullet", speed: 120, damage: 10, cooldown: 0.35, spread: 0, ammo: null },
+  shotgun: { type: "bullet", speed: 120, damage: 10, cooldown: 0.9, spread: 7, pellets: 10, range: 35, push: 0.8, ammo: { pickup: 8, box: 8, max: 24 } },
+  rocket: { type: "rocket", speed: 30, damage: 90, cooldown: 0.9, spread: 0, splash: 4, knockback: 15, self: 0.5, showFor: 0.5, ammo: { pickup: 5, box: 5, max: 15 } },
+  minigun: { type: "bullet", speed: 120, damage: 6, cooldown: 0.08, spread: 1.2, ammo: { pickup: 100, box: 80, max: 300 } },
+  sniper: { type: "bullet", speed: 600, damage: 75, cooldown: 1.5, spread: 0, zoom: 4, ammo: { pickup: 5, box: 5, max: 15 } },
+  railgun: { type: "ray", damage: 90, cooldown: 1.5, spread: 0, range: 800, showFor: 0.5, ammo: { pickup: 5, box: 5, max: 10 } },
+};
+// Keys 1 to 6, and the wheel's order.
+export const WEAPON_ORDER = ["pistol", "shotgun", "rocket", "minigun", "sniper", "railgun"];
+export const PISTOL = WEAPONS.pistol;
+export const ROCKET = WEAPONS.rocket;
 
 export const SHOT = { ownerGrace: 0.1 }; // s a projectile can't hit its own shooter
 

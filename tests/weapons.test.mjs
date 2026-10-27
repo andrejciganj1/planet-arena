@@ -26,6 +26,12 @@ const run = (w, secs, inputs = {}, each = null) => {
   }
   return false;
 };
+// Hands e weapon w with n rounds and puts it in hand.
+function arm(e, w, n = 15) {
+  if (!e.weapons.includes(w)) e.weapons.push(w);
+  e.ammo[w] = n;
+  e.weapon = w;
+}
 // Keeps the far entity out of the way.
 const park = (w, id) => put(w, id, "heavy", [0, -1, 0]);
 
@@ -47,7 +53,7 @@ test("a rocket curves towards the planet it was fired across", () => {
   const w = createWorld(tuning);
   park(w, "dummy");
   const p = put(w, "player", "mid", [0, 1, 0]);
-  p.weapon = "rocket";
+  arm(p, "rocket");
   fire(w, p);
   const r = w.projectiles[0];
   const start = [...r.pos], v0 = [...r.vel], t0 = w.t;
@@ -61,7 +67,7 @@ test("a rocket that hits the ground explodes there", () => {
   const w = createWorld(tuning);
   park(w, "dummy");
   const p = put(w, "player", "mid", norm([1, 1, 0]));
-  p.weapon = "rocket";
+  arm(p, "rocket");
   p.pitch = -Math.PI / 2;
   run(w, 0.1, { player: { ...NO_INPUT, fire: true } });
   const ex = w.events.find((e) => e.type === "explode");
@@ -88,7 +94,7 @@ test("a rocket jump on the heavy planet lifts the player and lands them back", (
   park(w, "dummy");
   w.entities.dummy.pos = add(w.entities.dummy.pos, [0, 0, 0]);
   const p = put(w, "player", "heavy", norm([0, 1, 1]));
-  p.weapon = "rocket";
+  arm(p, "rocket");
   p.pitch = -Math.PI / 2;
   let top = 0, left = false, shot = false;
   const once = () => (shot ? {} : ((shot = true), { player: { ...NO_INPUT, fire: true } }));
@@ -154,6 +160,8 @@ test("fire honours the cooldown, and the weapon input switches weapons", () => {
   assert.equal(fire(w, p), false);
   run(w, PISTOL.cooldown + TICK);
   assert.equal(fire(w, p), true);
+  arm(p, "rocket");
+  p.weapon = "pistol";
   stepWorld(w, { player: { ...NO_INPUT, weapon: "rocket" } }, TICK);
   assert.equal(p.weapon, "rocket");
   run(w, ROCKET.cooldown);
@@ -162,4 +170,47 @@ test("fire honours the cooldown, and the weapon input switches weapons", () => {
   // A projectile carries the shooter's velocity: on a moving planet, the planet's.
   const r = w.projectiles.at(-1);
   assert.ok(Math.abs(len(sub(r.vel, w.poses.mid.vel)) - ROCKET.speed) < 0.5);
+});
+
+test("you start with the pistol only, and a key for a weapon you don't hold does nothing", () => {
+  const w = padless(), p = w.entities.player;
+  assert.deepEqual(p.weapons, ["pistol"]);
+  stepWorld(w, { player: { ...NO_INPUT, weapon: "rocket" } }, TICK);
+  assert.equal(p.weapon, "pistol");
+});
+
+test("a held weapon spends one ammo per shot, and an empty one hands you the pistol", () => {
+  const w = padless(), p = w.entities.player;
+  arm(p, "rocket", 2);
+  assert.equal(fire(w, p), true);
+  assert.equal(p.ammo.rocket, 1);
+  run(w, ROCKET.cooldown + TICK);
+  assert.equal(fire(w, p), true);
+  assert.equal(p.ammo.rocket, 0);
+  assert.equal(p.weapon, "pistol");
+  run(w, ROCKET.cooldown + TICK);
+  assert.equal(fire(w, p), true);
+  assert.equal(w.projectiles.at(-1).kind, "pistol");
+});
+
+test("the pistol never runs out", () => {
+  const w = padless(), p = w.entities.player;
+  for (let i = 0; i < 50; i++) {
+    assert.equal(fire(w, p), true, `shot ${i}`);
+    p.cooldown = 0;
+  }
+  assert.equal(p.ammo.pistol, undefined);
+});
+
+test("respawning gives the pistol only", () => {
+  const w = padless(), p = w.entities.player;
+  arm(p, "rocket");
+  arm(p, "shotgun", 8);
+  p.pos = add(w.poses.sun.pos, [0, w.system.byId.sun.radius - 1, 0]);
+  p.groundId = null;
+  run(w, PLAYER.respawn + 0.5);
+  assert.ok(p.alive);
+  assert.deepEqual(p.weapons, ["pistol"]);
+  assert.deepEqual(p.ammo, {});
+  assert.equal(p.weapon, "pistol");
 });

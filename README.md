@@ -34,11 +34,19 @@ Then open http://localhost:8100 in a desktop browser and click the page to captu
 | W A S D | Run |
 | Space | Jump; in the air, hold it to fire the booster (after a jump, let go and press again) |
 | Left mouse | Fire |
-| 1 / 2 / wheel | Pistol / rocket launcher |
+| Right mouse | Hook: hold to pull yourself to the planet, moon or comet you aim at (25 m); let go to fly on |
+| 1 to 6 / wheel | Pistol, shotgun, rocket launcher, minigun, sniper rifle, railgun (the wheel skips ones you don't hold) |
+| Shift | Zoom, with the sniper rifle |
 
-- Bottom left: your health (your own rockets hurt you too) and the booster's fuel, which refills while you
-  stand on anything. A full booster burn adds 18 m/s, more than it takes to leave most planets, so boost
-  with care.
+- Bottom left: your health (your own rockets hurt you too), the weapons you hold, the one in hand with its
+  ammo, and the booster's fuel, which refills while you stand on anything. A full booster burn adds 18 m/s,
+  more than it takes to leave most planets, so boost with care. Extra fuel from a pickup shows in blue.
+- The crosshair gets a ring when the hook can catch something.
+- You start with the pistol, which never runs out. Pickups float over fixed spots on every planet and the
+  moon: health (white with a red cross), booster fuel (orange, fills the tank to double), weapons (long
+  bars) and ammo (small boxes, in the weapon's colour). A taken pickup comes back after a while; its spot
+  shows a faint outline meanwhile. The sniper rifle is on the moon and the railgun on the hot planet. Dying
+  costs you everything but the pistol.
 - Jump pads are the discs with an arrow. Green means a launch right now lands on another body; red means
   it won't. Stand near one to see the predicted path.
 - The dummy (orange, with a face) lives on the tiny green planet and comes back 3 s after it dies.

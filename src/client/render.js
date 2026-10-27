@@ -2,8 +2,9 @@
 // blasts, and the weapon in view. It only reads the world; drawing happens between the last two ticks
 // (alpha) so motion stays smooth on screens faster than the 60 Hz simulation.
 import * as THREE from "three";
-import { PLAYER, ROCKET, PAD_CUE, BELT, TICK } from "../tuning.js";
+import { PLAYER, ROCKET, PAD_CUE, BELT, TICK, PICKUPS, WEAPONS } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
+import { pickupReady } from "../sim/pickups.js";
 import { posesAt } from "../sim/system.js";
 import { surfaceInfo } from "../sim/collide.js";
 import { add, sub, scale, lerp, norm, cross, dist, rotateAxis, rotateFromTo } from "../sim/vec.js";
@@ -163,7 +164,46 @@ function weaponModels() {
   bore.position.z = -0.249;
   rocket.add(tube, bore);
   rocket.position.set(0.18, -0.17, -0.5);
-  return { pistol, rocket };
+  // The other four from boxes and tubes, each in its own colour (as their pickups are).
+  const gun = (color, parts, at) => {
+    const g = new THREE.Group();
+    for (const [w, h, d, x, y, z] of parts) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lit(color));
+      m.position.set(x, y, z);
+      g.add(m);
+    }
+    g.position.set(...at);
+    return g;
+  };
+  const shotgun = gun(WEAPON_COLORS.shotgun, [[0.06, 0.06, 0.42, 0, 0.01, -0.12], [0.07, 0.05, 0.18, 0, -0.04, 0.06]], [0.17, -0.16, -0.45]);
+  const minigun = gun(WEAPON_COLORS.minigun, [[0.11, 0.11, 0.36, 0, 0, -0.1], [0.04, 0.04, 0.2, 0.03, 0.03, -0.36], [0.04, 0.04, 0.2, -0.03, -0.03, -0.36]], [0.18, -0.17, -0.48]);
+  const sniper = gun(WEAPON_COLORS.sniper, [[0.04, 0.05, 0.6, 0, 0, -0.18], [0.05, 0.05, 0.14, 0, 0.06, -0.08]], [0.16, -0.15, -0.45]);
+  const railgun = gun(WEAPON_COLORS.railgun, [[0.07, 0.07, 0.5, 0, 0, -0.14], [0.09, 0.02, 0.4, 0, 0.05, -0.14], [0.09, 0.02, 0.4, 0, -0.05, -0.14]], [0.17, -0.16, -0.47]);
+  return { pistol, shotgun, rocket, minigun, sniper, railgun };
+}
+
+const WEAPON_COLORS = { pistol: 0x8fa1b8, shotgun: 0xc98a4b, rocket: 0x5f8f4e, minigun: 0x9a9fa8, sniper: 0x4b7bc9, railgun: 0x3fe0d0 };
+
+// A pickup's look: health a white box with a red cross, fuel an orange can, a weapon a long bar and ammo
+// a small box in the weapon's colour. The same shape as a faint wireframe marks a spot waiting to refill.
+function pickupMesh(pk, wire) {
+  const mat = (color) => (wire
+    ? new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: 0.25 })
+    : new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.4 }));
+  const g = new THREE.Group();
+  if (pk.kind === "health") {
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), mat(0xffffff)));
+    if (!wire) {
+      for (const [w, h] of [[0.62, 0.18], [0.18, 0.62]]) g.add(new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.62), mat(0xe0443e)));
+    }
+  } else if (pk.kind === "fuel") {
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.7, 12), mat(0xff9a2e)));
+  } else if (pk.kind === "weapon") {
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 1.1), mat(WEAPON_COLORS[pk.weapon])));
+  } else {
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), mat(WEAPON_COLORS[pk.weapon])));
+  }
+  return g;
 }
 
 export function createRenderer(world, canvas, fixedView = null) {
@@ -244,15 +284,33 @@ export function createRenderer(world, canvas, fixedView = null) {
   const dummy = dummyMesh();
   scene.add(dummy);
   const weapons = weaponModels();
-  camera.add(weapons.pistol, weapons.rocket);
+  camera.add(...Object.values(weapons));
+
+  // Pickups float over their spots; each has a solid look and a faint one for while it is gone.
+  const pickups = PICKUPS.map((pk) => {
+    const solid = pickupMesh(pk, false), ghost = pickupMesh(pk, true);
+    scene.add(solid, ghost);
+    return { pk, solid, ghost };
+  });
+  // The rope, from the hand to where the hook caught.
+  const ropeGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+  const rope = new THREE.Line(ropeGeo, new THREE.LineBasicMaterial({ color: 0xd9d2c0 }));
+  rope.frustumCulled = false;
+  scene.add(rope);
+  const beamMat = () => new THREE.LineBasicMaterial({ color: 0x6fe3ff, transparent: true });
 
   const rocketGeo = new THREE.CapsuleGeometry(0.12, 0.45, 4, 8), rocketMat = new THREE.MeshLambertMaterial({ color: 0xd8dde6 });
   const bulletGeo = new THREE.SphereGeometry(0.09, 8, 6), bulletMat = new THREE.MeshBasicMaterial({ color: 0xfff27a });
   const blastGeo = new THREE.SphereGeometry(1, 16, 12);
-  const shots = [], blasts = [];
+  const shots = [], blasts = [], beams = [];
   const pooled = (list, make) => (i) => list[i] || (list[i] = (() => { const m = make(); scene.add(m); return m; })());
   const shot = pooled(shots, () => new THREE.Mesh(rocketGeo, rocketMat));
   const blast = pooled(blasts, () => new THREE.Mesh(blastGeo, new THREE.MeshBasicMaterial({ color: 0xff9a2e, transparent: true, depthWrite: false })));
+  const beam = pooled(beams, () => {
+    const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), beamMat());
+    l.frustumCulled = false;
+    return l;
+  });
 
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -267,9 +325,14 @@ export function createRenderer(world, canvas, fixedView = null) {
   const between = (e, alpha) => (e.prev ? { pos: lerp(e.prev.pos, e.pos, alpha), up: norm(lerp(e.prev.up, e.up, alpha)) } : { pos: e.pos, up: e.up });
 
   return {
-    // alpha: how far towards the next tick to draw (0..1); look: mouse turn not yet given to the sim.
-    draw(alpha, look) {
+    // alpha: how far towards the next tick to draw (0..1); look: mouse turn not yet given to the sim;
+    // zoom: the sniper's magnification while zoomed, else 1.
+    draw(alpha, look, zoom = 1) {
       resize();
+      if (camera.fov !== 80 / zoom) {
+        camera.fov = 80 / zoom;
+        camera.updateProjectionMatrix();
+      }
       const poses = {};
       for (const b of world.system.bodies) {
         const pos = lerp(world.prevPoses[b.id].pos, world.poses[b.id].pos, alpha);
@@ -303,8 +366,7 @@ export function createRenderer(world, canvas, fixedView = null) {
         camera.up.copy(v3(up));
         camera.lookAt(v3(add(eye, dir)));
       }
-      weapons.pistol.visible = !fixedView && p.alive && p.weapon === "pistol";
-      weapons.rocket.visible = !fixedView && p.alive && p.weapon === "rocket";
+      for (const [name, m] of Object.entries(weapons)) m.visible = !fixedView && p.alive && p.weapon === name && zoom === 1;
       const viewer = camera.position.toArray();
 
       let nearest = null;
@@ -360,6 +422,38 @@ export function createRenderer(world, canvas, fixedView = null) {
         m.material.opacity = 0.85 * (1 - k);
       }
       for (; i < blasts.length; i++) blasts[i].visible = false;
+      i = 0;
+      for (const b of world.beams) {
+        const l = beam(i++);
+        l.visible = true;
+        l.geometry.setFromPoints([v3(b.from), v3(b.to)]);
+        l.material.opacity = 1 - b.age / WEAPONS.railgun.showFor;
+      }
+      for (; i < beams.length; i++) beams[i].visible = false;
+
+      // Pickups bob and turn above their spots.
+      const t = world.t + (alpha - 1) * TICK;
+      for (const { pk, solid, ghost } of pickups) {
+        const b = world.system.byId[pk.body];
+        const at = add(poses[pk.body], scale(pk.dir, b.radius + 1 + 0.15 * Math.sin(2 * t + b.radius)));
+        const ready = pickupReady(world, pk);
+        for (const m of [solid, ghost]) {
+          m.position.copy(v3(at));
+          m.quaternion.setFromUnitVectors(Y, v3(pk.dir));
+          m.rotateY(t);
+        }
+        solid.visible = ready;
+        ghost.visible = !ready;
+      }
+
+      // The rope from just below the eye to the caught point (interpolated with its body).
+      rope.visible = p.alive && !!p.hook;
+      if (rope.visible) {
+        const { pos, up } = between(p, alpha);
+        const hand = add(pos, scale(up, PLAYER.eye - 0.4));
+        const anchor = add(poses[p.hook.body], p.hook.offset);
+        ropeGeo.setFromPoints([v3(hand), v3(anchor)]);
+      }
 
       renderer.render(scene, camera);
     },

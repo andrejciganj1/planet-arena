@@ -5,7 +5,7 @@ Date: 2026-10-25. Status: for the owner's review.
 ## Intent
 
 A fast 3D arena shooter in the browser, in the spirit of Quake 3 Arena deathmatch, fought across a small
-solar system. Every planet, moon and station has its own gravity, which pulls on players, bots and
+solar system. Every planet and moon has its own gravity, which pulls on players, bots and
 projectiles. The physics is the point: the best kills come from using gravity and knockback, not only
 from aiming.
 
@@ -64,16 +64,13 @@ region serves everyone with low lag.
 - **Moons** orbit some planets. They have weak gravity and stay close to their planet, so a jump from a
   moon always reaches its planet. They are high perches and a second place where knockback can throw
   someone off.
-- **Space stations** (from stage 2, with the pickups) are static: they don't orbit. They hold the weapon
-  and health pickups and make safe sniping perches, so players keep flying to them and fighting over
-  them. They have their own weak gravity, so you can stand on them and jump off again.
 - Planets don't spin, to keep it simple at first.
 - Standing on a planet you see the others moving across the sky and the sun at the centre. You ride along
   with your planet without noticing its motion.
 
 ### Gravity and movement
 
-- Every body (sun, planets, moons, stations) pulls on players, bots, rockets and sniper bullets.
+- Every body (sun, planets, moons) pulls on players, bots, rockets and sniper bullets.
   Gameplay feel decides how the pulls are shaped, not real physics: on or near a body's surface its own
   pull dominates; between bodies the pulls combine, with the sun's pull drawing anything that has lost
   its footing.
@@ -83,8 +80,8 @@ region serves everyone with low lag.
   reaches another planet depends on where that planet is at that moment.
 - **Booster.** In the air, a small booster pushes the player in the direction they choose, so they are
   never helpless after a jump pad launch or a blast. It drains quickly. It is for correcting a course
-  or reaching a nearby moon or station, not for flying freely: how you jumped still counts most.
-  - My calls: it refills while you stand on a body (planet, moon or station), and a bar shows how much
+  or reaching a nearby moon, not for flying freely: how you jumped still counts most.
+  - My calls: it refills while you stand on a body (planet or moon), and a bar shows how much
     is left.
   - A mistimed launch or a big blast is therefore usually survivable with good boosting. The sun stays a
     real danger for anyone who has used their booster up or is thrown hard on a light planet or moon.
@@ -100,7 +97,8 @@ region serves everyone with low lag.
 | Sniper | A fast bullet that bends a little over long shots | Zooms. Picks people off across planets; aim slightly ahead and above. |
 | Railgun | None: instant and dead straight | As in Quake. |
 
-Weapons other than the pistol are picked up on the stations.
+Weapons other than the pistol are picked up on the planets, so players keep flying between them and
+fighting over them.
 
 ### Rules
 
@@ -108,7 +106,7 @@ Weapons other than the pistol are picked up on the stations.
 - A death in the sun counts as a kill for whoever hit you last, if they hit you within the last few
   seconds. Falling into the sun on your own costs you a point.
 - You respawn on a random planet, away from other players, with only the pistol.
-- Health only, no armour, to start. Health pickups are on the stations.
+- Health only, no armour, to start. Health pickups are on the planets too.
 - Pickups come back a while after someone takes them.
 - Bots join automatically to keep a match at about four players, and leave as people join.
 
@@ -136,7 +134,7 @@ right mouse to zoom the sniper, number keys and mouse wheel to change weapons.
 
 - **three.js** to draw the game (the owner's other project uses it).
 - **Rapier** (its browser build, which also runs in Node.js) for collisions, unless the builder finds the
-  shapes simple enough (spheres for planets and moons, boxes for stations) to collide without it.
+  shapes simple enough (spheres for planets and moons) to collide without it.
 - **Our own code** for gravity and the player's movement, as standard character controllers assume "down"
   always points the same way.
 - **Orbits are scripted, not simulated**: each planet and moon follows a fixed path computed from the
@@ -169,9 +167,9 @@ right mouse to zoom the sniper, number keys and mouse wheel to change weapons.
 1. **Prototype (single player, no server).** One sun, five planets, one moon, jump pads,
    the booster, the pistol and the rocket launcher, and a dummy target that can be blasted into the sun. Done when the
    owner finds running, jumping and flying between planets fun. (Changed after the first playtest: it began
-   with three planets and a station; the owner swapped the station for two more planets. Stations come in
-   stage 2, where their pickups give them a purpose.)
-2. **The full game alone.** Four to six planets, moons, stations, all four weapons, pickups, health, the
+   with three planets and a station; the owner swapped the station for two more planets and dropped
+   stations from the game. Pickups go on the planets.)
+2. **The full game alone.** Four to six planets, moons, all four weapons, pickups, health, the
    rules and score, bots.
 3. **Online.** The server, rooms by link, prediction and smoothing, lag compensation, hosting. Done when
    the owner and their friends play a full match.
@@ -182,6 +180,6 @@ right mouse to zoom the sniper, number keys and mouse wheel to change weapons.
 - Exact numbers: sizes, gravity strengths, orbit periods, speeds, damage, timers (all in the tuning
   file, tuned with the owner).
 - How gravity pulls are shaped and blended between bodies, within the rules above.
-- Layout of the solar system: which planets have moons, where stations and jump pads go.
+- Layout of the solar system: which planets have moons, where pickups and jump pads go.
 - How bots plan jumps between moving planets, use the booster and aim with gravity.
 - Sound and effects style, within "simple and cartoonish".

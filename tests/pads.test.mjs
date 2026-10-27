@@ -152,7 +152,7 @@ test("a runner who steps onto the pad off-centre while the cue is on lands on th
         const centre = padPos(w, pad, w.poses), up = surfaceInfo(body, w.poses[pad.body], centre).normal;
         const k = [[1, 0, 0], [0, 0, 1], [-1, 0, 0], [0, 0, -1]][side];
         const offset = scale(norm(projectOnPlane(Math.abs(dot(k, up)) > 0.9 ? [0, 1, 0] : k, up)), 1.1);
-        const feet = body.radius ? add(c, scale(norm(add(sub(centre, c), offset)), body.radius)) : add(centre, offset);
+        const feet = add(c, scale(norm(add(sub(centre, c), offset)), body.radius));
         const p = w.entities.player;
         Object.assign(p, createEntity("player", "player", feet, surfaceInfo(body, w.poses[pad.body], feet).normal));
         standOn(p, pad.body);

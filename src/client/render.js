@@ -47,21 +47,6 @@ function sphereMesh(body, rand) {
   return mesh;
 }
 
-function stationMesh(body) {
-  const g = new THREE.Group();
-  const box = new THREE.BoxGeometry(...body.size);
-  g.add(new THREE.Mesh(box, new THREE.MeshLambertMaterial({ color: body.color, flatShading: true })));
-  g.add(new THREE.LineSegments(new THREE.EdgesGeometry(box), new THREE.LineBasicMaterial({ color: 0x39424d })));
-  // Deck stripes, to read the deck's edges and your speed on it.
-  const stripe = new THREE.MeshBasicMaterial({ color: 0xf0c541 });
-  for (const sx of [-1, 1]) {
-    const s = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.02, body.size[2] - 1), stripe);
-    s.position.set(sx * (body.size[0] / 2 - 0.6), body.size[1] / 2 + 0.01, 0);
-    g.add(s);
-  }
-  return g;
-}
-
 function glowSprite(color, size) {
   const c = document.createElement("canvas");
   c.width = c.height = 128;
@@ -162,7 +147,7 @@ export function createRenderer(world, canvas, fixedView = null) {
 
   const bodies = {};
   for (const b of world.system.bodies) {
-    const m = b.kind === "station" ? stationMesh(b) : sphereMesh(b, rand);
+    const m = sphereMesh(b, rand);
     if (b.kind === "sun") m.add(glowSprite(0xffb43d, b.radius * 6));
     bodies[b.id] = m;
     scene.add(m);

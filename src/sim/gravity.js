@@ -8,17 +8,8 @@
 import { sub, add, scale, len, norm } from "./vec.js";
 import { surfaceInfo } from "./collide.js";
 
-// The point of a body's core closest to p: the centre for spheres, the mid-plane rectangle for the
-// station, so the station pulls straight into its deck right out to the corners.
-export function corePoint(body, pose, p) {
-  if (body.kind !== "station") return pose.pos;
-  const [w, , d] = body.size;
-  const c = pose.pos;
-  return [Math.min(Math.max(p[0], c[0] - w / 2), c[0] + w / 2), c[1], Math.min(Math.max(p[2], c[2] - d / 2), c[2] + d / 2)];
-}
-
 export function bodyPull(body, pose, p) {
-  const v = sub(corePoint(body, pose, p), p);
+  const v = sub(pose.pos, p);
   const d = len(v);
   if (d < 1e-9) return [0, 0, 0];
   const g = d <= body.reach ? body.g : body.g * (body.reach / d) ** 2;

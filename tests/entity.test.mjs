@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { BOOST, TICK, PLAYER } from "../src/tuning.js";
 import { createEntity, standOn, stepEntity, viewDir, worldVel, NO_INPUT } from "../src/sim/entity.js";
-import { makeWorld, assertFrame, directions, WITH_STATION } from "./helpers.mjs";
+import { makeWorld, assertFrame, directions } from "./helpers.mjs";
 import { add, sub, scale, norm, dist, len, dot } from "../src/sim/vec.js";
 
 // An entity standing on body `id` at unit direction u from its centre.
@@ -117,20 +117,8 @@ test("up flipping to its opposite leaves a valid frame, no NaN", () => {
   assert.ok(dot(e.up, norm(sub(e.pos, world.poses.mid.pos))) > Math.cos((5 * Math.PI) / 180), `up ${e.up}`);
 });
 
-test("standing on the station deck's corner and on the moon is stable", () => {
-  const world = makeWorld(0, WITH_STATION);
-  const st = world.system.byId.station, s = world.poses.station.pos, top = s[1] + st.size[1] / 2;
-  const corners = [[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([sx, sz], i) => {
-    const e = createEntity("c" + i, "player", [s[0] + sx * (st.size[0] / 2 - 0.1), top, s[2] + sz * (st.size[2] / 2 - 0.1)], [0, 1, 0]);
-    standOn(e, "station");
-    return (world.entities[e.id] = e);
-  });
-  const starts = corners.map((e) => [...e.pos]);
-  world.step(600);
-  corners.forEach((e, i) => {
-    assert.equal(e.groundId, "station");
-    assert.ok(dist(e.pos, starts[i]) < 0.05, `corner ${i}`);
-  });
+test("standing on the moon's far side is stable", () => {
+  const world = makeWorld(0);
   // The moon is covered with the planets in the first test; here, its far side.
   const m = placeOn(world, "moon", norm(sub(world.poses.moon.pos, world.poses.heavy.pos)), "m");
   const rel = sub(m.pos, world.poses.moon.pos);

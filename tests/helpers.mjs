@@ -6,13 +6,8 @@ import { createSystem, posesAt } from "../src/sim/system.js";
 import { stepEntity, NO_INPUT } from "../src/sim/entity.js";
 import { dist, len, dot } from "../src/sim/vec.js";
 
-// The game has no station for now; stations come back with pickups (spec, stage 2). Tests add this one so
-// the box code stays covered.
-export const TEST_STATION = { id: "station", kind: "station", size: [24, 2, 16], g: 3, reach: 8, hold: 6, orbit: null, pos: [0, 8, -92], color: 0xb8c2cc };
-export const WITH_STATION = [...tuning.BODIES, TEST_STATION];
-
-export function makeWorld(t = 0, bodies = tuning.BODIES) {
-  const system = createSystem(bodies);
+export function makeWorld(t = 0) {
+  const system = createSystem(tuning.BODIES);
   const poses = posesAt(system, t);
   const world = { tuning, system, t, poses, prevPoses: poses, entities: {}, projectiles: [], explosions: [], pads: [], cues: {}, events: [] };
   // input: a record, or a function (entity, tick) -> record.

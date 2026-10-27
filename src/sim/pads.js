@@ -7,14 +7,9 @@ import { posesAt } from "./system.js";
 import { createEntity, standOn, stepEntity, unground, hitCentre, NO_INPUT } from "./entity.js";
 import { surfaceInfo } from "./collide.js";
 
-// Where a pad sits: out from the body's centre along `at` (or its launch direction), on the surface.
+// Where a pad sits: on the surface, out from the body's centre along its launch direction.
 export function padPos(world, pad, poses) {
-  const body = world.system.byId[pad.body];
-  const c = poses[pad.body].pos;
-  const at = pad.at || pad.dir;
-  if (body.kind !== "station") return add(c, scale(at, body.radius));
-  const t = Math.min(...[0, 1, 2].map((i) => (Math.abs(at[i]) > 1e-9 ? body.size[i] / 2 / Math.abs(at[i]) : Infinity)));
-  return add(c, scale(at, t));
+  return add(poses[pad.body].pos, scale(pad.dir, world.system.byId[pad.body].radius));
 }
 
 export function launch(world, e, pad) {

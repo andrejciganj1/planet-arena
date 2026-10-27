@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { BODIES } from "../src/tuning.js";
 import { createSystem, posesAt } from "../src/sim/system.js";
 import { dist, sub, scale } from "../src/sim/vec.js";
-import { TEST_STATION as station, WITH_STATION } from "./helpers.mjs";
 
 const system = createSystem(BODIES);
 const spheres = BODIES.filter((b) => b.radius);
@@ -20,14 +19,6 @@ test("the moon keeps its distance from its planet", () => {
   for (let t = 0; t <= 600; t += 1) {
     const p = posesAt(system, t);
     assert.ok(Math.abs(dist(p.moon.pos, p[moon.orbit.around].pos) - moon.orbit.radius) < 1e-6);
-  }
-});
-
-test("the station never moves", () => {
-  for (const t of [0, 13.5, 300]) {
-    const p = posesAt(createSystem(WITH_STATION), t).station;
-    assert.deepEqual(p.pos, station.pos);
-    assert.deepEqual(p.vel, [0, 0, 0]);
   }
 });
 

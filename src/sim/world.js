@@ -15,11 +15,7 @@ const SPAWN_DIRS = Array.from({ length: 48 }, (_, i) => {
 
 function candidates(world, body) {
   const c = world.poses[body.id].pos;
-  if (body.kind !== "station") return SPAWN_DIRS.map((u) => ({ pos: add(c, scale(u, body.radius)), up: u }));
-  const [w, h, d] = body.size, out = [];
-  for (let i = 1; i < 6; i++) for (let j = 1; j < 4; j++)
-    out.push({ pos: [c[0] - w / 2 + (w * i) / 6, c[1] + h / 2, c[2] - d / 2 + (d * j) / 4], up: [0, 1, 0] });
-  return out;
+  return SPAWN_DIRS.map((u) => ({ pos: add(c, scale(u, body.radius)), up: u }));
 }
 
 // A point on bodyId's surface clear of pads and other bodies, and far from the other entities: at least

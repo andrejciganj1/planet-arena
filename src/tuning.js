@@ -51,7 +51,7 @@ export const DUMMY = { health: 100, respawn: 3, body: "tiny" };
 export const PLAYER_BODY = "mid"; // where the player starts and respawns
 
 // Pads: `dir` is the launch direction in world axes (nothing spins); the pad sits on its body out along
-// `at`, or along `dir` when there is no `at`. heading(a, el) is the unit vector at `a` degrees round the
+// `dir`. heading(a, el) is the unit vector at `a` degrees round the
 // orbital plane (from +x towards +z) and `el` degrees above it. The layout was searched so every pad has a
 // launch window of at least 5 s and every planet has one at least once a minute (tests/pads.test.mjs).
 // Speed is per planet, a little above what it takes to leave it: heavier planets need faster pads.

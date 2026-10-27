@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import * as tuning from "../src/tuning.js";
 import { createWorld, stepWorld, advance, spawnPoint } from "../src/sim/world.js";
 import { padPos } from "../src/sim/pads.js";
-import { NO_INPUT, hitCentre } from "../src/sim/entity.js";
+import { NO_INPUT, hitCentre, createEntity, standOn } from "../src/sim/entity.js";
 import { sphereContacts, surfaceInfo } from "../src/sim/collide.js";
-import { add, dist } from "../src/sim/vec.js";
+import { add, sub, scale, norm, dist } from "../src/sim/vec.js";
 import { skipTo } from "./helpers.mjs";
 
-const { TICK, MAX_TICKS, VOID_RADIUS, DUMMY, PLAYER } = tuning;
+const { TICK, MAX_TICKS, VOID_RADIUS, DUMMY, PLAYER, COMET } = tuning;
 const deaths = (w) => w.events.filter((e) => e.type === "death");
 
 test("a new world has the player on its body and the dummy on the tiny planet", () => {
@@ -163,4 +163,61 @@ test("an entity adrift too long is lost to the void", () => {
   while (d.alive && t < tuning.PLAYER.adrift + 1) stepWorld(w, {}, TICK), (t += TICK);
   assert.deepEqual(deaths(w), [{ type: "death", id: "dummy", cause: "void" }]);
   assert.ok(t >= tuning.PLAYER.adrift - 2 * TICK, `died after ${t}`);
+});
+
+// A pad-free world at t with the dummy out of the way and the player stood on body `id`, facing out along u.
+function riderOn(t, id, u) {
+  const w = createWorld(tuning);
+  skipTo(w, t);
+  w.pads = [];
+  w.entities.dummy.alive = false;
+  w.entities.dummy.respawnAt = Infinity;
+  const p = w.entities.player, b = w.system.byId[id];
+  Object.assign(p, createEntity("player", "player", add(w.poses[id].pos, scale(u, b.radius)), u));
+  standOn(p, id);
+  return { w, p };
+}
+
+test("riding a comet for a whole lap, through perihelion and aphelion, you stay on and alive", () => {
+  for (const id of ["comet-a", "comet-c"]) {
+    const { w, p } = riderOn(0, id, [0, 1, 0]);
+    const ticks = Math.round(w.system.byId[id].orbit.period / TICK);
+    for (let i = 0; i < ticks; i++) {
+      stepWorld(w, {}, TICK);
+      assert.ok(p.alive && p.groundId === id, `${id} at ${w.t.toFixed(2)}: ${p.alive ? p.groundId : "dead"}`);
+    }
+  }
+});
+
+test("jumping off the slow comet at a close pass lands you on that outer planet", () => {
+  const w0 = createWorld(tuning), comet = w0.system.byId["comet-c"];
+  const passes = [];
+  for (const id of ["mid", "heavy", "giant"]) {
+    const b = w0.system.byId[id];
+    let prev = Infinity, closing = false;
+    for (let t = 0; t < 1800; t += 0.25) {
+      skipTo(w0, t);
+      const gap = dist(w0.poses[comet.id].pos, w0.poses[id].pos) - comet.radius - b.radius;
+      if (closing && gap > prev && prev <= COMET.close) passes.push({ id, t: t - 0.25 });
+      closing = gap < prev;
+      prev = gap;
+    }
+  }
+  assert.ok(passes.length > 0);
+  for (const { id, t } of passes) {
+    // Stand on the side facing the planet 3 s before the closest approach, then jump at it.
+    const w = createWorld(tuning);
+    skipTo(w, t - 3);
+    const u = norm(sub(w.poses[id].pos, w.poses[comet.id].pos));
+    const { w: rw, p } = riderOn(t - 3, comet.id, u);
+    for (let i = 0; i < Math.round(3 / TICK); i++) stepWorld(rw, {}, TICK);
+    stepWorld(rw, { player: { ...NO_INPUT, jump: true } }, TICK);
+    let end = null;
+    for (let i = 0; i < 20 / TICK && !end; i++) {
+      stepWorld(rw, {}, TICK);
+      if (!p.alive) end = "dead";
+      else if (p.groundId) end = p.groundId;
+    }
+    assert.equal(end, id, `pass at ${t} s`);
+  }
 });

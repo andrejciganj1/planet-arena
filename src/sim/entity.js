@@ -118,15 +118,17 @@ export function stepEntity(world, e, input, dt) {
     const into = dot(rel, c.normal);
     if (into < 0) rel = sub(rel, scale(c.normal, into));
     wv = add(rel, bv);
-    // 8. Standing if the surface is within groundAngle of up.
-    if (dot(c.normal, e.up) >= cosGround && (!ground || c.depth > ground.depth)) ground = c;
+    // 8. Standing if the surface is within groundAngle of up. A comet catches you at any angle: hitting
+    // one is how you board it, so it must not bounce or skim you off. Up then turns to it as usual.
+    const catches = system.byId[c.id].kind === "comet";
+    if ((catches || dot(c.normal, e.up) >= cosGround) && (!ground || c.depth > ground.depth)) ground = c;
   }
   let groundId = ground ? ground.id : null;
   if (!groundId && wasGround && e.groundId) {
     // Stick to the surface while running over its curve, so speed alone can't fling you off.
     const s = surfaceInfo(system.byId[wasGround], poses[wasGround], hitCentre(e));
     const gap = s.dist - PLAYER.radius;
-    if (gap < PLAYER.snap && dot(s.normal, e.up) >= cosGround) {
+    if (gap < PLAYER.snap && (system.byId[wasGround].kind === "comet" || dot(s.normal, e.up) >= cosGround)) {
       e.pos = sub(e.pos, scale(s.normal, gap));
       let rel = sub(wv, poses[wasGround].vel);
       const out = dot(rel, s.normal);

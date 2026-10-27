@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BODIES, CYCLE, COMET } from "../src/tuning.js";
+import { BODIES, CYCLE, COMET, BELT } from "../src/tuning.js";
 import { createSystem, posesAt } from "../src/sim/system.js";
 import { dist, sub, scale, len } from "../src/sim/vec.js";
 
@@ -106,4 +106,12 @@ test("over the full cycle, some comet passes close to some planet at least every
   }
   longest = Math.max(longest, CYCLE - last);
   assert.ok(longest <= 120, `longest wait ${longest} s`);
+});
+
+test("the asteroid belt stays clear of every planet's and the moon's path", () => {
+  // Bands of the orbital plane each body sweeps, from the sun's centre.
+  const bands = BODIES.filter((b) => b.kind === "planet").map((b) => [b.id, b.orbit.radius - b.radius, b.orbit.radius + b.radius]);
+  const moon = BODIES.find((b) => b.kind === "moon"), around = BODIES.find((b) => b.id === moon.orbit.around);
+  bands.push(["moon", around.orbit.radius - moon.orbit.radius - moon.radius, around.orbit.radius + moon.orbit.radius + moon.radius]);
+  for (const [id, lo, hi] of bands) assert.ok(BELT.inner - hi >= 3 || lo - BELT.outer >= 3, id);
 });

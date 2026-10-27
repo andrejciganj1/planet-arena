@@ -2,8 +2,9 @@
 // blasts, and the weapon in view. It only reads the world; drawing happens between the last two ticks
 // (alpha) so motion stays smooth on screens faster than the 60 Hz simulation.
 import * as THREE from "three";
-import { PLAYER, ROCKET, PAD_CUE } from "../tuning.js";
+import { PLAYER, ROCKET, PAD_CUE, BELT, TICK } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
+import { posesAt } from "../sim/system.js";
 import { surfaceInfo } from "../sim/collide.js";
 import { add, sub, scale, lerp, norm, cross, dist, rotateAxis, rotateFromTo } from "../sim/vec.js";
 
@@ -45,6 +46,54 @@ function sphereMesh(body, rand) {
     }
   }
   return mesh;
+}
+
+// A comet's tail: an open cone, its base at the comet and its tip pointing away (set per frame).
+function cometTail() {
+  const geo = new THREE.ConeGeometry(1, 1, 12, 1, true);
+  geo.translate(0, 0.5, 0); // wide end at the comet, tip out along +y
+  const mat = new THREE.MeshBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  return new THREE.Mesh(geo, mat);
+}
+
+// A flat ring like Saturn's, riding on its planet (planets don't spin). Looks only.
+function planetRing(body) {
+  const { inner, outer, tilt } = body.ring;
+  const geo = new THREE.RingGeometry(body.radius * inner, body.radius * outer, 96);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xcbb8f0, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+  const ring = new THREE.Mesh(geo, mat);
+  ring.rotation.x = -Math.PI / 2 + (tilt * Math.PI) / 180;
+  return ring;
+}
+
+// The asteroid belt: one instanced mesh of tumbling rocks, turning round the sun the way the planets go.
+// Looks only, so it lives here and not in the simulation.
+function asteroidBelt(rand) {
+  const geo = new THREE.DodecahedronGeometry(1, 0);
+  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), BELT.rocks);
+  const rocks = [], base = new THREE.Color(0x8d7f73);
+  for (let i = 0; i < BELT.rocks; i++) {
+    const r = BELT.inner + rand() * (BELT.outer - BELT.inner), a = rand() * 2 * Math.PI;
+    const s = BELT.size[0] + rand() * (BELT.size[1] - BELT.size[0]);
+    rocks.push({
+      pos: new THREE.Vector3(r * Math.cos(a), (rand() - 0.5) * BELT.thick, r * Math.sin(a)),
+      scale: new THREE.Vector3(s, s * (0.6 + rand() * 0.4), s * (0.7 + rand() * 0.3)),
+      axis: new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).normalize(),
+      rate: 0.2 + rand() * 0.8,
+    });
+    mesh.setColorAt(i, base.clone().offsetHSL(0, 0, (rand() - 0.5) * 0.15));
+  }
+  const group = new THREE.Group();
+  group.add(mesh);
+  const q = new THREE.Quaternion(), m = new THREE.Matrix4();
+  return {
+    group,
+    update(t) {
+      group.rotation.y = (-2 * Math.PI * t) / BELT.period; // three's +y turn runs x towards -z; orbits go x towards +z
+      rocks.forEach((k, i) => mesh.setMatrixAt(i, m.compose(k.pos, q.setFromAxisAngle(k.axis, k.rate * t), k.scale)));
+      mesh.instanceMatrix.needsUpdate = true;
+    },
+  };
 }
 
 function glowSprite(color, size) {
@@ -133,25 +182,38 @@ export function createRenderer(world, canvas, fixedView = null) {
   scene.add(sunLight, starfield(rand));
 
   // Faint orbit rings, so you can see where a planet will come round. A moon's ring rides on its planet.
+  // A comet's ellipse is sampled from the simulation's own poses, so the line is exactly its path.
   const rings = [];
   for (const b of world.system.bodies.filter((b) => b.orbit)) {
     const pts = [];
-    for (let i = 0; i <= 128; i++) {
-      const a = (i / 128) * 2 * Math.PI;
-      pts.push(new THREE.Vector3(b.orbit.radius * Math.cos(a), 0, b.orbit.radius * Math.sin(a)));
+    if (b.orbit.peri) {
+      for (let i = 0; i <= 256; i++) pts.push(v3(posesAt(world.system, (i / 256) * b.orbit.period)[b.id].pos));
+    } else {
+      for (let i = 0; i <= 128; i++) {
+        const a = (i / 128) * 2 * Math.PI;
+        pts.push(new THREE.Vector3(b.orbit.radius * Math.cos(a), 0, b.orbit.radius * Math.sin(a)));
+      }
     }
     const ring = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x39406a }));
     rings.push({ ring, around: b.orbit.around });
     scene.add(ring);
   }
 
-  const bodies = {};
+  const bodies = {}, tails = [];
   for (const b of world.system.bodies) {
     const m = sphereMesh(b, rand);
     if (b.kind === "sun") m.add(glowSprite(0xffb43d, b.radius * 6));
+    if (b.kind === "comet") {
+      m.add(glowSprite(0xbfe8ff, b.radius * 5));
+      tails.push({ id: b.id, mesh: cometTail() });
+    }
+    if (b.ring) m.add(planetRing(b));
     bodies[b.id] = m;
     scene.add(m);
   }
+  for (const t of tails) scene.add(t.mesh);
+  const belt = asteroidBelt(rand);
+  scene.add(belt.group);
 
   // Pads ride on their bodies: keep each pad's offset from its body's centre.
   const pads = world.pads.map((pad) => {
@@ -216,6 +278,14 @@ export function createRenderer(world, canvas, fixedView = null) {
       }
       sunLight.position.copy(v3(poses.sun));
       for (const r of rings) r.ring.position.copy(v3(poses[r.around]));
+      // Tails point away from the sun and grow as the comet nears it.
+      for (const t of tails) {
+        const away = sub(poses[t.id], poses.sun), d = Math.hypot(...away);
+        t.mesh.position.copy(v3(poses[t.id]));
+        t.mesh.quaternion.setFromUnitVectors(Y, v3(scale(away, 1 / d)));
+        t.mesh.scale.set(2.2, Math.min(60, 12 + 1600 / d), 2.2);
+      }
+      belt.update(world.t + (alpha - 1) * TICK);
 
       const p = world.entities.player;
       if (fixedView) {

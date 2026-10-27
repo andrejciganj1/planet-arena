@@ -14,6 +14,9 @@ The two fast comets pass the hot and tiny planets often, but hopping off near th
 boosting. The slow one swings past the heavy and giant planets every few minutes, where a plain jump
 gets you off. Stay on too long and it carries you close to the sun.
 
+The asteroid belt between the mid and heavy planets' paths and the giant's ring are scenery: you fly
+straight through them.
+
 ## Start it
 
 ```

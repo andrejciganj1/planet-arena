@@ -8,8 +8,10 @@ import { viewDir, worldVel, hitCentre, unground } from "./entity.js";
 const specOf = (world, kind) => world.tuning.WEAPONS[kind];
 
 // Fires e's weapon from the eye along the view, adding e's own velocity. False while cooling down or
-// out of ammo. Spends a round; an emptied weapon hands you the pistol, which never runs out.
-export function fire(world, e) {
+// out of ammo. `lag` is the shooter's view delay in seconds, kept on the projectile for the server's
+// compensation. Every projectile is named by shooter, shot number and pellet, so the browser and the
+// server agree on which is which. Spends a round; an emptied weapon hands you the pistol, which never runs out.
+export function fire(world, e, lag = 0) {
   if (e.cooldown > 0 || !e.alive) return false;
   const spec = specOf(world, e.weapon);
   if (spec.ammo && !(e.ammo[e.weapon] > 0)) {
@@ -17,12 +19,13 @@ export function fire(world, e) {
     return false;
   }
   const eye = add(e.pos, scale(e.up, world.tuning.PLAYER.eye));
-  if (spec.type === "ray") rail(world, e, eye, viewDir(e), spec);
+  if (spec.type === "ray") rail(world, e, eye, viewDir(e), spec, `${e.id}.${e.shots}.0`);
   else {
-    for (let i = 0; i < (spec.pellets || 1); i++) {
+    for (let k = 0; k < (spec.pellets || 1); k++) {
+      const id = `${e.id}.${e.shots}.${k}`;
       world.projectiles.push({
-        kind: e.weapon, owner: e.id, age: 0, pos: eye, range: spec.range, push: spec.push,
-        vel: add(scale(spread(world, viewDir(e), spec.spread), spec.speed), worldVel(world, e)),
+        id, kind: e.weapon, owner: e.id, age: 0, pos: eye, range: spec.range, push: spec.push, lag,
+        vel: add(scale(spread(viewDir(e), spec.spread, shotRand(e.id, e.shots, k)), spec.speed), worldVel(world, e)),
       });
     }
   }
@@ -32,16 +35,25 @@ export function fire(world, e) {
   return true;
 }
 
+// Two numbers in [0, 1) from a pure hash of shooter, shot and pellet (FNV-1a into the same LCG as
+// `seeded`), so spread never depends on how many other random draws the world has made.
+function shotRand(id, shots, k) {
+  let h = 0x811c9dc5;
+  for (const c of `${id}|${shots}|${k}`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;
+  const next = () => (h = (Math.imul(h, 1664525) + 1013904223) >>> 0) / 4294967296;
+  return [next(), next()];
+}
+
 // dir turned by up to `deg` degrees, spread evenly over the cone's disc.
-function spread(world, dir, deg) {
+function spread(dir, deg, [r1, r2]) {
   if (!deg) return dir;
-  const theta = ((deg * Math.PI) / 180) * Math.sqrt(world.rand()), phi = 2 * Math.PI * world.rand();
+  const theta = ((deg * Math.PI) / 180) * Math.sqrt(r1), phi = 2 * Math.PI * r2;
   const u = anyPerpendicular(dir), v = cross(dir, u);
   return norm(add(scale(dir, Math.cos(theta)), scale(add(scale(u, Math.cos(phi)), scale(v, Math.sin(phi))), Math.sin(theta))));
 }
 
 // The railgun: instant and dead straight, ignoring gravity. The first body or entity on the line takes it.
-function rail(world, e, eye, dir, spec) {
+function rail(world, e, eye, dir, spec, id) {
   const { system, poses, tuning } = world;
   const end = add(eye, scale(dir, spec.range));
   let hit = segmentHit(system, poses, eye, end);
@@ -52,7 +64,7 @@ function rail(world, e, eye, dir, spec) {
   }
   const to = hit ? add(eye, scale(sub(end, eye), hit.f)) : end;
   if (hit?.entity) hurt(world, hit.entity, spec.damage, e.id);
-  world.beams.push({ from: eye, to, age: 0, owner: e.id });
+  world.beams.push({ id, from: eye, to, age: 0, owner: e.id });
   world.events.push({ type: "beam", from: eye, to });
 }
 

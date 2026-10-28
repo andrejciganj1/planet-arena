@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as tuning from "../src/tuning.js";
-import { createWorld, stepWorld, advance, spawnPoint } from "../src/sim/world.js";
+import { createWorld, stepWorld, advance, spawnPoint, tickClock, stepPlayer } from "../src/sim/world.js";
 import { padPos } from "../src/sim/pads.js";
 import { NO_INPUT, hitCentre, createEntity, standOn } from "../src/sim/entity.js";
 import { sphereContacts, surfaceInfo } from "../src/sim/collide.js";
@@ -220,4 +220,28 @@ test("jumping off the slow comet at a close pass lands you on that outer planet"
     }
     assert.equal(end, id, `pass at ${t} s`);
   }
+});
+
+test("stepPlayer on a bare clock gives exactly what stepWorld gives", () => {
+  const make = () => {
+    const w = { ...createWorld(tuning), pads: [] };
+    // The dummy is parked on the far side of another planet, and no pickup is ready, so stepWorld's
+    // extra work can't touch the player.
+    const d = w.entities.dummy, u = [0, -1, 0];
+    Object.assign(d, createEntity("dummy", "dummy", add(w.poses.heavy.pos, scale(u, w.system.byId.heavy.radius)), u));
+    standOn(d, "heavy");
+    for (const pk of tuning.PICKUPS) w.pickups[pk.id] = { readyAt: Infinity };
+    return w;
+  };
+  const w1 = make(), w2 = make();
+  const start = [...w1.entities.player.pos];
+  const input = (i) => ({ ...NO_INPUT, move: [0, i < 40 ? 1 : 0], jump: i === 40, boost: i >= 45 && i < 75, hook: i >= 80 && i < 110 });
+  for (let i = 0; i < 120; i++) {
+    stepWorld(w1, { player: input(i) }, TICK);
+    tickClock(w2, TICK);
+    stepPlayer(w2, w2.entities.player, input(i), TICK);
+  }
+  const [a, b] = [w1.entities.player, w2.entities.player];
+  for (const k of ["pos", "vel", "up", "forward"]) assert.deepEqual(a[k], b[k], k);
+  assert.ok(dist(a.pos, start) > 1, "the player moved");
 });

@@ -148,22 +148,32 @@ function die(world, e, cause) {
   if (cause !== "void") world.explosions.push({ pos: [...pos], age: 0 });
 }
 
-export function stepWorld(world, inputs, dt) {
-  const { PLAYER, VOID_RADIUS } = world.tuning;
+// The clock alone. A predicting client starts from the server's `t` and adds dt, never `tick * TICK`,
+// so both sides get the same floats.
+export function tickClock(world, dt) {
   world.prevPoses = world.poses;
   world.t += dt;
   world.tick++;
   world.poses = posesAt(world.system, world.t);
+}
+
+// One entity's tick, shared by the server's stepWorld and the browser's prediction of its own player.
+export function stepPlayer(world, e, input, dt) {
+  e.prev = { pos: e.pos, up: e.up }; // the renderer draws between this and the new state
+  stepEntity(world, e, input, dt);
+  stepHook(world, e, !!input.hook, dt);
+  if (input.weapon && e.weapons.includes(input.weapon)) e.weapon = input.weapon;
+  if (input.fire) fire(world, e, input.lag || 0);
+  touchPads(world, e);
+}
+
+export function stepWorld(world, inputs, dt) {
+  const { PLAYER, VOID_RADIUS } = world.tuning;
+  tickClock(world, dt);
   const entities = Object.values(world.entities);
   for (const e of entities) {
     if (!e.alive) continue;
-    const input = inputs[e.id] || NO_INPUT;
-    e.prev = { pos: e.pos, up: e.up }; // the renderer draws between this and the new state
-    stepEntity(world, e, input, dt);
-    stepHook(world, e, !!input.hook, dt);
-    if (input.weapon && e.weapons.includes(input.weapon)) e.weapon = input.weapon;
-    if (input.fire) fire(world, e);
-    touchPads(world, e);
+    stepPlayer(world, e, inputs[e.id] || NO_INPUT, dt);
   }
   stepPickups(world);
   stepProjectiles(world, dt);

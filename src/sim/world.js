@@ -189,7 +189,7 @@ export function stepWorld(world, inputs, dt) {
     if (e.lastHitBy && e.groundTime >= KILL.standing && world.t - e.lastHitAt >= KILL.standing) e.lastHitBy = null;
     const c = hitCentre(e);
     if (dist(c, world.poses[sun.id].pos) < sun.radius + PLAYER.radius + 1e-6) die(world, e, "sun");
-    else if (dist(c, world.poses[sun.id].pos) > VOID_RADIUS || e.airTime > PLAYER.adrift) die(world, e, "void");
+    else if (dist(c, world.poses[sun.id].pos) > VOID_RADIUS) die(world, e, "void");
     else if (e.health <= 0) die(world, e, "damage");
   }
   for (const e of entities) {

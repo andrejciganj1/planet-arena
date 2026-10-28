@@ -153,16 +153,16 @@ test("the dummy never respawns next to the player, even on the tiny planet", () 
   }
 });
 
-test("an entity adrift too long is lost to the void", () => {
+test("floating for 60 s inside the system is not a death", () => {
   const w = createWorld(tuning);
   const d = w.entities.dummy;
   d.groundId = null;
-  d.pos = [0, 300, 0]; // far above the plane, falling slowly
+  d.pos = [0, 300, 0]; // far above the plane, where the 60 s fall meets no body and stays inside the void radius
   d.vel = [0, 0, 0];
-  let t = 0;
-  while (d.alive && t < tuning.PLAYER.adrift + 1) stepWorld(w, {}, TICK), (t += TICK);
-  assert.deepEqual(deaths(w).map(({ type, id, cause }) => ({ type, id, cause })), [{ type: "death", id: "dummy", cause: "void" }]);
-  assert.ok(t >= tuning.PLAYER.adrift - 2 * TICK, `died after ${t}`);
+  for (let t = 0; t < 60; t += TICK) stepWorld(w, {}, TICK);
+  assert.ok(d.alive, "still alive");
+  assert.ok(d.airTime >= 59, `airTime ${d.airTime}`);
+  assert.deepEqual(deaths(w), []);
 });
 
 // A pad-free world at t with the dummy out of the way and the player stood on body `id`, facing out along u.

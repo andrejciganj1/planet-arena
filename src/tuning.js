@@ -56,7 +56,6 @@ export const PLAYER = {
   groundAngle: 45, // degrees from up that still counts as standing
   health: 100,
   respawn: 3, // s
-  adrift: 25, // s in the air before you count as lost in space (pad flights land within 20 s)
   spawnFromPad: 4, // m, spawn points keep this clear of pads
   spawnFromOther: 20, // m, a respawning player keeps this far from the other entity
 };

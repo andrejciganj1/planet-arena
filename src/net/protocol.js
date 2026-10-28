@@ -16,7 +16,7 @@ const flag = (x) => x === true;
 // A usable input record or null. Nothing returned can hold NaN, Infinity or a wrong type, and `lag` is
 // always 0: the server sets it from what it knows, never from the client.
 export function cleanInput(raw) {
-  if (!raw || typeof raw !== "object" || !Number.isInteger(raw.tick)) return null;
+  if (!raw || typeof raw !== "object" || !Number.isSafeInteger(raw.tick) || raw.tick < 0) return null;
   const move = Array.isArray(raw.move) ? raw.move : [];
   return {
     ...NO_INPUT,
@@ -25,13 +25,13 @@ export function cleanInput(raw) {
     weapon: WEAPON_ORDER.includes(raw.weapon) ? raw.weapon : null,
     yawDelta: angle(raw.yawDelta), pitchDelta: angle(raw.pitchDelta),
     tick: raw.tick,
-    view: num(raw.view) && raw.view <= raw.tick ? raw.view : raw.tick,
+    view: Number.isSafeInteger(raw.view) && raw.view >= 0 && raw.view <= raw.tick ? raw.view : raw.tick,
   };
 }
 
 // Plain text of at most NET.nameMax characters; a name already taken (ignoring case) gets " 2", " 3", ...
 export function cleanName(raw, taken = []) {
-  const base = String(raw ?? "").replace(/[\u0000-\u001f\u007f-\u009f]/g, "").replace(/\s+/g, " ").trim().slice(0, NET.nameMax).trim() || "Player";
+  const base = (typeof raw === "string" ? raw : num(raw) ? String(raw) : "").replace(/[\u0000-\u001f\u007f-\u009f]/g, "").replace(/\s+/g, " ").trim().slice(0, NET.nameMax).trim() || "Player";
   const used = new Set(taken.map((n) => String(n).toLowerCase()));
   if (!used.has(base.toLowerCase())) return base;
   for (let n = 2; ; n++) {

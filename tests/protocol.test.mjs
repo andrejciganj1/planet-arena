@@ -24,6 +24,9 @@ test("cleanInput keeps good input and repairs or rejects the rest", () => {
   assert.equal(cleanInput({ tick: 5, view: 9 }).view, 5);
   assert.equal(cleanInput({ tick: 5, yawDelta: 99 }).yawDelta, Math.PI);
   assert.deepEqual(cleanInput({ tick: 5, move: "ab" }).move, [0, 0]);
+  for (const t of [1e300, -5, 2 ** 60]) assert.equal(cleanInput({ tick: t }), null);
+  for (const v of [-1e300, 0.5, 6, -1, "3"]) assert.equal(cleanInput({ tick: 5, view: v }).view, 5);
+  assert.equal(cleanInput({ tick: 5, view: 0 }).view, 0);
   for (const raw of [null, undefined, "x", 3, {}, { tick: 1.5 }, { tick: NaN }, { tick: "1" }]) assert.equal(cleanInput(raw), null);
 });
 
@@ -31,6 +34,9 @@ test("cleanName trims, cuts and numbers duplicates", () => {
   assert.equal(cleanName("  Ana  ", []), "Ana");
   assert.equal(cleanName("a   b", []), "a b");
   assert.equal(cleanName("", []), "Player");
+  assert.equal(cleanName(JSON.parse('{"toString":1}'), []), "Player");
+  assert.equal(cleanName(JSON.parse('[{"toString":1}]'), []), "Player");
+  assert.equal(cleanName(JSON.parse("12"), []), "12");
   assert.equal(cleanName(undefined, []), "Player");
   assert.equal(cleanName("a\u0000b", []), "ab");
   assert.equal(cleanName("x".repeat(40), []), "x".repeat(16));

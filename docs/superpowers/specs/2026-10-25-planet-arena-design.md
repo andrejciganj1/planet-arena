@@ -173,6 +173,8 @@ right mouse to zoom the sniper, number keys and mouse wheel to change weapons.
    rules and score, bots.
 3. **Online.** The server, rooms by link, prediction and smoothing, lag compensation, hosting. Done when
    the owner and their friends play a full match.
+   (Designed in `2026-10-28-multiplayer-design.md`, which changes some rules for now: one shared game
+   instead of rooms, no match end, no bots, and dying on your own costs nothing.)
 4. **Polish.** Sounds, effects, tuning from their playtests.
 
 ## Left to the builder

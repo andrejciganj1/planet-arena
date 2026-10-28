@@ -84,13 +84,15 @@ function frame(now) {
     acc = advance(world, acc, elapsed, ticks && locked ? { player: input.take() } : {});
     alpha = Math.min(1, acc / tuning.TICK);
   }
+  // Effects run on real time: the match clock goes back to 0 when the server restarts.
+  const secs = now / 1000;
   for (const ev of world.events) {
-    hud.event(ev, world.t, id, world.players);
-    renderer.event(ev, world.t);
+    hud.event(ev, secs, id, world.players);
+    renderer.event(ev, secs);
   }
   world.events.length = 0;
-  renderer.draw(alpha, locked ? input.pending() : { yaw: 0, pitch: 0 }, zoom, shift);
-  hud.update(world, locked, world.t, id, renderer.camera());
+  renderer.draw(alpha, locked ? input.pending() : { yaw: 0, pitch: 0 }, zoom, shift, secs);
+  hud.update(world, locked, secs, id, renderer.camera());
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

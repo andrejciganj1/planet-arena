@@ -348,7 +348,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const pooled = (list, make) => (i) => list[i] || (list[i] = (() => { const m = make(); scene.add(m); return m; })());
   const figures = [];
   const figure = pooled(figures, dummyMesh); // everyone but you
-  const flashUntil = {}; // entity id -> world time its bar stops flashing
+  const flashAt = {}; // entity id -> when its bar began to flash (real seconds: the match clock can go back)
   const shot = pooled(shots, () => new THREE.Mesh(rocketGeo, rocketMat));
   const blast = pooled(blasts, () => new THREE.Mesh(blastGeo, new THREE.MeshBasicMaterial({ color: 0xff9a2e, transparent: true, depthWrite: false })));
   const beam = pooled(beams, () => {
@@ -371,8 +371,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
 
   return {
     // A hit event for someone: their bar flashes white for a moment (it reacts to the server's confirmation).
+    // now: real seconds.
     event(ev, now) {
-      if (ev.type === "hit") flashUntil[ev.id] = now + FEEDBACK.flash;
+      if (ev.type === "hit") flashAt[ev.id] = now;
     },
     // The camera as last drawn: { pos, right, up, forward }, for the HUD's hit arcs.
     camera() {
@@ -381,8 +382,8 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
     },
     // alpha: how far towards the next tick to draw (0..1); look: mouse turn not yet given to the sim;
     // zoom: the sniper's magnification while zoomed, else 1; shift: added to where you are drawn (online,
-    // a prediction's correction eased in).
-    draw(alpha, look, zoom = 1, shift = null) {
+    // a prediction's correction eased in); now: real seconds, for the bars' hit flash.
+    draw(alpha, look, zoom = 1, shift = null, now = 0) {
       resize();
       if (camera.fov !== 80 / zoom) {
         camera.fov = 80 / zoom;
@@ -462,7 +463,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         m.visible = true;
         const who = world.players[id];
         m.userData.body.material.color.setHex(who ? who.colour : DUMMY_COLOUR);
-        m.userData.tag.userData.show(who ? who.name : "Dummy", d.health / (d.kind === "dummy" ? DUMMY.health : PLAYER.health), world.t < flashUntil[id]);
+        m.userData.tag.userData.show(who ? who.name : "Dummy", d.health / (d.kind === "dummy" ? DUMMY.health : PLAYER.health), now >= flashAt[id] && now - flashAt[id] < FEEDBACK.flash);
         const { pos, up } = between(d, alpha);
         const fwd = norm(rotateFromTo(d.forward, d.up, up)), right = cross(fwd, up);
         m.matrix.makeBasis(v3(right), v3(up), v3(scale(fwd, -1))).setPosition(v3(pos));

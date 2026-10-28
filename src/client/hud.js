@@ -26,6 +26,18 @@ export function feedText(ev, players) {
   return ev.by && ev.by !== ev.id ? `${nameOf(players, ev.by)} ${MARKS[ev.cause] ?? "✹"} ${victim}` : victim;
 }
 
+// Effects are timed in real seconds (the page's clock, which never goes back; the match clock does when
+// the server restarts). Seconds since `at`, or Infinity when the clock is before it, so nothing sticks.
+export const since = (at, now) => (now >= at ? now - at : Infinity);
+
+// Removes from `list` every item ({ at }) older than `life` s, wherever it is, and returns them.
+export function expire(list, now, life) {
+  const gone = list.filter((x) => since(x.at, now) > life);
+  const kept = list.filter((x) => !gone.includes(x));
+  list.splice(0, list.length, ...kept);
+  return gone;
+}
+
 // Where on screen the hit came from, as an angle round the crosshair: 0 is straight up, clockwise positive.
 // camera: { pos, right, up, forward }. A source right behind you has no side, so it gets the bottom.
 export function arcAngle(camera, from) {
@@ -79,14 +91,14 @@ export function createHud(root, online = false) {
   const toast = el(root, "hud toast");
   const screen = el(root, "hud screen");
   const play = el(root, "hud play", `Click to play<small>WASD move · mouse look · space jump, hold in the air to boost · click fire · right mouse hook · 1 to 6 / wheel weapons · Shift zoom (sniper)</small>`);
-  let toastUntil = 0, vignetteAt = -1, vignetteStrength = 0, boardOn = false;
+  let toastAt = -Infinity, vignetteAt = -Infinity, vignetteStrength = 0, boardOn = false;
   const arcs = []; // { from, at, node }
   const lines = []; // { at, node }
 
   const say = (text, now) => {
     toast.textContent = text;
     toast.classList.add("on");
-    toastUntil = now + 1.6;
+    toastAt = now;
   };
 
   return {
@@ -94,6 +106,7 @@ export function createHud(root, online = false) {
     scores(on) {
       boardOn = on && online;
     },
+    // now: real seconds, as in update.
     event(ev, now, selfId = "player", players = {}) {
       if (ev.type === "hit" && ev.id === selfId) {
         vignetteAt = now;
@@ -115,15 +128,15 @@ export function createHud(root, online = false) {
       screen.style.display = text ? "flex" : "none";
       if (text && screen.textContent !== text) screen.textContent = text;
     },
-    // camera: { pos, right, up, forward } as drawn, to aim the hit arcs; null when there is none.
+    // now: real seconds. camera: { pos, right, up, forward } as drawn, to aim the hit arcs; null when there is none.
     update(world, locked, now, selfId = "player", camera = null) {
       const p = world.entities[selfId];
       // Online there is no body until the first snapshot.
       for (const x of [bottom, cross, play]) x.style.display = p ? "" : "none";
-      if (now > toastUntil) toast.classList.remove("on");
-      vignette.style.opacity = Math.max(0, vignetteStrength * (1 - (now - vignetteAt) / FEEDBACK.vignetteFade));
+      if (since(toastAt, now) > 1.6) toast.classList.remove("on");
+      vignette.style.opacity = Math.max(0, vignetteStrength * (1 - since(vignetteAt, now) / FEEDBACK.vignetteFade));
       for (let i = arcs.length - 1; i >= 0; i--) {
-        const a = arcs[i], k = (now - a.at) / FEEDBACK.arcFade;
+        const a = arcs[i], k = since(a.at, now) / FEEDBACK.arcFade;
         if (k >= 1 || !camera) {
           a.node.remove();
           arcs.splice(i, 1);
@@ -132,7 +145,7 @@ export function createHud(root, online = false) {
           a.node.style.transform = `rotate(${arcAngle(camera, a.from)}rad)`;
         }
       }
-      while (lines.length && now - lines[0].at > FEEDBACK.feedFor) lines.shift().node.remove();
+      for (const l of expire(lines, now, FEEDBACK.feedFor)) l.node.remove();
       const mine = world.scores[selfId];
       score.style.display = online && p && mine ? "" : "none";
       if (online && mine) score.textContent = `Kills ${mine.kills} · Deaths ${mine.deaths}`;

@@ -17,8 +17,8 @@ function placeOn(world, id, u, name = "p") {
 const altitude = (world, e, id) => dist(e.pos, world.poses[id].pos) - world.system.byId[id].radius;
 const sunward = (world, id) => norm(sub(world.poses.sun.pos, world.poses[id].pos));
 
-test("standing 10 s on each planet: stays on its spot on the moving surface", () => {
-  for (const id of ["tiny", "mid", "heavy", "moon"]) {
+test("standing 10 s on each planet and moon: stays on its spot on the moving surface", () => {
+  for (const id of ["tiny", "mid", "heavy", "moon", "mid-moon", "ring-moon", "outer-moon"]) {
     const world = makeWorld(5);
     const e = placeOn(world, id, norm([0.3, 0.8, -0.5]));
     const start = sub(e.pos, world.poses[id].pos);

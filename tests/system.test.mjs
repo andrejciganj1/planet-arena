@@ -14,12 +14,21 @@ test("a planet returns to its start after one period", () => {
   }
 });
 
-test("the moon keeps its distance from its planet", () => {
-  const moon = BODIES.find((b) => b.kind === "moon");
-  for (let t = 0; t <= 600; t += 1) {
-    const p = posesAt(system, t);
-    assert.ok(Math.abs(dist(p.moon.pos, p[moon.orbit.around].pos) - moon.orbit.radius) < 1e-6);
+const moons = BODIES.filter((b) => b.kind === "moon");
+
+test("every moon keeps its distance from its planet", () => {
+  for (const moon of moons) {
+    for (let t = 0; t <= 600; t += 1) {
+      const p = posesAt(system, t);
+      assert.ok(Math.abs(dist(p[moon.id].pos, p[moon.orbit.around].pos) - moon.orbit.radius) < 1e-6, moon.id);
+    }
   }
+});
+
+test("there are four moons: one round heavy, two round giant, one round mid", () => {
+  const round = (id) => moons.filter((m) => m.orbit.around === id).length;
+  assert.equal(moons.length, 4);
+  assert.deepEqual([round("heavy"), round("giant"), round("mid")], [1, 2, 1]);
 });
 
 test("vel matches the change of pos", () => {
@@ -34,7 +43,8 @@ test("vel matches the change of pos", () => {
 });
 
 test("no two bodies ever touch", () => {
-  for (let t = 0; t <= 600; t += 0.5) {
+  // The whole cycle: the giant's moons cross the heavy planet's band and miss it only by timing.
+  for (let t = 0; t < CYCLE; t += 0.5) {
     const p = posesAt(system, t);
     for (let i = 0; i < spheres.length; i++) {
       for (let j = i + 1; j < spheres.length; j++) {
@@ -108,9 +118,14 @@ test("over the full cycle, some comet passes close to some planet at least every
   assert.ok(longest <= 120, `longest wait ${longest} s`);
 });
 
-test("the asteroid belt stays clear of every planet's path", () => {
-  // Bands of the orbital plane each planet sweeps, from the sun's centre. (The moon's path dips into the
-  // belt's outer edge, where the owner placed it; the belt is scenery, so it just passes through.)
-  const bands = BODIES.filter((b) => b.kind === "planet").map((b) => [b.id, b.orbit.radius - b.radius, b.orbit.radius + b.radius]);
-  for (const [id, lo, hi] of bands) assert.ok(BELT.inner - hi >= 3 || lo - BELT.outer >= 3, id);
+test("the asteroid belt stays clear of every planet's and moon's path", () => {
+  // Bands of the orbital plane each body sweeps, from the sun's centre. (The heavy planet's moon dips into
+  // the belt's outer edge, where the owner placed it; the belt is scenery, so it just passes through.)
+  const byId = system.byId;
+  const planets = BODIES.filter((b) => b.kind === "planet").map((b) => [b.id, b.orbit.radius - b.radius, b.orbit.radius + b.radius]);
+  const others = moons.filter((m) => m.id !== "moon").map((m) => {
+    const r = byId[m.orbit.around].orbit.radius, d = m.orbit.radius + m.radius;
+    return [m.id, r - d, r + d];
+  });
+  for (const [id, lo, hi] of [...planets, ...others]) assert.ok(BELT.inner - hi >= 3 || lo - BELT.outer >= 3, id);
 });

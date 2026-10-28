@@ -5,18 +5,26 @@ export const TICK = 1 / 60;
 export const MAX_TICKS = 5; // per frame; a slow frame or hidden tab drops time instead of catching up
 export const VOID_RADIUS = 460; // from the sun; beyond it you are lost in space (the far comet reaches 400)
 
-// g is the full pull within `reach` of the core, falling off as g * (reach / d)^2 beyond. Planets and the
-// moon keep it to 1.75x their radius, so a rocket blast or a booster burn doesn't easily throw you off.
+// g is the full pull within `reach` of the core, falling off as g * (reach / d)^2 beyond. Planets and
+// moons keep it to 1.75x their radius, so a rocket blast or a booster burn doesn't easily throw you off.
 // Within `hold` metres of a body's surface only that body pulls; the others fade back in over the next
 // `hold` metres (see gravity.js). Orbits are circles in the XZ plane, angle = phase + 2 pi t / period.
+// Moons: their planet outpulls them a few metres up, so a jump falls back to the moon or the planet. The
+// mid planet's moon stays inside the belt. The giant's ring-moon orbits inside the ring band (looks only);
+// its outer-moon crosses the heavy planet's band and misses it, and the heavy planet's moon, only by
+// timing: its 140 s period has it facing away from the sun at every heavy-giant line-up (every 1050 s).
+// Moon phases were searched so no moon comes within 7 m of another body over the full CYCLE.
 export const BODIES = [
   { id: "sun", kind: "sun", radius: 25, g: 24, reach: 25, hold: 0, orbit: null, pos: [0, 0, 0], color: 0xffc23d },
   { id: "hot", kind: "planet", radius: 7, g: 11, reach: 12.25, hold: 8, orbit: { around: "sun", radius: 46, period: 80, phase: 1.0 }, color: 0xe0525e },
   { id: "tiny", kind: "planet", radius: 6, g: 8, reach: 10.5, hold: 8, orbit: { around: "sun", radius: 78, period: 120, phase: 0 }, color: 0x7fd36b },
   { id: "mid", kind: "planet", radius: 12, g: 10, reach: 21, hold: 8, orbit: { around: "sun", radius: 120, period: 200, phase: 2.1 }, color: 0x4f9de8 },
+  { id: "mid-moon", kind: "moon", radius: 2.5, g: 3, reach: 4.375, hold: 4, orbit: { around: "mid", radius: 22, period: 60, phase: 4.45 }, color: 0xb4c2cf },
   { id: "heavy", kind: "planet", radius: 23, g: 13, reach: 40.25, hold: 10, orbit: { around: "sun", radius: 200, period: 300, phase: 4.2 }, color: 0xd9744a },
   { id: "moon", kind: "moon", radius: 5, g: 3, reach: 8.75, hold: 4, orbit: { around: "heavy", radius: 40, period: 90, phase: 0 }, color: 0xc9c4bd },
   { id: "giant", kind: "planet", radius: 18, g: 9, reach: 31.5, hold: 10, orbit: { around: "sun", radius: 270, period: 420, phase: 5.6 }, color: 0x8a6fd6, ring: { inner: 1.4, outer: 2.3, tilt: 18 } },
+  { id: "ring-moon", kind: "moon", radius: 3, g: 3, reach: 5.25, hold: 4, orbit: { around: "giant", radius: 32, period: 90, phase: 0.19 }, color: 0xc9bde0 },
+  { id: "outer-moon", kind: "moon", radius: 4, g: 3, reach: 7, hold: 4, orbit: { around: "giant", radius: 52, period: 140, phase: 4.89 }, color: 0xd8cfae },
   { id: "far", kind: "planet", radius: 5, g: 8.5, reach: 8.75, hold: 6, orbit: { around: "sun", radius: 340, period: 840, phase: 0.7 }, color: 0x6fd3c9 },
   // Comets: tilted ellipses, peri and apo in metres from the sun, inc/node/arg in degrees, phase in radians
   // (see system.js). Searched so that over the full CYCLE no comet comes within 3 m of any body and some
@@ -109,7 +117,9 @@ export const NET = {
 // `dir`. heading(a, el) is the unit vector at `a` degrees round the
 // orbital plane (from +x towards +z) and `el` degrees above it. The layout was searched so every pad has a
 // launch window of at least 5 s and every planet has one at least once a minute (tests/pads.test.mjs).
-// Speed is per planet, a little above what it takes to leave it: heavier planets need faster pads.
+// Speed is per planet, a little above what it takes to leave it: heavier planets need faster pads. The
+// giant's outer moon is the only moon with pads: 22 m/s also leaves the giant's pull, so its two opposite
+// pads reach the far and heavy planets as well as the giant and its ring-moon.
 const heading = (a, el = 0) => {
   const r = Math.PI / 180, c = Math.cos(el * r);
   return [c * Math.cos(a * r), Math.sin(el * r), c * Math.sin(a * r)];
@@ -130,6 +140,8 @@ export const PADS = [
   { id: "giant-a", body: "giant", dir: heading(120), speed: 33 },
   { id: "giant-b", body: "giant", dir: heading(240), speed: 33 },
   { id: "giant-c", body: "giant", dir: heading(345), speed: 33 },
+  { id: "outer-moon-a", body: "outer-moon", dir: heading(120), speed: 22 },
+  { id: "outer-moon-b", body: "outer-moon", dir: heading(300), speed: 22 },
   { id: "far-a", body: "far", dir: heading(45), speed: 24 },
   { id: "far-b", body: "far", dir: heading(105), speed: 24 },
   { id: "far-c", body: "far", dir: heading(300), speed: 24 },
@@ -147,6 +159,7 @@ export const HOOK = { range: 25, pull: 30, speed: 15, steady: 3, cooldown: 0.5 }
 export const PICKUP = { touch: 1.2, health: 25, fuelMax: 2, respawn: { health: 20, ammo: 15, weapon: 30, fuel: 40 } };
 // Fixed spots, the same every match, so players learn routes. The sniper rifle sits on the far planet and
 // the railgun on the hot planet, the hard places to reach (tests/pickups.test.mjs checks the layout rules).
+// Moons carry no weapons, only health, fuel or ammo, so they are detours rather than new routes.
 export const PICKUPS = [
   { id: "hot-railgun", body: "hot", dir: heading(0, 50), kind: "weapon", weapon: "railgun" },
   { id: "hot-health", body: "hot", dir: heading(120, -45), kind: "health" },
@@ -165,6 +178,8 @@ export const PICKUPS = [
   { id: "heavy-minigun-ammo", body: "heavy", dir: heading(0, -35), kind: "ammo", weapon: "minigun" },
   { id: "moon-health", body: "moon", dir: heading(0, 40), kind: "health" },
   { id: "moon-sniper-ammo", body: "moon", dir: heading(180, -40), kind: "ammo", weapon: "sniper" },
+  { id: "mid-moon-health", body: "mid-moon", dir: heading(0, 40), kind: "health" },
+  { id: "mid-moon-minigun-ammo", body: "mid-moon", dir: heading(180, -40), kind: "ammo", weapon: "minigun" },
   { id: "giant-minigun", body: "giant", dir: heading(30, 40), kind: "weapon", weapon: "minigun" },
   { id: "giant-health", body: "giant", dir: heading(150, -40), kind: "health" },
   { id: "giant-health-2", body: "giant", dir: heading(270, 50), kind: "health" },
@@ -172,6 +187,10 @@ export const PICKUPS = [
   { id: "giant-rocket-ammo", body: "giant", dir: heading(210, 35), kind: "ammo", weapon: "rocket" },
   { id: "giant-sniper-ammo", body: "giant", dir: heading(330, -35), kind: "ammo", weapon: "sniper" },
   { id: "giant-railgun-ammo", body: "giant", dir: heading(0, 60), kind: "ammo", weapon: "railgun" },
+  { id: "ring-moon-health", body: "ring-moon", dir: heading(0, 40), kind: "health" },
+  { id: "ring-moon-rocket-ammo", body: "ring-moon", dir: heading(180, -40), kind: "ammo", weapon: "rocket" },
+  { id: "outer-moon-health", body: "outer-moon", dir: heading(30, 50), kind: "health" },
+  { id: "outer-moon-fuel", body: "outer-moon", dir: heading(210, -50), kind: "fuel" },
   { id: "far-sniper", body: "far", dir: heading(0, 50), kind: "weapon", weapon: "sniper" },
   { id: "far-sniper-ammo", body: "far", dir: heading(180, -50), kind: "ammo", weapon: "sniper" },
 ];

@@ -105,3 +105,12 @@ test("the view tick trails the newest snapshot by NET.interp, advances with time
   }
   assert.ok(Math.abs(ip.view() - (tick - NET.interp)) < 1.5);
 });
+
+test("between a corpse and its respawn, the later record wins (no slide across the map)", () => {
+  const ip = createInterp(system);
+  ip.push(snap(10, [rec("a", { alive: false, pos: [0, 100, 0] })]));
+  ip.push(snap(12, [rec("a", { alive: true, pos: [50, 100, 0] })]));
+  const r = ip.sample(11).entities.a;
+  assert.equal(r.alive, true);
+  close(r.pos, [50, 100, 0]);
+});

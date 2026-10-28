@@ -30,8 +30,9 @@ export function createInterp(system) {
   }
 
   function mix(a, b, k) {
-    // Across a change of body the later record is used whole; lerping would swing through space.
-    if (a.groundId !== b.groundId) return b;
+    // Across a change of body, or a death and respawn, the later record is used whole; lerping would
+    // swing through space.
+    if (a.groundId !== b.groundId || a.alive !== b.alive) return b;
     const out = { ...b, up: norm(lerp(a.up, b.up, k)), forward: norm(lerp(a.forward, b.forward, k)) };
     if (a.groundId) {
       // A straight lerp of two offsets cuts through the planet; keep the length so feet stay on the surface.

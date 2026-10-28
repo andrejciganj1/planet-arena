@@ -1,6 +1,6 @@
-// Draws the simulation with three.js: flat-shaded bodies, pads with their cue, the dummy, shots and
-// blasts, and the weapon in view. It only reads the world; drawing happens between the last two ticks
-// (alpha) so motion stays smooth on screens faster than the 60 Hz simulation.
+// Draws the simulation with three.js: flat-shaded bodies, pads with their cue, the dummy and other
+// players, shots and blasts, and the weapon in view. It only reads the world; drawing happens between the
+// last two ticks (alpha) so motion stays smooth on screens faster than the 60 Hz simulation.
 import * as THREE from "three";
 import { PLAYER, ROCKET, PAD_CUE, BELT, TICK, PICKUPS, WEAPONS } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
@@ -12,6 +12,8 @@ import { add, sub, scale, lerp, norm, cross, dist, rotateAxis, rotateFromTo } fr
 const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const Y = new THREE.Vector3(0, 1, 0);
 const MAX_PITCH = (89 * Math.PI) / 180;
+// Where the camera looks from while you have no body yet (online, before the first snapshot).
+const OVERVIEW = [0, 260, 380, 0, 0, 0];
 
 // Deterministic randomness, so every load looks the same.
 function rng(seed) {
@@ -206,7 +208,10 @@ function pickupMesh(pk, wire) {
   return g;
 }
 
-export function createRenderer(world, canvas, fixedView = null) {
+// selfId: your entity, whose eyes the camera uses. Online it is a function, as the id comes with the
+// server's welcome and changes if the server restarts.
+export function createRenderer(world, canvas, fixedView = null, selfId = "player") {
+  const self = typeof selfId === "function" ? selfId : () => selfId;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   const scene = new THREE.Scene();
@@ -281,8 +286,6 @@ export function createRenderer(world, canvas, fixedView = null) {
   path.frustumCulled = false;
   scene.add(path);
 
-  const dummy = dummyMesh();
-  scene.add(dummy);
   const weapons = weaponModels();
   camera.add(...Object.values(weapons));
 
@@ -304,6 +307,8 @@ export function createRenderer(world, canvas, fixedView = null) {
   const blastGeo = new THREE.SphereGeometry(1, 16, 12);
   const shots = [], blasts = [], beams = [];
   const pooled = (list, make) => (i) => list[i] || (list[i] = (() => { const m = make(); scene.add(m); return m; })());
+  const figures = [];
+  const figure = pooled(figures, dummyMesh); // everyone but you
   const shot = pooled(shots, () => new THREE.Mesh(rocketGeo, rocketMat));
   const blast = pooled(blasts, () => new THREE.Mesh(blastGeo, new THREE.MeshBasicMaterial({ color: 0xff9a2e, transparent: true, depthWrite: false })));
   const beam = pooled(beams, () => {
@@ -326,8 +331,9 @@ export function createRenderer(world, canvas, fixedView = null) {
 
   return {
     // alpha: how far towards the next tick to draw (0..1); look: mouse turn not yet given to the sim;
-    // zoom: the sniper's magnification while zoomed, else 1.
-    draw(alpha, look, zoom = 1) {
+    // zoom: the sniper's magnification while zoomed, else 1; shift: added to where you are drawn (online,
+    // a prediction's correction eased in).
+    draw(alpha, look, zoom = 1, shift = null) {
       resize();
       if (camera.fov !== 80 / zoom) {
         camera.fov = 80 / zoom;
@@ -350,13 +356,19 @@ export function createRenderer(world, canvas, fixedView = null) {
       }
       belt.update(world.t + (alpha - 1) * TICK);
 
-      const p = world.entities.player;
-      if (fixedView) {
-        camera.position.set(fixedView[0], fixedView[1], fixedView[2]);
-        camera.up.set(0, 1, 0);
-        camera.lookAt(fixedView[3], fixedView[4], fixedView[5]);
-      } else {
+      const p = world.entities[self()];
+      // You, interpolated and shifted.
+      const mine = () => {
         const { pos, up } = between(p, alpha);
+        return { pos: shift ? add(pos, shift) : pos, up };
+      };
+      const free = fixedView || (!p && OVERVIEW);
+      if (free) {
+        camera.position.set(free[0], free[1], free[2]);
+        camera.up.set(0, 1, 0);
+        camera.lookAt(free[3], free[4], free[5]);
+      } else {
+        const { pos, up } = mine();
         let fwd = rotateFromTo(p.forward, p.up, up);
         fwd = rotateAxis(fwd, up, -look.yaw);
         const pitch = Math.min(MAX_PITCH, Math.max(-MAX_PITCH, p.pitch + look.pitch));
@@ -366,7 +378,7 @@ export function createRenderer(world, canvas, fixedView = null) {
         camera.up.copy(v3(up));
         camera.lookAt(v3(add(eye, dir)));
       }
-      for (const [name, m] of Object.entries(weapons)) m.visible = !fixedView && p.alive && p.weapon === name && zoom === 1;
+      for (const [name, m] of Object.entries(weapons)) m.visible = !free && p.alive && p.weapon === name && zoom === 1;
       const viewer = camera.position.toArray();
 
       let nearest = null;
@@ -394,16 +406,19 @@ export function createRenderer(world, canvas, fixedView = null) {
         pathMat.color.setHex(cue.landsOn ? 0x3ee05a : 0xe0443e);
       }
 
-      const d = world.entities.dummy;
-      dummy.visible = d.alive;
-      if (d.alive) {
+      let i = 0;
+      for (const d of Object.values(world.entities)) {
+        if (d === p || !d.alive) continue;
+        const m = figure(i++);
+        m.visible = true;
         const { pos, up } = between(d, alpha);
         const fwd = norm(rotateFromTo(d.forward, d.up, up)), right = cross(fwd, up);
-        dummy.matrix.makeBasis(v3(right), v3(up), v3(scale(fwd, -1))).setPosition(v3(pos));
-        dummy.matrixAutoUpdate = false;
+        m.matrix.makeBasis(v3(right), v3(up), v3(scale(fwd, -1))).setPosition(v3(pos));
+        m.matrixAutoUpdate = false;
       }
+      for (; i < figures.length; i++) figures[i].visible = false;
 
-      let i = 0;
+      i = 0;
       for (const s of world.projectiles) {
         const m = shot(i++);
         m.visible = true;
@@ -427,7 +442,7 @@ export function createRenderer(world, canvas, fixedView = null) {
         const l = beam(i++);
         l.visible = true;
         // Your own beam starts at the gun, not your eye, or you would see it end-on as a dot.
-        const from = b.owner === p.id && !fixedView ? camera.localToWorld(new THREE.Vector3(0.17, -0.16, -0.9)) : v3(b.from);
+        const from = b.owner === p?.id && !free ? camera.localToWorld(new THREE.Vector3(0.17, -0.16, -0.9)) : v3(b.from);
         l.geometry.setFromPoints([from, v3(b.to)]);
         l.material.opacity = 1 - b.age / WEAPONS.railgun.showFor;
       }
@@ -449,9 +464,9 @@ export function createRenderer(world, canvas, fixedView = null) {
       }
 
       // The rope from just below the eye to the caught point (interpolated with its body).
-      rope.visible = p.alive && !!p.hook;
+      rope.visible = !!p?.alive && !!p.hook;
       if (rope.visible) {
-        const { pos, up } = between(p, alpha);
+        const { pos, up } = mine();
         const hand = add(pos, scale(up, PLAYER.eye - 0.4));
         const anchor = add(poses[p.hook.body], p.hook.offset);
         ropeGeo.setFromPoints([v3(hand), v3(anchor)]);

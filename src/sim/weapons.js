@@ -86,9 +86,10 @@ function hurt(world, e, damage, byId, from) {
 // takes reduced damage but full knockback, which is what makes rocket jumps work. Everyone but the owner is
 // measured where the shooter saw them (`lag`); the push is added to their current velocity. A cosmetic world
 // pushes only you, so your own rocket jump feels right at once, and says how hard through onSelfPush.
-export function explode(world, pos, ownerId, lag = 0) {
+// `id` is the rocket's, so the browser can tell the server's blast from the one it drew already.
+export function explode(world, pos, ownerId, lag = 0, id = null) {
   const { ROCKET } = world.tuning;
-  world.events.push({ type: "explode", pos: [...pos] });
+  world.events.push({ type: "explode", pos: [...pos], id });
   world.explosions.push({ pos: [...pos], age: 0 });
   for (const e of Object.values(world.entities)) {
     if (!e.alive) continue;
@@ -129,7 +130,7 @@ export function stepProjectiles(world, dt) {
       continue;
     }
     if (hit.id === sun.id) continue; // the sun swallows everything
-    if (p.kind === "rocket") explode(world, hit.point, p.owner, p.lag);
+    if (p.kind === "rocket") explode(world, hit.point, p.owner, p.lag, p.id);
     else if (hit.entity) {
       hurt(world, hit.entity, specOf(world, p.kind).damage, p.owner, p.from || p.pos);
       // A pellet's push goes to whoever it hits, never back to the shooter.

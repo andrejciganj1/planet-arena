@@ -41,9 +41,11 @@ export function createPrediction(view, id) {
     age++;
     const me = view.entities[id];
     if (me?.alive) {
-      const n = view.projectiles.length;
+      const n = view.projectiles.length, nb = view.beams.length;
       stepPlayer(view, me, input, TICK);
+      // Marked so the server's copies of your shots can be told apart and not drawn twice.
       for (let i = n; i < view.projectiles.length; i++) view.projectiles[i].mine = true;
+      for (let i = nb; i < view.beams.length; i++) view.beams[i].mine = true;
     }
     inputs.set(view.tick, input);
     // A snapshot older than NET.resync ticks restarts the clock, so older inputs are never replayed.
@@ -81,7 +83,8 @@ export function createPrediction(view, id) {
     const was = view.entities[id]?.alive ? view.entities[id].pos : null;
     const me = (view.entities[id] ||= createEntity(id, rec.kind, ZERO, [0, 1, 0]));
     applyEntity(me, rec);
-    if (me.alive) replay(me, snap);
+    if (me.alive && snap.tick < view.tick) replay(me, snap);
+    else me.prev = { pos: me.pos, up: me.up }; // nothing replayed: drawn still, not from a stale prev
     // Drawn where it was, then eased towards the corrected place; a respawn or a big error just jumps.
     const total = was && me.alive ? add(offset(), sub(was, me.pos)) : ZERO;
     off = len(total) > NET.snap ? ZERO : total;

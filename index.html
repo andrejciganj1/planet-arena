@@ -36,6 +36,12 @@
   .play { inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column;
           background: #05060d88; font-size: 30px; font-weight: 700; }
   .play small { font-size: 15px; font-weight: 400; margin-top: 14px; opacity: 0.85; }
+  .screen { inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column;
+            background: #05060dcc; font-size: 30px; font-weight: 700; z-index: 1; }
+  .ask { display: flex; gap: 16px; pointer-events: auto; }
+  .ask input, .ask button { font: inherit; font-size: 22px; border-radius: 8px; padding: 6px 14px; }
+  .ask input { width: 280px; text-align: center; border: 2px solid #fff8; background: #0008; color: #f4f1e8; }
+  .ask button { border: 0; background: #ffb43d; color: #05060d; padding: 6px 30px; cursor: pointer; }
 </style>
 </head>
 <body>

@@ -1,6 +1,7 @@
 // Local check: loads the page with the installed Chrome, fails on any page error or console error, and
-// prints the simulation clock after 5 s of real time (it must be about 5).
-// Usage: NODE_PATH=... node tools/page_check.cjs <url with ?debug> [screenshot.png] [seconds, default 5]
+// prints the simulation clock after 5 s of real time (it must be about 5). Online (?server=...), give a
+// name: it is typed into the name box, and the clock is timed once you have a body.
+// Usage: NODE_PATH=... node tools/page_check.cjs <url with ?debug> [screenshot.png] [seconds, default 5] [name]
 const { chromium } = require("playwright");
 (async () => {
   const b = await chromium.launch({ channel: "chrome", args: ["--use-angle=metal", "--enable-gpu"] });
@@ -13,7 +14,15 @@ const { chromium } = require("playwright");
   p.on("pageerror", (e) => ((bad = true), console.log("pageerror:", e.message)));
   await p.goto(process.argv[2]);
   const secs = Number(process.argv[4] || 5);
+  if (process.argv[5]) {
+    await p.fill(".ask input", process.argv[5]);
+    await p.click(".ask button");
+  }
   await p.waitForFunction(() => window.game?.world, null, { timeout: 15000 }).catch(() => ((bad = true), console.log("no window.game")));
+  if (process.argv[5]) {
+    await p.waitForFunction(() => window.game.world.entities[window.game.world.selfId], null, { timeout: 15000 })
+      .catch(() => ((bad = true), console.log("never joined")));
+  }
   const t0 = await p.evaluate(() => window.game?.world.t ?? NaN);
   await p.waitForTimeout(secs * 1000);
   const t = await p.evaluate(() => window.game?.world.t ?? NaN);

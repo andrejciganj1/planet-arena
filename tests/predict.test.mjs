@@ -199,3 +199,13 @@ test("a dead or missing own record is taken as it is", () => {
   assert.equal(pred.me, undefined);
   pred.step(NO_INPUT);
 });
+
+test("your railgun beam is marked mine, and a reconcile at the view's own tick keeps the frame still", () => {
+  const { view, pred } = joined();
+  Object.assign(pred.me, { weapon: "railgun", weapons: ["pistol", "railgun"], ammo: { railgun: 5 } });
+  pred.step({ ...NO_INPUT, fire: true });
+  assert.equal(view.beams.length, 1);
+  assert.equal(view.beams[0].mine, true);
+  pred.reconcile(selfSnap(view, pred.me));
+  assert.deepEqual(pred.me.prev, { pos: pred.me.pos, up: pred.me.up });
+});

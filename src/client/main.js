@@ -1,21 +1,38 @@
-// The page: wires keyboard and mouse into the input, runs the simulation at its fixed tick from real
-// time, and draws every frame.
-//   ?debug               exposes window.game = { world }
+// The page: wires keyboard and mouse into the input, runs the game at its fixed tick from real time, and
+// draws every frame. Solo runs the whole world here; online asks for a name, then runs your player ahead
+// of the server and draws everyone else from its snapshots.
+//   ?server=<ws url>     plays online against that server (the page on *.github.io uses config.js's)
+//   ?solo                plays solo whatever the address
+//   ?debug               exposes window.game = { world } (online: the view world)
 //   ?view=x,y,z,tx,ty,tz fixes a free camera at x,y,z looking at tx,ty,tz (for screenshots)
 import * as tuning from "../tuning.js";
 import { createWorld, advance } from "../sim/world.js";
+import { NO_INPUT } from "../sim/entity.js";
 import { createInput } from "./input.js";
 import { createRenderer } from "./render.js";
-import { createHud } from "./hud.js";
+import { createHud, askName } from "./hud.js";
+import { createOnlineGame, storedName } from "./online.js";
+import { SERVER } from "./config.js";
 
 const params = new URLSearchParams(location.search);
-const world = createWorld(tuning);
+const server = params.has("solo") ? null : params.get("server") || (location.hostname.endsWith(".github.io") ? SERVER : null);
+const game = server ? createOnlineGame(tuning, server, await askName(document.body, storedName())) : null;
+const world = game ? game.world : createWorld(tuning);
+const selfId = () => (game ? game.id : "player");
 if (params.has("debug")) window.game = { world };
 const view = params.get("view")?.split(",").map(Number);
 const canvas = document.getElementById("game");
-const renderer = createRenderer(world, canvas, view && view.length === 6 && !view.some(Number.isNaN) ? view : null);
+const renderer = createRenderer(world, canvas, view && view.length === 6 && !view.some(Number.isNaN) ? view : null, selfId);
 const hud = createHud(document.body);
 const input = createInput();
+
+// What covers the game while online and not playing yet (or any more).
+function statusText() {
+  if (game.outcome === "version") return "A new version is out: reload the page";
+  if (game.outcome === "full") return "The game is full";
+  if (game.status === "unreachable") return "Can't reach the server, still trying";
+  return game.status === "open" && game.me ? null : "Starting the server...";
+}
 
 let locked = false;
 canvas.addEventListener("click", () => canvas.requestPointerLock());
@@ -40,16 +57,27 @@ let last = performance.now(), acc = 0;
 function frame(now) {
   const elapsed = (now - last) / 1000;
   last = now;
-  // Only take input on frames that run a tick, so presses and mouse movement are never dropped.
-  const ticks = (acc + elapsed) / tuning.TICK + 1e-9 >= 1;
-  const p = world.entities.player, look = locked ? input.pending() : { yaw: 0, pitch: 0, zoom: false };
-  const zoom = p.alive && p.weapon === "sniper" && look.zoom ? tuning.WEAPONS.sniper.zoom : 1;
-  input.sync(p.weapon, p.weapons, zoom);
-  acc = advance(world, acc, elapsed, ticks && locked ? { player: input.take() } : {});
-  for (const ev of world.events) hud.event(ev, world.t);
+  const id = selfId();
+  const p = world.entities[id], look = locked ? input.pending() : { yaw: 0, pitch: 0, zoom: false };
+  const zoom = p?.alive && p.weapon === "sniper" && look.zoom ? tuning.WEAPONS.sniper.zoom : 1;
+  if (p) input.sync(p.weapon, p.weapons, zoom);
+  let alpha, shift = null;
+  if (game) {
+    // Called once per tick the frame runs: each tick's input is sent to the server.
+    game.frame(elapsed, () => (locked ? input.take() : NO_INPUT));
+    alpha = game.alpha;
+    shift = game.offset();
+    hud.screen(statusText());
+  } else {
+    // Only take input on frames that run a tick, so presses and mouse movement are never dropped.
+    const ticks = (acc + elapsed) / tuning.TICK + 1e-9 >= 1;
+    acc = advance(world, acc, elapsed, ticks && locked ? { player: input.take() } : {});
+    alpha = Math.min(1, acc / tuning.TICK);
+  }
+  for (const ev of world.events) hud.event(ev, world.t, id);
   world.events.length = 0;
-  renderer.draw(Math.min(1, acc / tuning.TICK), locked ? input.pending() : { yaw: 0, pitch: 0 }, zoom);
-  hud.update(world, locked, world.t);
+  renderer.draw(alpha, locked ? input.pending() : { yaw: 0, pitch: 0 }, zoom, shift);
+  hud.update(world, locked, world.t, id);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

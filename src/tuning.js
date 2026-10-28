@@ -96,7 +96,7 @@ export const COLOURS = [0xffd23f, 0xe8505b, 0x4fb0e8, 0x6fd36b, 0xb06fe8, 0xff8a
 // Online play. Ticks unless noted: maxLag, history, rejoin, unreachable and smooth are seconds, snap is metres.
 export const NET = {
   maxPlayers: 8, snapEvery: 2, interp: 6, slack: [2, 5], hold: 15, maxAhead: 60, maxLag: 0.5, history: 0.6,
-  rejoin: 10, unreachable: 30, smooth: 0.1, snap: 4, resync: 30, lead: 6, nameMax: 16,
+  rejoin: 10, unreachable: 30, smooth: 0.1, snap: 4, resync: 60, lead: 6, nameMax: 16,
 };
 
 // Pads: `dir` is the launch direction in world axes (nothing spins); the pad sits on its body out along

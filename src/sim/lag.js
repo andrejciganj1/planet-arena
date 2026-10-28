@@ -1,7 +1,6 @@
 // Lag compensation: where the shooter saw a target when they pulled the trigger. The server keeps a short
 // history of every entity and rewinds hits to the shooter's view delay.
-import { add, sub, scale, lerp, norm } from "./vec.js";
-import { hitCentre } from "./entity.js";
+import { add, sub, lerp, norm } from "./vec.js";
 
 // Called at the end of each world step. Planets are not stored: they are scripted from the clock, so a
 // grounded entity is kept as an offset from its body.
@@ -23,16 +22,18 @@ export function record(world) {
 export const placeRec = (rec, poses) =>
   rec.groundId && poses[rec.groundId] ? add(poses[rec.groundId].pos, rec.rel) : rec.pos;
 
-// The hit centre of e as the shooter saw it, `lag` seconds ago (capped), placed against the current poses.
-export function seenCentre(world, e, lag) {
-  const { NET, PLAYER } = world.tuning;
+// The feet and up of e as the shooter saw them, `lag` seconds ago (capped), placed against the current
+// poses. Callers build the hit spheres from it.
+export function seenPose(world, e, lag) {
+  const { NET } = world.tuning;
+  const now = { pos: e.pos, up: e.up };
   const h = world.history;
-  if (!(lag > 0) || !h?.length) return hitCentre(e);
+  if (!(lag > 0) || !h?.length) return now;
   const at = world.t - Math.min(lag, NET.maxLag);
   let i = h.length - 1;
   while (i > 0 && h[i].t > at) i--;
   const a = h[i].ents[e.id], b = (h[i + 1] || h[i]).ents[e.id];
-  if (!a && !b) return hitCentre(e);
+  if (!a && !b) return now;
   let rec = b || a;
   if (a && b && a !== b) {
     const k = Math.min(1, Math.max(0, (at - h[i].t) / (h[i + 1].t - h[i].t)));
@@ -42,5 +43,5 @@ export function seenCentre(world, e, lag) {
       rec = { groundId: a.groundId, up, pos: lerp(a.pos, b.pos, k), rel: a.groundId ? lerp(a.rel, b.rel, k) : null };
     }
   } else if (a && !b) rec = a;
-  return add(placeRec(rec, world.poses), scale(rec.up, PLAYER.radius));
+  return { pos: placeRec(rec, world.poses), up: rec.up };
 }

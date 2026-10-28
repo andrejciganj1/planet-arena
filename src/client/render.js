@@ -163,25 +163,29 @@ function tagSprite() {
   return sprite;
 }
 
-// A cartoon capsule with a face on its forward side, and its tag overhead.
+// A body sphere and a head sphere, exactly the shapes shots test (PLAYER.hit), the face on the head's
+// forward side, and the tag overhead.
 function dummyMesh() {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(PLAYER.radius, PLAYER.height - 2 * PLAYER.radius, 6, 16), new THREE.MeshLambertMaterial({ color: DUMMY_COLOUR }));
-  body.position.y = PLAYER.height / 2;
-  g.add(body);
-  g.userData.body = body;
+  const mat = new THREE.MeshLambertMaterial({ color: DUMMY_COLOUR });
+  for (const { at, r } of [PLAYER.hit.body, PLAYER.hit.head]) {
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), mat);
+    ball.position.y = at;
+    g.add(ball);
+  }
+  g.userData.body = { material: mat }; // one material for both, so the colour is set once
   g.userData.tag = tagSprite();
   g.add(g.userData.tag);
   const white = new THREE.MeshBasicMaterial({ color: 0xffffff }), black = new THREE.MeshBasicMaterial({ color: 0x111111 });
   for (const sx of [-1, 1]) {
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), white);
-    eye.position.set(sx * 0.17, 1.42, -0.43);
+    eye.position.set(sx * 0.17, 1.32, -0.5);
     const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 6), black);
-    pupil.position.set(sx * 0.17, 1.42, -0.54);
+    pupil.position.set(sx * 0.17, 1.32, -0.6);
     g.add(eye, pupil);
   }
   const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.03, 6, 12, Math.PI), black);
-  mouth.position.set(0, 1.18, -0.47);
+  mouth.position.set(0, 1.08, -0.5);
   mouth.rotation.z = Math.PI;
   g.add(mouth);
   return g;

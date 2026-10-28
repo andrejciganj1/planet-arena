@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import * as tuning from "../src/tuning.js";
 import { createWorld, stepWorld, addPlayer } from "../src/sim/world.js";
 import { fire, explode, stepProjectiles } from "../src/sim/weapons.js";
-import { seenCentre, placeRec } from "../src/sim/lag.js";
-import { standOn, hitCentre } from "../src/sim/entity.js";
+import { seenPose, placeRec } from "../src/sim/lag.js";
+import { standOn, hitCentre, hitSpheres } from "../src/sim/entity.js";
 import { add, sub, scale, dist, norm, len, dot } from "../src/sim/vec.js";
 
 const { TICK, PLAYER, NET, ROCKET, COLOURS } = tuning;
@@ -25,6 +25,8 @@ function setup() {
   }
   return { w, a, b };
 }
+// The body sphere centre as the shooter saw it, the old "seen centre".
+const seenCentre = (w, e, lag) => { const s = seenPose(w, e, lag); return hitSpheres(s.pos, s.up)[0][0]; };
 const hits = (w, id) => w.events.filter((x) => x.type === "hit" && x.id === id);
 // Points a's view along +x/up at `target`.
 function aimAt(a, target) {
@@ -71,12 +73,13 @@ test("a target standing on a moving planet is rewound relative to the planet", (
   const at = w.t - 0.2;
   const rec = w.history.find((h) => Math.abs(h.t - at) < TICK / 2);
   const old = rec.ents.b;
-  const expected = add(add(w.poses.mid.pos, old.rel), scale(old.up, PLAYER.radius));
-  const got = seenCentre(w, b, w.t - rec.t);
-  assert.ok(dist(got, expected) < 1e-9);
+  const expected = add(w.poses.mid.pos, old.rel);
+  const got = seenPose(w, b, w.t - rec.t);
+  assert.ok(dist(got.pos, expected) < 1e-9);
+  assert.deepEqual(got.up, old.up);
   // The planet moved, so the old world position is far from the rewound one; riding it, b is where it is now.
   assert.ok(dist(old.pos, b.pos) > 0.5, `moved ${dist(old.pos, b.pos)}`);
-  assert.ok(dist(got, hitCentre(b)) < 1e-6);
+  assert.ok(dist(got.pos, b.pos) < 1e-6);
 });
 
 test("a rocket under the seen feet throws the target as hard as the shooter saw", () => {
@@ -95,8 +98,8 @@ test("a rocket under the seen feet throws the target as hard as the shooter saw"
 
 test("lag is capped at NET.maxLag", () => {
   const { w, b } = setup();
-  assert.deepEqual(seenCentre(w, b, 5), seenCentre(w, b, NET.maxLag));
-  assert.notDeepEqual(seenCentre(w, b, NET.maxLag), hitCentre(b));
+  assert.deepEqual(seenPose(w, b, 5), seenPose(w, b, NET.maxLag));
+  assert.notDeepEqual(seenPose(w, b, NET.maxLag).pos, b.pos);
 });
 
 test("hit events say who hit and from where", () => {
@@ -148,4 +151,20 @@ test("in a cosmetic world nobody is hurt, and a blast pushes only you", () => {
   stepProjectiles(w, TICK);
   assert.deepEqual(b.vel, vb);
   assert.equal(w.projectiles.length, 0);
+});
+
+test("a head shot where the shooter saw the head hits with lag, misses without", () => {
+  const { w, a, b } = setup();
+  a.weapon = "railgun";
+  a.weapons.push("railgun");
+  a.ammo.railgun = 5;
+  const s = seenPose(w, b, 0.1);
+  aimAt(a, hitSpheres(s.pos, s.up)[1][0]);
+  w.events.length = 0;
+  assert.ok(fire(w, a, 0.1));
+  assert.equal(hits(w, "b").length, 1);
+  a.cooldown = 0;
+  w.events.length = 0;
+  assert.ok(fire(w, a, 0));
+  assert.equal(hits(w, "b").length, 0, "b has moved 1 m since, more than the head's reach sideways");
 });

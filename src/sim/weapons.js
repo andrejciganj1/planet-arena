@@ -2,9 +2,9 @@
 // tick segment so fast bullets can't pass through thin chords of a planet.
 import { add, sub, scale, dist, norm, len, cross, anyPerpendicular } from "./vec.js";
 import { gravityAt } from "./gravity.js";
-import { segmentHit, segmentHitsSphere } from "./collide.js";
-import { viewDir, worldVel, hitCentre, unground } from "./entity.js";
-import { seenCentre } from "./lag.js";
+import { segmentHit } from "./collide.js";
+import { viewDir, worldVel, unground, segmentHitsPlayer, nearestSphere } from "./entity.js";
+import { seenPose } from "./lag.js";
 
 const specOf = (world, kind) => world.tuning.WEAPONS[kind];
 
@@ -56,12 +56,12 @@ function spread(dir, deg, [r1, r2]) {
 // The railgun: instant and dead straight, ignoring gravity. The first body or entity on the line takes it,
 // each entity where the shooter saw it (`lag`).
 function rail(world, e, eye, dir, spec, id, lag) {
-  const { system, poses, tuning } = world;
+  const { system, poses } = world;
   const end = add(eye, scale(dir, spec.range));
   let hit = segmentHit(system, poses, eye, end);
   for (const o of Object.values(world.entities)) {
     if (!o.alive || o === e) continue;
-    const f = segmentHitsSphere(eye, end, seenCentre(world, o, lag), tuning.PLAYER.radius);
+    const s = seenPose(world, o, lag), f = segmentHitsPlayer(eye, end, s.pos, s.up);
     if (f !== null && (!hit || f < hit.f)) hit = { entity: o, f };
   }
   const to = hit ? add(eye, scale(sub(end, eye), hit.f)) : end;
@@ -94,8 +94,8 @@ export function explode(world, pos, ownerId, lag = 0, id = null) {
   for (const e of Object.values(world.entities)) {
     if (!e.alive) continue;
     if (world.cosmetic && e.id !== world.selfId) continue;
-    const c = e.id === ownerId ? hitCentre(e) : seenCentre(world, e, lag);
-    const d = dist(c, pos);
+    const s = e.id === ownerId ? e : seenPose(world, e, lag);
+    const { centre: c, d } = nearestSphere(pos, s.pos, s.up);
     if (d >= ROCKET.splash) continue;
     const f = 1 - d / ROCKET.splash;
     const away = d > 1e-6 ? norm(sub(c, pos)) : e.up;
@@ -108,7 +108,7 @@ export function explode(world, pos, ownerId, lag = 0, id = null) {
 }
 
 export function stepProjectiles(world, dt) {
-  const { PLAYER, SHOT, VOID_RADIUS } = world.tuning;
+  const { SHOT, VOID_RADIUS } = world.tuning;
   const { system, poses } = world;
   const sun = system.bodies.find((b) => b.kind === "sun");
   const keep = [];
@@ -120,7 +120,7 @@ export function stepProjectiles(world, dt) {
     let hit = segmentHit(system, poses, p.pos, next);
     for (const e of Object.values(world.entities)) {
       if (!e.alive || (e.id === p.owner && p.age < SHOT.ownerGrace)) continue;
-      const f = segmentHitsSphere(p.pos, next, e.id === p.owner ? hitCentre(e) : seenCentre(world, e, p.lag), PLAYER.radius);
+      const s = e.id === p.owner ? e : seenPose(world, e, p.lag), f = segmentHitsPlayer(p.pos, next, s.pos, s.up);
       if (f !== null && (!hit || f < hit.f)) hit = { entity: e, f, point: add(p.pos, scale(sub(next, p.pos), f)) };
     }
     p.age += dt;

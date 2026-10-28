@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as tuning from "../src/tuning.js";
 import { createWorld, stepWorld } from "../src/sim/world.js";
 import { fire, explode } from "../src/sim/weapons.js";
-import { createEntity, standOn, hitCentre, viewDir, NO_INPUT } from "../src/sim/entity.js";
+import { createEntity, standOn, hitCentre, hitSpheres, viewDir, NO_INPUT } from "../src/sim/entity.js";
 import { surfaceInfo } from "../src/sim/collide.js";
 import { add, sub, scale, norm, dist, dot, len, cross, projectOnPlane, anyPerpendicular } from "../src/sim/vec.js";
 import { stepProjectiles } from "../src/sim/weapons.js";
@@ -81,7 +81,7 @@ test("splash damage falls off with distance and stops at the radius", () => {
   for (const d of [0.5, 2, 3.5, ROCKET.splash + 0.1]) {
     const w = createWorld(tuning);
     const e = w.entities.dummy;
-    const at = sub(hitCentre(e), scale(e.up, d));
+    const at = sub(hitSpheres(e.pos, e.up)[0][0], scale(e.up, d)); // d below the body centre, the nearer sphere
     explode(w, at, "player");
     const want = d < ROCKET.splash ? ROCKET.damage * (1 - d / ROCKET.splash) : 0;
     assert.ok(Math.abs(tuning.DUMMY.health - e.health - want) < 1e-9, `d=${d}`);
@@ -224,7 +224,7 @@ function range(rangeM, weapon, opts = {}) {
   const eye = [0, 150, 0], dir = [1, 0, 0], up = [0, 1, 0];
   const place = () => {
     Object.assign(p, { pos: sub(eye, scale(up, PLAYER.eye)), vel: [0, 0, 0], up, forward: dir, pitch: 0, groundId: null, airTime: 0 });
-    Object.assign(d, { pos: sub(add(eye, scale(dir, rangeM)), scale(up, PLAYER.radius)), vel: [0, 0, 0], up, groundId: null, airTime: 0 });
+    Object.assign(d, { pos: sub(add(eye, scale(dir, rangeM)), scale(up, PLAYER.hit.body.at)), vel: [0, 0, 0], up, groundId: null, airTime: 0 });
   };
   place();
   d.health = opts.health ?? 1e9;
@@ -244,7 +244,7 @@ test("the railgun hits instantly along a straight line", () => {
   // The beam ends on the view line, at the target's hit sphere.
   const off = sub(beam.to, eye), along = dot(off, dir);
   // Off the line by nothing; along it, at the target's near side (its up turns a little in the tick).
-  assert.ok(len(sub(off, scale(dir, along))) < 1e-6 && Math.abs(along - (60 - PLAYER.radius)) < 0.1, JSON.stringify(beam.to));
+  assert.ok(len(sub(off, scale(dir, along))) < 1e-6 && Math.abs(along - (60 - PLAYER.hit.body.r)) < 0.1, JSON.stringify(beam.to));
   assert.equal(w.projectiles.length, 0);
 });
 
@@ -331,4 +331,37 @@ test("no weapon is simply better: shotgun, minigun and a long gun each win at so
   assert.equal(at5, "shotgun", JSON.stringify(t5));
   assert.equal(at25, "minigun", JSON.stringify(t25));
   assert.ok(at80 === "railgun" || at80 === "sniper", JSON.stringify(t80));
+});
+
+// A standing dummy 20 m ahead of the shooter, its feet `h` below the shooter's level line (so the line
+// meets it `h` m above its feet). Gravity is too weak over 20 m to bend the bullet visibly.
+function level(weapon, h) {
+  const { w, p, d, eye, dir, up } = (() => { const r = range(20, weapon); return { ...r, up: [0, 1, 0] }; })();
+  d.pos = sub(add(eye, scale(dir, 20)), scale(up, h));
+  return { w, p, d };
+}
+test("a shot at the head hits: 1.6 m up, where today's sphere misses", () => {
+  assert.ok(1.6 - PLAYER.radius * 2 > 0.1, "1.6 m is above the old sphere");
+  for (const weapon of ["railgun", "pistol"]) {
+    const { w, p } = level(weapon, 1.6);
+    assert.ok(fire(w, p), weapon);
+    if (weapon === "pistol") for (let i = 0; i < 20; i++) stepProjectiles(w, TICK);
+    assert.ok(w.events.some((e) => e.type === "hit" && e.id === "dummy"), `${weapon} hit the head`);
+  }
+});
+
+test("a shot just over the helmet misses", () => {
+  const { w, p } = level("railgun", 1.85);
+  fire(w, p);
+  assert.ok(!w.events.some((e) => e.type === "hit"));
+});
+
+test("a blast is measured to the nearer sphere", () => {
+  const w = padless(), e = w.entities.dummy;
+  const [head] = hitSpheres(e.pos, e.up)[1];
+  const at = add(head, scale(e.up, 1.0));
+  assert.ok(dist(at, hitSpheres(e.pos, e.up)[0][0]) > 1.8, "1.85 m from the body centre");
+  explode(w, at, "player");
+  const dmg = tuning.DUMMY.health - e.health;
+  assert.ok(Math.abs(dmg - ROCKET.damage * (1 - 1.0 / ROCKET.splash)) < 1e-9, `${dmg}`);
 });

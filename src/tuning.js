@@ -41,7 +41,10 @@ export const CYCLE = 25200;
 export const COMET = { close: 10 };
 
 export const PLAYER = {
-  radius: 0.5, // hit sphere, centred radius above the feet
+  radius: 0.5, // movement and ground contact sphere, centred radius above the feet
+  // Shots test these two spheres, the figure as drawn (metres along up from the feet). The head is the
+  // bubble helmet's outer shape, its top at 1.8 m.
+  hit: { body: { at: 0.4, r: 0.4 }, head: { at: 1.25, r: 0.55 } },
   height: 1.8,
   eye: 1.6,
   run: 9, // m/s
@@ -63,13 +66,13 @@ export const BOOST = { accel: 12, fuel: 1.5, refill: 0.5 };
 // Weapons, keyed by name. type: "bullet" (falls with gravity), "rocket" (bullet that explodes) or "ray"
 // (instant and straight). spread: half-angle of the cone in degrees. ammo: { pickup: rounds a weapon pickup
 // gives, box: rounds an ammo box gives, max: the most you carry }; null means unlimited (the pistol).
-// Rocket: splash damage and knockback fall off linearly to zero at `splash`, measured to the hit sphere
+// Rocket: splash damage and knockback fall off linearly to zero at `splash`, measured to the nearer hit sphere
 // centre; `self` scales damage to the shooter.
 export const WEAPONS = {
   pistol: { type: "bullet", speed: 120, damage: 10, cooldown: 0.35, spread: 0, ammo: null },
-  shotgun: { type: "bullet", speed: 120, damage: 10, cooldown: 0.9, spread: 7, pellets: 10, range: 35, push: 0.8, ammo: { pickup: 8, box: 8, max: 24 } },
+  shotgun: { type: "bullet", speed: 120, damage: 10, cooldown: 0.9, spread: 6, pellets: 10, range: 35, push: 0.8, ammo: { pickup: 8, box: 8, max: 24 } },
   rocket: { type: "rocket", speed: 30, damage: 90, cooldown: 0.9, spread: 0, splash: 4, knockback: 15, self: 0.5, showFor: 0.5, ammo: { pickup: 5, box: 5, max: 15 } },
-  minigun: { type: "bullet", speed: 120, damage: 6, cooldown: 0.08, spread: 1.2, ammo: { pickup: 100, box: 80, max: 300 } },
+  minigun: { type: "bullet", speed: 120, damage: 6, cooldown: 0.08, spread: 0.8, ammo: { pickup: 100, box: 80, max: 300 } },
   sniper: { type: "bullet", speed: 600, damage: 75, cooldown: 1.5, spread: 0, zoom: 4, ammo: { pickup: 5, box: 5, max: 15 } },
   railgun: { type: "ray", damage: 90, cooldown: 1.5, spread: 0, range: 800, showFor: 0.5, ammo: { pickup: 5, box: 5, max: 10 } },
 };

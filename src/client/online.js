@@ -46,7 +46,12 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
   let status = "connecting", outcome = null; // outcome: null, "full" or "version"
   let acc = 0, nudge = 0, nudgedAt = -Infinity;
   let own = []; // your shots, flown here; everyone else's are drawn from the snapshots
-  const drawn = new Map(); // shot id -> view.t, for beams and blasts already on screen
+  const drawn = new Map(); // shot id -> when seen, for beams and blasts already on screen
+  // The server's beams and blasts wait here for the next frame, with the server time they began. Only ticks
+  // age what is on screen, and a hidden tab runs none, so until then they are aged and dropped by the
+  // snapshots' clock instead.
+  let heard = [], newest = 0; // newest: the latest snapshot's t
+  const showFor = { beams: tuning.WEAPONS.railgun.showFor, explosions: tuning.ROCKET.showFor };
   save("localStorage", NAME, name);
 
   // As in the prediction: the clock is built by adding TICK, so it matches the server's floats.
@@ -63,6 +68,7 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
     outcome = null;
     Object.assign(view, { selfId: id, entities: {}, projectiles: [], beams: [], explosions: [], players: {}, scores: {}, pickups: {}, cues: {} });
     own = [];
+    heard = [];
     drawn.clear();
     acc = nudge = 0;
     nudgedAt = -Infinity;
@@ -91,16 +97,18 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
     // A beam is in every snapshot while it shows: drawn once, then aged here.
     for (const b of msg.beams) {
       if (drawn.has(b.id)) continue;
-      drawn.set(b.id, view.t);
-      view.beams.push(b);
+      drawn.set(b.id, msg.t);
+      heard.push({ list: "beams", item: b, at: msg.t - b.age });
     }
     for (const ev of msg.events) {
       if (ev.type === "explode" && drawn.has(ev.id)) continue; // your own rocket, drawn when it hit here
-      if (ev.type === "explode" || (ev.type === "death" && ev.cause !== "void")) view.explosions.push({ pos: ev.pos, age: 0 });
+      if (ev.type === "explode" || (ev.type === "death" && ev.cause !== "void")) heard.push({ list: "explosions", item: { pos: ev.pos, age: 0 }, at: msg.t });
       view.events.push(ev);
     }
     if (view.events.length > EVENTS_KEPT) view.events.splice(0, view.events.length - EVENTS_KEPT);
-    for (const [k, t] of drawn) if (t < view.t - FORGET) drawn.delete(k);
+    heard = heard.filter((h) => msg.t - h.at < showFor[h.list]);
+    newest = msg.t;
+    for (const [k, t] of drawn) if (t < msg.t - FORGET) drawn.delete(k);
   }
 
   let conn = null;
@@ -135,6 +143,11 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
   // gives the input for each tick.
   function frame(elapsed, take) {
     if (!pred) return;
+    for (const h of heard) {
+      h.item.age = newest - h.at;
+      view[h.list].push(h.item);
+    }
+    heard = [];
     acc += elapsed;
     let n = Math.floor(acc / TICK + 1e-9);
     if (n > MAX_TICKS) {

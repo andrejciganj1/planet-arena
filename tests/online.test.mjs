@@ -34,7 +34,11 @@ function room() {
       inbox.get(conn)(json(msg));
     }
   };
-  return { game, connect, step, sent };
+  // Hands a message to every browser, as if the server had sent it.
+  const deliver = (msg) => {
+    for (const onMessage of inbox.values()) onMessage(json(msg));
+  };
+  return { game, connect, step, sent, deliver };
 }
 
 // Browsers joined to the room; each frame is 1/60 s of real time and the room steps once per frame.
@@ -106,4 +110,31 @@ test("your own rocket's blast is drawn once, not again when the server's arrives
   assert.equal(r.sent.flatMap((m) => m.events).filter((e) => e.type === "explode").length, 1, "the room's rocket went off");
   assert.equal(events, 1, "one blast event in the view");
   assert.equal(most, 1, "one blast on screen");
+});
+
+test("a hidden tab's snapshots leave only the blasts and beams still showing", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  const a = join("Ana", () => NO_INPUT);
+  for (let f = 0; f < 10; f++) frame();
+  // 3000 snapshots (100 s) arrive with no frame drawn, each with someone's blast and beam.
+  const last = r.sent.at(-1);
+  let tick = last.tick, t = last.t;
+  for (let k = 0; k < 3000; k++) {
+    for (let i = 0; i < tuning.NET.snapEvery; i++) (tick++, (t += TICK));
+    const beam = { id: `x.${k}.0`, from: [0, 300, 0], to: [10, 300, 0], age: 0, owner: "x" };
+    r.deliver({ ...last, tick, t, slack: 3, beams: [beam], events: [{ type: "explode", pos: [0, 300, 0], id: `x.${k}.1` }] });
+  }
+  // At most what shows at once: one of each per snapshot for as long as they show.
+  const most = (showFor) => Math.ceil(showFor / (tuning.NET.snapEvery * TICK)) + 1;
+  const { ROCKET, WEAPONS } = tuning;
+  const w = a.g.world;
+  assert.ok(w.explosions.length <= most(ROCKET.showFor), `${w.explosions.length} blasts while hidden`);
+  assert.ok(w.beams.length <= most(WEAPONS.railgun.showFor), `${w.beams.length} beams while hidden`);
+  a.g.frame(TICK, () => NO_INPUT);
+  assert.ok(w.explosions.length > 0 && w.explosions.length <= most(ROCKET.showFor), `${w.explosions.length} blasts after`);
+  assert.ok(w.beams.length > 0 && w.beams.length <= most(WEAPONS.railgun.showFor), `${w.beams.length} beams after`);
+  assert.ok(w.explosions.every((x) => x.age < ROCKET.showFor) && w.beams.every((b) => b.age < WEAPONS.railgun.showFor));
+  // The newest are the ones left, aged by the snapshot clock.
+  assert.ok(w.beams.some((b) => b.id === "x.2999.0"));
 });

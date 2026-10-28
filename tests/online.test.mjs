@@ -139,6 +139,25 @@ test("a hidden tab's snapshots leave only the blasts and beams still showing", (
   assert.ok(w.beams.some((b) => b.id === "x.2999.0"));
 });
 
+test("after the clock restarts lower (snapshots stopped a while), the next late snapshot nudges again", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  const a = join("Ana", () => NO_INPUT);
+  for (let f = 0; f < 30; f++) frame();
+  const last = r.sent.at(-1);
+  const w = a.g.world;
+  const at = (k) => ({ ...last, tick: last.tick + k, t: last.t + k * TICK, events: [], beams: [] });
+  r.deliver({ ...at(2), slack: -10 }); // inputs late: one extra tick, and wait for the server to see it
+  a.g.frame(TICK, () => NO_INPUT);
+  // Snapshots stop while frames run on, until the view is more than NET.resync ticks ahead.
+  for (let f = 0; f < NET.resync + 10; f++) a.g.frame(TICK, () => NO_INPUT);
+  r.deliver({ ...at(4), slack: -10 }); // the clock restarts at this tick + NET.lead; inputs still late
+  assert.equal(w.tick, last.tick + 4 + NET.lead, "restarted lower");
+  const before = w.tick;
+  a.g.frame(TICK, () => NO_INPUT);
+  assert.equal(w.tick - before, 2, "one tick and the nudge");
+});
+
 test("a page says hello with one nonce on every open; another page has its own", () => {
   const hellos = [];
   const connect = (url, { hello }) => {

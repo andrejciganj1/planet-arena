@@ -318,3 +318,13 @@ test("a reconnect into a full room is told so, and the token still works once a 
   assert.equal(w.id, "p1");
   assert.deepEqual(g.world.scores.p1, { kills: 4, deaths: 0 });
 });
+
+test("slack follows the newest input received, also when a client's ticks go back", () => {
+  const g = mk();
+  hi(g, "a", "A"); hi(g, "b", "B");
+  steps(g, 2);
+  g.input("a", inp(20));
+  assert.equal(steps(g, 2).find((o) => o.conn === "a").msg.slack, 20 - 4);
+  g.input("a", inp(6)); // the client restarted its clock lower
+  assert.equal(steps(g, 2).find((o) => o.conn === "a").msg.slack, 6 - 6);
+});

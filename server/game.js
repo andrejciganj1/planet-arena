@@ -69,7 +69,7 @@ export function createGame(tuning, { token = () => randomUUID() } = {}) {
     if (!clean) return;
     if (clean.tick < p.ack - NET.maxAhead || clean.tick > world.tick + NET.maxAhead) return;
     p.pending.set(clean.tick, clean);
-    p.newest = Math.max(p.newest, clean.tick);
+    p.newest = clean.tick; // one socket delivers in order; a client that restarted its clock lower is believed
   }
 
   function drop(conn) {

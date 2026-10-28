@@ -84,7 +84,9 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
   function snap(msg) {
     if (!pred) return;
     interp.push(msg);
+    const before = view.tick;
     pred.reconcile(msg);
+    if (view.tick < before) nudgedAt = -Infinity; // the clock restarted lower: the old mark would block nudges
     // One tick faster or slower per snapshot, but only once the server has inputs sent since the last
     // change; reacting again before that would overshoot by a round trip's worth of ticks.
     if (msg.tick + msg.slack >= nudgedAt) {
@@ -140,7 +142,7 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
     own = view.projectiles;
     for (const b of view.beams) if (b.mine && !drawn.has(b.id)) drawn.set(b.id, view.t);
     for (const ev of view.events.slice(from)) if (ev.type === "explode" && ev.id) drawn.set(ev.id, view.t);
-    conn.send({ type: "input", tick: view.tick, view: Math.floor(interp.view()), input });
+    conn.send({ type: "input", tick: view.tick, view: Math.round(interp.view()), input });
   }
 
   // Runs ticks for real elapsed time (as sim's advance does), then fills the view for drawing. `take`

@@ -1,0 +1,183 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import * as tuning from "../src/tuning.js";
+import { createWorld } from "../src/sim/world.js";
+import { NO_INPUT } from "../src/sim/entity.js";
+import { PROTOCOL } from "../src/net/protocol.js";
+import { createGame } from "../server/game.js";
+
+const { NET } = tuning;
+const hi = (g, conn, name, token) => g.hello(conn, { type: "hello", v: PROTOCOL, name, token });
+const inp = (tick, extra = {}) => ({ type: "input", tick, view: tick - 6, input: { ...NO_INPUT, ...extra } });
+const steps = (g, n) => { const out = []; for (let i = 0; i < n; i++) out.push(...g.step()); return out; };
+const mk = () => { let n = 0; return createGame(tuning, { token: () => "tok" + ++n }); };
+
+test("the first hello gets a welcome with an id, token, tick and t, and a fresh world", () => {
+  const g = mk();
+  assert.equal(g.world, null);
+  const w = hi(g, "a", "Ann");
+  assert.deepEqual(w, { type: "welcome", id: "p1", token: "tok1", tick: 0, t: 0, colour: tuning.COLOURS[1] });
+  assert.equal(g.players(), 1);
+  assert.equal(g.world.players.p1.name, "Ann");
+});
+
+test("a ninth player is told the game is full", () => {
+  const g = mk();
+  for (let i = 0; i < NET.maxPlayers; i++) assert.equal(hi(g, i, "x").type, "welcome");
+  assert.deepEqual(hi(g, 99, "late"), { type: "full" });
+  assert.equal(g.players(), NET.maxPlayers);
+});
+
+test("a wrong protocol version is told to reload", () => {
+  const g = mk();
+  assert.deepEqual(g.hello("a", { type: "hello", v: PROTOCOL + 1, name: "x" }), { type: "version" });
+  assert.deepEqual(g.hello("a", { type: "hello", name: "x" }), { type: "version" });
+  assert.equal(g.players(), 0);
+});
+
+test("same names get numbers, and each player gets a colour nobody else has", () => {
+  const g = mk();
+  for (let i = 0; i < NET.maxPlayers; i++) hi(g, i, "Sam");
+  const ps = Object.values(g.world.players);
+  assert.equal(new Set(ps.map((p) => p.name.toLowerCase())).size, NET.maxPlayers);
+  assert.equal(ps[0].name, "Sam");
+  assert.equal(ps[1].name, "Sam 2");
+  assert.equal(new Set(ps.map((p) => p.colour)).size, NET.maxPlayers);
+});
+
+test("an input is applied at its tick; a late one's jump and turn are not lost", () => {
+  // Late path: step T+1 runs with nothing, then input T+1 (jump, yaw) and T+2 (yaw) arrive.
+  const g = mk();
+  hi(g, "a", "A"); hi(g, "b", "B");
+  steps(g, 30);
+  const T = g.world.tick;
+  steps(g, 1);
+  g.input("a", inp(T + 1, { jump: true, yawDelta: 0.3 }));
+  g.input("a", inp(T + 2, { yawDelta: 0.2 }));
+  steps(g, 1);
+  const e = g.world.entities.p1;
+  assert.equal(e.groundId, null, "jumped");
+  // Reference: the same two ticks of input as one input at T+2.
+  const r = mk();
+  hi(r, "a", "A"); hi(r, "b", "B");
+  steps(r, 31);
+  r.input("a", inp(T + 2, { jump: true, yawDelta: 0.5 }));
+  steps(r, 1);
+  const f = r.world.entities.p1;
+  assert.equal(f.groundId, null);
+  for (let i = 0; i < 3; i++) assert.ok(Math.abs(e.forward[i] - f.forward[i]) < 1e-9);
+});
+
+test("with no inputs a player keeps their held keys for NET.hold ticks, then lets go", () => {
+  const g = mk();
+  hi(g, "a", "A"); hi(g, "b", "B");
+  steps(g, 10);
+  const T = g.world.tick;
+  Object.assign(g.world.entities.p1, { weapon: "minigun", weapons: ["pistol", "minigun"], ammo: { minigun: 300 } }); // fast cooldown
+  g.input("a", inp(T + 1, { fire: true }));
+  // Shots are counted on the entity: bullets may hit the ground at once.
+  const shotsAt = [];
+  let prev = g.world.entities.p1.shots;
+  for (let i = 1; i <= NET.hold + 120; i++) {
+    g.step();
+    if (g.world.entities.p1.shots > prev) shotsAt.push(i);
+    prev = g.world.entities.p1.shots;
+  }
+  assert.ok(shotsAt.length >= 2, "fired while held");
+  assert.ok(shotsAt[shotsAt.length - 1] <= NET.hold + 1, `last shot at tick ${shotsAt[shotsAt.length - 1]}`);
+});
+
+test("dropped: the body leaves at once; back within 10 s with the token: same id, same score, no death", () => {
+  const g = mk();
+  hi(g, "a", "A"); const b = hi(g, "b", "B");
+  steps(g, 5);
+  g.world.scores.p2.kills = 3; g.world.scores.p2.deaths = 1;
+  g.world.entities.p2.shots = 7;
+  g.drop("b");
+  assert.equal(g.world.entities.p2, undefined);
+  assert.equal(g.world.players.p2, undefined);
+  assert.equal(g.players(), 1);
+  steps(g, 300);
+  const w = hi(g, "b2", "ignored", b.token);
+  assert.equal(w.id, "p2");
+  assert.equal(w.token, b.token);
+  assert.equal(w.colour, b.colour);
+  assert.equal(g.world.players.p2.name, "B");
+  assert.deepEqual(g.world.scores.p2, { kills: 3, deaths: 1 });
+  assert.equal(g.world.entities.p2.shots, 7);
+  assert.ok(g.world.entities.p2.alive);
+});
+
+test("after 10 s the token is forgotten: a new player at 0/0", () => {
+  const g = mk();
+  hi(g, "a", "A"); const b = hi(g, "b", "B");
+  g.world.scores.p2.kills = 3;
+  g.drop("b");
+  steps(g, NET.rejoin * 60);
+  assert.equal(g.world.scores.p2, undefined);
+  const w = hi(g, "b2", "B", b.token);
+  assert.equal(w.id, "p3");
+  assert.notEqual(w.token, b.token);
+  assert.deepEqual(g.world.scores.p3, { kills: 0, deaths: 0 });
+});
+
+test("the same token on two connections: the second gets a new player", () => {
+  const g = mk();
+  const a = hi(g, "a", "A");
+  const w = hi(g, "a2", "A", a.token);
+  assert.equal(w.id, "p2");
+  assert.notEqual(w.token, a.token);
+  assert.equal(g.players(), 2);
+  g.drop("a");
+  const back = hi(g, "a3", "A", a.token);
+  assert.equal(back.id, "p1");
+});
+
+test("when the last player is gone and the reconnect window is over, the game resets", () => {
+  const g = mk();
+  hi(g, "a", "A"); hi(g, "b", "B");
+  steps(g, 20);
+  g.world.pickups.somewhere = { readyAt: g.world.t + 100 }; // a taken pickup
+  g.world.scores.p1.kills = 2; g.world.scores.p2.deaths = 2;
+  g.drop("a"); g.drop("b");
+  steps(g, NET.rejoin * 60 - 1);
+  assert.ok(g.world, "still waiting for a return");
+  steps(g, 1);
+  assert.equal(g.world, null);
+  const w = hi(g, "c", "C");
+  assert.equal(w.id, "p1");
+  assert.equal(w.tick, 0);
+  assert.equal(w.t, 0);
+  assert.deepEqual(g.world.pickups, createWorld(tuning, { solo: false }).pickups); // none taken: all ready
+  assert.deepEqual(g.world.scores, { p1: { kills: 0, deaths: 0 } });
+});
+
+test("snapshots every 2 ticks carry ack, slack and the events since the last one", () => {
+  const g = mk();
+  hi(g, "a", "A"); hi(g, "b", "B");
+  g.input("a", inp(1));
+  g.input("a", inp(9));
+  g.world.events.push({ type: "marker" });
+  const out = steps(g, 4);
+  assert.deepEqual(out.map((o) => o.msg.tick), [2, 2, 4, 4]);
+  const first = out.find((o) => o.conn === "a" && o.msg.tick === 2).msg;
+  assert.equal(first.type, "snap");
+  assert.equal(first.ack, 1);
+  assert.equal(first.slack, 9 - 2);
+  assert.ok(first.events.some((e) => e.type === "marker"));
+  const second = out.find((o) => o.conn === "a" && o.msg.tick === 4).msg;
+  assert.ok(!second.events.some((e) => e.type === "marker"));
+  assert.equal(out.find((o) => o.conn === "b" && o.msg.tick === 2).msg.ack, 0);
+});
+
+test("garbage never crashes the room or puts NaN into the world", () => {
+  const g = mk();
+  hi(g, "a", "A");
+  for (const x of [null, 1, "s", {}, { tick: "1" }, { tick: 1, input: { move: [NaN, NaN], yawDelta: 1e308 } }, { tick: 2, input: 5 }, { tick: 3, input: [1] }, { tick: 1e9 }, { tick: -4 }]) g.input("a", x);
+  g.input("ghost", inp(1));
+  assert.equal(hi(g, "c", { a: 1 }).type, "welcome");
+  assert.equal(g.hello("d", null).type, "version");
+  steps(g, 60);
+  const bad = (v) => (typeof v === "number" ? !Number.isFinite(v) && Math.abs(v) !== Infinity : v && typeof v === "object" ? Object.values(v).some(bad) : false);
+  for (const e of Object.values(g.world.entities)) assert.ok(!bad(e), e.id);
+});

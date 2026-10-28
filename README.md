@@ -45,7 +45,7 @@ Open `http://localhost:8100/?server=ws://localhost:8787` in two windows. The ser
 code as the browser, so both agree on the rules.
 
 To check two browsers at once (Playwright through `npx`, both servers running):
-`node tools/net_check.cjs "http://localhost:8100/?server=ws://localhost:8787&debug" shots` prints `OK`.
+`NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/net_check.cjs "http://localhost:8100/?server=ws://localhost:8787&debug" shots` prints `OK`.
 
 ## Deploy
 
@@ -57,6 +57,9 @@ Nothing here is automatic; each step is the owner's.
    machine's memory, so friends would land in separate games; if two exist, run `fly scale count 1`. The machine stops when idle and starts on
    the first connection, so the first join after a quiet spell takes a few seconds.
 3. Push `main` to GitHub and turn on Pages (branch `main`, root). `.nojekyll` keeps Pages from rebuilding the files.
+
+Whenever rules, tuning or messages change, bump `PROTOCOL` in `src/net/protocol.js` before deploying, so a page
+still cached from the old version says "reload the page" instead of playing by different rules.
 
 ## Controls
 

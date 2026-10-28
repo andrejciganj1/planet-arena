@@ -18,6 +18,15 @@
   .bar > div { height: 100%; background: #ffb43d; }
   .health { font-size: 14px; margin-bottom: 8px; }
   .fuel { font-size: 14px; margin-top: 8px; }
+  .fuel .bar { position: relative; }
+  .fuel .bar > .over { position: absolute; left: 0; top: 0; background: #6fe3ff; }
+  .slots { font-size: 13px; margin-bottom: 4px; }
+  .slots span { display: inline-block; width: 18px; text-align: center; opacity: 0.25; }
+  .slots span.held { opacity: 0.8; }
+  .slots span.hand { opacity: 1; color: #ffb43d; }
+  .crosshair.hookable { border: 2px solid #6fe3ff; border-radius: 50%; width: 22px; height: 22px; margin: -13px 0 0 -13px; }
+  .crosshair.hookable::before { left: 10px; top: 4px; }
+  .crosshair.hookable::after { top: 10px; left: 4px; }
   .health .bar > div { background: #5fd36b; }
   .dummy { right: 24px; top: 20px; font-size: 16px; text-align: right; }
   .dummy .bar > div { background: #ff5d5d; }

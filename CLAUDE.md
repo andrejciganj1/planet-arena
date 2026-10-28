@@ -9,7 +9,8 @@ A physics arena shooter across a small solar system, in the browser. Spec:
   prints `OK` when the page has no errors and the clock keeps real time. `?view=x,y,z,tx,ty,tz` fixes a free
   camera for screenshots; `?debug` exposes `window.game = { world }`.
 - Controls: click to capture the mouse; mouse look, WASD move, space jump (held in the air: booster),
-  left mouse fire, 1 pistol, 2 rocket launcher, wheel cycles.
+  left mouse fire, right mouse hook (held), 1 to 6 weapons (pistol, shotgun, rocket launcher, minigun, sniper
+  rifle, railgun), wheel cycles held weapons, Shift zooms the sniper rifle.
 
 ## Constraints
 

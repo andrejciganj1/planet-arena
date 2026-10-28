@@ -19,6 +19,7 @@ const input = createInput();
 
 let locked = false;
 canvas.addEventListener("click", () => canvas.requestPointerLock());
+canvas.addEventListener("contextmenu", (e) => e.preventDefault()); // right mouse is the hook
 document.addEventListener("pointerlockchange", () => {
   locked = document.pointerLockElement === canvas;
   if (!locked) input.onBlur(); // Esc or alt-tab while keys are held must not leave them stuck
@@ -41,11 +42,13 @@ function frame(now) {
   last = now;
   // Only take input on frames that run a tick, so presses and mouse movement are never dropped.
   const ticks = (acc + elapsed) / tuning.TICK + 1e-9 >= 1;
-  input.sync(world.entities.player.weapon);
+  const p = world.entities.player, look = locked ? input.pending() : { yaw: 0, pitch: 0, zoom: false };
+  const zoom = p.alive && p.weapon === "sniper" && look.zoom ? tuning.WEAPONS.sniper.zoom : 1;
+  input.sync(p.weapon, p.weapons, zoom);
   acc = advance(world, acc, elapsed, ticks && locked ? { player: input.take() } : {});
   for (const ev of world.events) hud.event(ev, world.t);
   world.events.length = 0;
-  renderer.draw(Math.min(1, acc / tuning.TICK), locked ? input.pending() : { yaw: 0, pitch: 0 });
+  renderer.draw(Math.min(1, acc / tuning.TICK), locked ? input.pending() : { yaw: 0, pitch: 0 }, zoom);
   hud.update(world, locked, world.t);
   requestAnimationFrame(frame);
 }

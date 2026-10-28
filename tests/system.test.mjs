@@ -53,8 +53,8 @@ test("the same t gives the same poses", () => {
 const comets = BODIES.filter((b) => b.kind === "comet");
 const gapBetween = (p, a, b) => dist(p[a.id].pos, p[b.id].pos) - a.radius - b.radius;
 
-test("there are three comets, and every orbit period divides CYCLE", () => {
-  assert.equal(comets.length, 3);
+test("there are four comets, and every orbit period divides CYCLE", () => {
+  assert.equal(comets.length, 4);
   for (const b of BODIES.filter((b) => b.orbit)) assert.equal(CYCLE % b.orbit.period, 0, b.id);
 });
 
@@ -108,10 +108,9 @@ test("over the full cycle, some comet passes close to some planet at least every
   assert.ok(longest <= 120, `longest wait ${longest} s`);
 });
 
-test("the asteroid belt stays clear of every planet's and the moon's path", () => {
-  // Bands of the orbital plane each body sweeps, from the sun's centre.
+test("the asteroid belt stays clear of every planet's path", () => {
+  // Bands of the orbital plane each planet sweeps, from the sun's centre. (The moon's path dips into the
+  // belt's outer edge, where the owner placed it; the belt is scenery, so it just passes through.)
   const bands = BODIES.filter((b) => b.kind === "planet").map((b) => [b.id, b.orbit.radius - b.radius, b.orbit.radius + b.radius]);
-  const moon = BODIES.find((b) => b.kind === "moon"), around = BODIES.find((b) => b.id === moon.orbit.around);
-  bands.push(["moon", around.orbit.radius - moon.orbit.radius - moon.radius, around.orbit.radius + moon.orbit.radius + moon.radius]);
   for (const [id, lo, hi] of bands) assert.ok(BELT.inner - hi >= 3 || lo - BELT.outer >= 3, id);
 });

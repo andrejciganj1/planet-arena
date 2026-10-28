@@ -5,6 +5,8 @@ import { createEntity, standOn, stepEntity, hitCentre, NO_INPUT } from "./entity
 import { surfaceInfo, sphereContacts } from "./collide.js";
 import { padPos, touchPads, refreshCues } from "./pads.js";
 import { fire, stepProjectiles } from "./weapons.js";
+import { stepPickups } from "./pickups.js";
+import { stepHook } from "./hook.js";
 import { add, scale, dist, norm, anyPerpendicular } from "./vec.js";
 
 // Spawn candidates: an evenly spread, fixed list of directions (Fibonacci sphere).
@@ -42,6 +44,12 @@ export function spawnPoint(world, bodyId, forId = null) {
   return best ? { pos: best.pos, up: best.up } : list[0];
 }
 
+// The simulation's only randomness (weapon spread), seeded so every run, and later every machine, agrees.
+export function seeded(seed) {
+  let s = seed >>> 0;
+  return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
+}
+
 const homeOf = (world, e) => (e.kind === "dummy" ? world.tuning.DUMMY.body : world.tuning.PLAYER_BODY);
 
 function spawn(world, e) {
@@ -55,8 +63,8 @@ export function createWorld(tuning) {
   const system = createSystem(tuning.BODIES);
   const poses = posesAt(system, 0);
   const world = {
-    tuning, system, t: 0, tick: 0, poses, prevPoses: poses, entities: {}, projectiles: [], explosions: [],
-    pads: tuning.PADS, cues: {}, events: [], spawns: 0,
+    tuning, system, t: 0, tick: 0, poses, prevPoses: poses, entities: {}, projectiles: [], explosions: [], beams: [],
+    pads: tuning.PADS, cues: {}, events: [], spawns: 0, rand: seeded(1), pickups: {},
   };
   for (const [id, kind] of [["dummy", "dummy"], ["player", "player"]]) {
     world.entities[id] = createEntity(id, kind, [0, 0, 0], [0, 1, 0]);
@@ -67,6 +75,7 @@ export function createWorld(tuning) {
 
 function die(world, e, cause) {
   e.alive = false;
+  e.hook = null;
   e.respawnAt = world.t + (e.kind === "dummy" ? world.tuning.DUMMY.respawn : world.tuning.PLAYER.respawn);
   world.events.push({ type: "death", id: e.id, cause });
 }
@@ -83,10 +92,12 @@ export function stepWorld(world, inputs, dt) {
     const input = inputs[e.id] || NO_INPUT;
     e.prev = { pos: e.pos, up: e.up }; // the renderer draws between this and the new state
     stepEntity(world, e, input, dt);
-    if (input.weapon) e.weapon = input.weapon;
+    stepHook(world, e, !!input.hook, dt);
+    if (input.weapon && e.weapons.includes(input.weapon)) e.weapon = input.weapon;
     if (input.fire) fire(world, e);
     touchPads(world, e);
   }
+  stepPickups(world);
   stepProjectiles(world, dt);
   refreshCues(world);
 

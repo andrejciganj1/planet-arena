@@ -4,12 +4,13 @@ import assert from "node:assert/strict";
 import * as tuning from "../src/tuning.js";
 import { createSystem, posesAt } from "../src/sim/system.js";
 import { stepEntity, NO_INPUT } from "../src/sim/entity.js";
+import { seeded } from "../src/sim/world.js";
 import { dist, len, dot } from "../src/sim/vec.js";
 
 export function makeWorld(t = 0) {
   const system = createSystem(tuning.BODIES);
   const poses = posesAt(system, t);
-  const world = { tuning, system, t, poses, prevPoses: poses, entities: {}, projectiles: [], explosions: [], pads: [], cues: {}, events: [] };
+  const world = { tuning, system, t, poses, prevPoses: poses, entities: {}, projectiles: [], explosions: [], beams: [], pads: [], cues: {}, events: [], rand: seeded(1) };
   // input: a record, or a function (entity, tick) -> record.
   world.step = (n = 1, input = NO_INPUT, each = null) => {
     for (let i = 0; i < n; i++) {

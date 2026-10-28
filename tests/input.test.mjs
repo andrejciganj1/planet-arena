@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createInput } from "../src/client/input.js";
 import { NO_INPUT } from "../src/sim/entity.js";
-import { CONTROLS } from "../src/tuning.js";
+import { CONTROLS, WEAPON_ORDER } from "../src/tuning.js";
 
 test("W and D give move [1, 1]", () => {
   const i = createInput();
@@ -52,22 +52,58 @@ test("space jumps once per press and boosts while held; a tap between ticks stil
   assert.equal(b.jump, true); // a fresh press
 });
 
-test("left mouse fires while held; 1, 2 and the wheel pick weapons", () => {
+test("left mouse fires while held", () => {
   const i = createInput();
   i.onButton(0, true);
   assert.equal(i.take().fire, true);
   assert.equal(i.take().fire, true);
   i.onButton(0, false);
   assert.equal(i.take().fire, false);
-  i.onKey("Digit2", true);
-  assert.equal(i.take().weapon, "rocket");
-  assert.equal(i.take().weapon, null);
-  i.onKey("Digit1", true);
-  assert.equal(i.take().weapon, "pistol");
-  i.onWheel(1);
-  assert.equal(i.take().weapon, "rocket");
-  i.onWheel(1);
-  assert.equal(i.take().weapon, "pistol");
+});
+
+test("keys 1 to 6 pick weapons in WEAPON_ORDER", () => {
+  const i = createInput();
+  WEAPON_ORDER.forEach((w, k) => {
+    i.onKey(`Digit${k + 1}`, true);
+    assert.equal(i.take().weapon, w);
+    i.onKey(`Digit${k + 1}`, false);
+    assert.equal(i.take().weapon, null);
+  });
+});
+
+test("the wheel cycles only the weapons you hold", () => {
+  const i = createInput();
+  i.sync("pistol", ["pistol", "rocket", "railgun"]);
+  const wheel = (dy) => (i.onWheel(dy), i.take().weapon);
+  assert.equal(wheel(1), "rocket");
+  assert.equal(wheel(1), "railgun");
+  assert.equal(wheel(1), "pistol");
+  assert.equal(wheel(-1), "railgun");
+  i.sync("pistol", ["pistol"]);
+  assert.equal(wheel(1), "pistol");
+});
+
+test("right mouse held is the hook; Shift held is zoom; blur clears both", () => {
+  const i = createInput();
+  i.onButton(2, true);
+  i.onKey("ShiftLeft", true);
+  let r = i.take();
+  assert.equal(r.hook, true);
+  assert.equal(r.zoom, true);
+  assert.equal(i.take().hook, true, "held, not a one-off");
+  i.onBlur();
+  r = i.take();
+  assert.equal(r.hook, false);
+  assert.equal(r.zoom, false);
+});
+
+test("zoomed, the mouse turns the view less", () => {
+  const i = createInput();
+  i.onMouseMove(100, 0);
+  const full = i.take().yawDelta;
+  i.sync("sniper", ["pistol", "sniper"], 4);
+  i.onMouseMove(100, 0);
+  assert.ok(Math.abs(i.take().yawDelta - full / 4) < 1e-12);
 });
 
 test("holding space jumps once, so landing while boosting doesn't bounce you off", () => {
@@ -76,4 +112,16 @@ test("holding space jumps once, so landing while boosting doesn't bounce you off
   assert.equal(i.take().jump, true);
   assert.equal(i.take().jump, false);
   assert.equal(i.take().boost, true);
+});
+
+test("on a fast screen, wheel notches between ticks all count", () => {
+  // main.js syncs every frame with the weapon still in hand; a pick not yet handed to the sim must stand.
+  const i = createInput(), held = ["pistol", "shotgun", "rocket", "minigun"];
+  i.sync("pistol", held);
+  i.onWheel(1);
+  i.sync("pistol", held); // a frame with no tick
+  i.onWheel(1);
+  i.sync("pistol", held);
+  i.onWheel(1);
+  assert.equal(i.take().weapon, "minigun");
 });

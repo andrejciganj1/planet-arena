@@ -8,7 +8,7 @@ import { add, sub, scale, dot, cross, len, norm, projectOnPlane, rotateAxis, rot
 import { bodyPull, shapedGravity } from "./gravity.js";
 import { surfaceInfo, sphereContacts } from "./collide.js";
 
-export const NO_INPUT = Object.freeze({ move: [0, 0], jump: false, boost: false, fire: false, weapon: null, yawDelta: 0, pitchDelta: 0 });
+export const NO_INPUT = Object.freeze({ move: [0, 0], jump: false, boost: false, fire: false, weapon: null, hook: false, zoom: false, yawDelta: 0, pitchDelta: 0 });
 
 const MAX_PITCH = (89 * Math.PI) / 180;
 
@@ -18,6 +18,9 @@ export function createEntity(id, kind, pos, up) {
     id, kind, pos: [...pos], vel: [0, 0, 0], up: u, forward: anyPerpendicular(u), pitch: 0,
     groundId: null, fuel: BOOST.fuel, health: kind === "dummy" ? DUMMY.health : PLAYER.health,
     alive: true, respawnAt: 0, weapon: "pistol", cooldown: 0, lastHitBy: null, lastHitAt: -Infinity,
+    // Everyone starts, and respawns, with the pistol only. ammo[w] is rounds left; the pistol never runs out.
+    weapons: ["pistol"], ammo: {},
+    hook: null, hookCooldown: 0, hookHeld: false, hookArmed: false,
     boostLock: false, padLockUntil: -Infinity, airTime: 0,
   };
 }
@@ -85,7 +88,8 @@ export function stepEntity(world, e, input, dt) {
       vt = scale(vt, Math.max(0, 1 - PLAYER.friction * dt));
     }
     e.vel = add(vt, scale(n, vn));
-    e.fuel = Math.min(BOOST.fuel, e.fuel + BOOST.refill * dt);
+    // Refill towards the usual tank, never lowering extra fuel from a pickup.
+    if (e.fuel < BOOST.fuel) e.fuel = Math.min(BOOST.fuel, e.fuel + BOOST.refill * dt);
     if (input.jump) {
       e.vel = add(vt, scale(e.up, PLAYER.jump));
       unground(world, e);

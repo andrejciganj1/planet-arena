@@ -93,6 +93,10 @@ export const KILL = { standing: 1 };
 // One per player slot; index 0 is the solo player's.
 export const COLOURS = [0xffd23f, 0xe8505b, 0x4fb0e8, 0x6fd36b, 0xb06fe8, 0xff8a3d, 0x3fd9c4, 0xf08bc8];
 
+// What being hit and kills look like (seconds unless noted). Looks only. Vignette: full strength at `full`
+// damage, never above `max`; the bar over a hit player flashes white for `flash`.
+export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade: 1, feedFor: 5, flash: 0.15, feedMax: 6 };
+
 // Online play. Ticks unless noted: maxLag, history, rejoin, unreachable and smooth are seconds, snap is metres.
 export const NET = {
   maxPlayers: 8, snapEvery: 2, interp: 6, slack: [2, 5], hold: 15, maxAhead: 60, maxLag: 0.5, history: 0.6,

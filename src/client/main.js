@@ -23,7 +23,7 @@ if (params.has("debug")) window.game = { world };
 const view = params.get("view")?.split(",").map(Number);
 const canvas = document.getElementById("game");
 const renderer = createRenderer(world, canvas, view && view.length === 6 && !view.some(Number.isNaN) ? view : null, selfId);
-const hud = createHud(document.body);
+const hud = createHud(document.body, !!game);
 const input = createInput();
 
 // What covers the game while online and not playing yet (or any more).
@@ -41,13 +41,23 @@ document.addEventListener("pointerlockchange", () => {
   locked = document.pointerLockElement === canvas;
   if (!locked) input.onBlur(); // Esc or alt-tab while keys are held must not leave them stuck
 });
-window.addEventListener("blur", () => input.onBlur());
+window.addEventListener("blur", () => {
+  input.onBlur();
+  hud.scores(false);
+});
 document.addEventListener("keydown", (e) => {
+  if (e.code === "Tab") {
+    e.preventDefault(); // focus stays on the game
+    hud.scores(true);
+  }
   if (!locked) return;
   if (e.code === "Space") e.preventDefault();
   if (!e.repeat) input.onKey(e.code, true);
 });
-document.addEventListener("keyup", (e) => input.onKey(e.code, false));
+document.addEventListener("keyup", (e) => {
+  if (e.code === "Tab") hud.scores(false);
+  input.onKey(e.code, false);
+});
 document.addEventListener("mousemove", (e) => locked && input.onMouseMove(e.movementX, e.movementY));
 document.addEventListener("mousedown", (e) => locked && input.onButton(e.button, true));
 document.addEventListener("mouseup", (e) => input.onButton(e.button, false));
@@ -74,10 +84,13 @@ function frame(now) {
     acc = advance(world, acc, elapsed, ticks && locked ? { player: input.take() } : {});
     alpha = Math.min(1, acc / tuning.TICK);
   }
-  for (const ev of world.events) hud.event(ev, world.t, id);
+  for (const ev of world.events) {
+    hud.event(ev, world.t, id, world.players);
+    renderer.event(ev, world.t);
+  }
   world.events.length = 0;
   renderer.draw(alpha, locked ? input.pending() : { yaw: 0, pitch: 0 }, zoom, shift);
-  hud.update(world, locked, world.t, id);
+  hud.update(world, locked, world.t, id, renderer.camera());
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

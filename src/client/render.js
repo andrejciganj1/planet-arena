@@ -2,7 +2,7 @@
 // players, shots and blasts, and the weapon in view. It only reads the world; drawing happens between the
 // last two ticks (alpha) so motion stays smooth on screens faster than the 60 Hz simulation.
 import * as THREE from "three";
-import { PLAYER, ROCKET, PAD_CUE, BELT, TICK, PICKUPS, WEAPONS } from "../tuning.js";
+import { PLAYER, DUMMY, ROCKET, PAD_CUE, BELT, TICK, PICKUPS, WEAPONS, FEEDBACK } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
 import { pickupReady } from "../sim/pickups.js";
 import { posesAt } from "../sim/system.js";
@@ -127,12 +127,51 @@ function starfield(rand) {
   return new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xdfe6ff, size: 1.6, sizeAttenuation: false }));
 }
 
-// A cartoon capsule with a face on its forward side.
+const DUMMY_COLOUR = 0xff7a3d;
+
+// The name and health bar over a head: a canvas drawn again only when what it shows changes. The depth
+// test hides it behind planets; it shrinks with distance like anything else in the scene.
+function tagSprite() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  const tex = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sprite.scale.set(2.4, 0.6, 1);
+  sprite.position.y = PLAYER.height + 0.5;
+  let shown = null;
+  // fraction: health 0..1; flash: the bar is white for a moment after a hit.
+  sprite.userData.show = (name, fraction, flash) => {
+    const key = `${name}|${Math.round(fraction * 200)}|${flash}`;
+    if (key === shown) return;
+    shown = key;
+    ctx.clearRect(0, 0, 256, 64);
+    ctx.font = "bold 28px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#000a";
+    ctx.strokeText(name, 128, 28);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(name, 128, 28);
+    ctx.fillStyle = "#000a";
+    ctx.fillRect(24, 40, 208, 16);
+    ctx.fillStyle = flash ? "#fff" : "#5fd36b";
+    ctx.fillRect(28, 44, 200 * Math.max(0, Math.min(1, fraction)), 8);
+    tex.needsUpdate = true;
+  };
+  return sprite;
+}
+
+// A cartoon capsule with a face on its forward side, and its tag overhead.
 function dummyMesh() {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(PLAYER.radius, PLAYER.height - 2 * PLAYER.radius, 6, 16), new THREE.MeshLambertMaterial({ color: 0xff7a3d }));
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(PLAYER.radius, PLAYER.height - 2 * PLAYER.radius, 6, 16), new THREE.MeshLambertMaterial({ color: DUMMY_COLOUR }));
   body.position.y = PLAYER.height / 2;
   g.add(body);
+  g.userData.body = body;
+  g.userData.tag = tagSprite();
+  g.add(g.userData.tag);
   const white = new THREE.MeshBasicMaterial({ color: 0xffffff }), black = new THREE.MeshBasicMaterial({ color: 0x111111 });
   for (const sx of [-1, 1]) {
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), white);
@@ -309,6 +348,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const pooled = (list, make) => (i) => list[i] || (list[i] = (() => { const m = make(); scene.add(m); return m; })());
   const figures = [];
   const figure = pooled(figures, dummyMesh); // everyone but you
+  const flashUntil = {}; // entity id -> world time its bar stops flashing
   const shot = pooled(shots, () => new THREE.Mesh(rocketGeo, rocketMat));
   const blast = pooled(blasts, () => new THREE.Mesh(blastGeo, new THREE.MeshBasicMaterial({ color: 0xff9a2e, transparent: true, depthWrite: false })));
   const beam = pooled(beams, () => {
@@ -330,6 +370,15 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const between = (e, alpha) => (e.prev ? { pos: lerp(e.prev.pos, e.pos, alpha), up: norm(lerp(e.prev.up, e.up, alpha)) } : { pos: e.pos, up: e.up });
 
   return {
+    // A hit event for someone: their bar flashes white for a moment (it reacts to the server's confirmation).
+    event(ev, now) {
+      if (ev.type === "hit") flashUntil[ev.id] = now + FEEDBACK.flash;
+    },
+    // The camera as last drawn: { pos, right, up, forward }, for the HUD's hit arcs.
+    camera() {
+      const m = camera.matrixWorld.elements;
+      return { pos: [m[12], m[13], m[14]], right: [m[0], m[1], m[2]], up: [m[4], m[5], m[6]], forward: [-m[8], -m[9], -m[10]] };
+    },
     // alpha: how far towards the next tick to draw (0..1); look: mouse turn not yet given to the sim;
     // zoom: the sniper's magnification while zoomed, else 1; shift: added to where you are drawn (online,
     // a prediction's correction eased in).
@@ -407,10 +456,13 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       }
 
       let i = 0;
-      for (const d of Object.values(world.entities)) {
+      for (const [id, d] of Object.entries(world.entities)) {
         if (d === p || !d.alive) continue;
         const m = figure(i++);
         m.visible = true;
+        const who = world.players[id];
+        m.userData.body.material.color.setHex(who ? who.colour : DUMMY_COLOUR);
+        m.userData.tag.userData.show(who ? who.name : "Dummy", d.health / (d.kind === "dummy" ? DUMMY.health : PLAYER.health), world.t < flashUntil[id]);
         const { pos, up } = between(d, alpha);
         const fwd = norm(rotateFromTo(d.forward, d.up, up)), right = cross(fwd, up);
         m.matrix.makeBasis(v3(right), v3(up), v3(scale(fwd, -1))).setPosition(v3(pos));

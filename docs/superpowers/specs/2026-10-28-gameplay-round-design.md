@@ -134,6 +134,18 @@ moon pad gets used to cross the system.
   light). The browser remembers each choice. The start screen's controls line lists both keys. Only your own
   screen changes.
 
+## Hit shape (added after approval; the owner agreed)
+
+- Found while designing the look round: shots test only one sphere of `PLAYER.radius` (0.5 m) at the feet
+  end (`hitCentre`), from the feet to 1 m up, while the drawn player is 1.8 m tall. A shot at the upper body
+  or head passes through, which is the multiplayer design's first anti-goal.
+- **Decided:** the hit shape follows the visible body. The look round makes players aliens with a big head
+  (the biggest part) on a small body, so the hit shape becomes a big head sphere and a smaller body sphere,
+  sized from tuning numbers that the look round's model then matches. Bullets, pellets, the railgun, rocket
+  and asteroid blasts and lag compensation all use it. Until the alien model arrives the capsule is drawn
+  to fit the same two spheres, so what you see is what you hit.
+- Movement and collision with the ground are unchanged.
+
 ## Online
 
 - The rules change, so `PROTOCOL` goes up and the server is redeployed with the page. Until a page reloads it

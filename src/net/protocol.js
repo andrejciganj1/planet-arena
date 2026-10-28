@@ -65,13 +65,18 @@ export function applyEntity(e, rec) {
   delete e.prev;
 }
 
-export function snapshot(world, { ack, slack, events }) {
+// away: players inside their reconnect window, { id, name, colour }, listed with `away: true`.
+export function snapshot(world, { ack, slack, events, away = [] }) {
   const pickups = {};
   for (const [id, p] of Object.entries(world.pickups)) pickups[id] = p.readyAt;
   const players = {};
   for (const [id, p] of Object.entries(world.players)) {
     const s = world.scores[id] || { kills: 0, deaths: 0 };
     players[id] = { name: p.name, colour: p.colour, kills: s.kills, deaths: s.deaths };
+  }
+  for (const a of away) {
+    const s = world.scores[a.id] || { kills: 0, deaths: 0 };
+    players[a.id] = { name: a.name, colour: a.colour, kills: s.kills, deaths: s.deaths, away: true };
   }
   return {
     type: "snap", tick: world.tick, t: world.t, ack, slack,

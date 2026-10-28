@@ -119,8 +119,9 @@ export function createGame(tuning, { token = () => randomUUID() } = {}) {
     stepWorld(world, inputs, TICK);
     const out = [];
     if (conns.size && world.tick % NET.snapEvery === 0) {
+      const gone = [...away.values()]; // their names, for kills credited to them while they are away
       for (const [conn, p] of conns) {
-        out.push({ conn, msg: snapshot(world, { ack: p.ack, slack: p.newest - world.tick, events: world.events }) });
+        out.push({ conn, msg: snapshot(world, { ack: p.ack, slack: p.newest - world.tick, events: world.events, away: gone }) });
       }
     }
     // Every message carries the events since the last snapshot; with nobody to tell they would only pile up.

@@ -5,6 +5,7 @@ import { createWorld } from "../src/sim/world.js";
 import { NO_INPUT } from "../src/sim/entity.js";
 import { PROTOCOL } from "../src/net/protocol.js";
 import { createGame } from "../server/game.js";
+import { feedText } from "../src/client/hud.js";
 
 const { NET } = tuning;
 const hi = (g, conn, name, token, nonce) => g.hello(conn, { type: "hello", v: PROTOCOL, name, token, nonce });
@@ -327,4 +328,23 @@ test("slack follows the newest input received, also when a client's ticks go bac
   assert.equal(steps(g, 2).find((o) => o.conn === "a").msg.slack, 20 - 4);
   g.input("a", inp(6)); // the client restarted its clock lower
   assert.equal(steps(g, 2).find((o) => o.conn === "a").msg.slack, 6 - 6);
+});
+
+test("a kill by a player who has just dropped still shows their name", () => {
+  const g = mk();
+  hi(g, "a", "Ana"); hi(g, "b", "Ben");
+  steps(g, 10);
+  const victim = g.world.entities.p1;
+  Object.assign(victim, { lastHitBy: "p2", lastHitAt: g.world.t });
+  g.drop("b");
+  victim.pos = [...g.world.poses.sun.pos]; // into the sun
+  const snaps = steps(g, 4).filter((o) => o.conn === "a").map((o) => o.msg);
+  const snap = snaps.find((m) => m.events.some((e) => e.type === "death"));
+  const death = snap.events.find((e) => e.type === "death");
+  assert.equal(death.by, "p2");
+  assert.equal(feedText(death, snap.players), "Ben ☀ Ana");
+  assert.equal(snap.players.p2.away, true);
+  assert.equal(snap.players.p1.away, undefined);
+  steps(g, NET.rejoin * 60);
+  assert.equal(steps(g, 2).find((o) => o.conn === "a").msg.players.p2, undefined, "gone once the window is over");
 });

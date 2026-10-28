@@ -97,7 +97,7 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
     view.players = {};
     view.scores = {};
     for (const [pid, p] of Object.entries(msg.players)) {
-      view.players[pid] = { name: p.name, colour: p.colour };
+      view.players[pid] = { name: p.name, colour: p.colour, ...(p.away ? { away: true } : {}) };
       view.scores[pid] = { kills: p.kills, deaths: p.deaths };
     }
     // A beam is in every snapshot while it shows: drawn once, then aged here.

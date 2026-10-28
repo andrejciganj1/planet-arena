@@ -152,7 +152,7 @@ export function createHud(root, online = false) {
       board.style.display = boardOn ? "" : "none";
       if (boardOn) {
         const all = {};
-        for (const [id, pl] of Object.entries(world.players)) all[id] = { name: pl.name, ...(world.scores[id] || { kills: 0, deaths: 0 }) };
+        for (const [id, pl] of Object.entries(world.players)) if (!pl.away) all[id] = { name: pl.name, ...(world.scores[id] || { kills: 0, deaths: 0 }) };
         board.replaceChildren();
         const head = el(board, "row head");
         for (const t of ["Player", "Kills", "Deaths"]) el(head, "cell").textContent = t;

@@ -144,6 +144,8 @@ moon pad gets used to cross the system.
   sized from tuning numbers that the look round's model then matches. Bullets, pellets, the railgun, rocket
   and asteroid blasts and lag compensation all use it. Until the alien model arrives the capsule is drawn
   to fit the same two spheres, so what you see is what you hit.
+- The head sphere is sized to the bubble helmet's outer shape (the look round puts a clear helmet on the
+  alien), so a shot that touches the glass hits.
 - Movement and collision with the ground are unchanged.
 
 ## Online

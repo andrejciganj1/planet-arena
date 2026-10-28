@@ -144,11 +144,14 @@ test("a runner who steps onto the pad off-centre while the cue is on lands on th
   // Only this pad is in the world, so a landing is a landing and the run is quick.
   for (const pad of PADS) {
     const tl = timeline[pad.id];
-    const times = [];
+    const all = [];
     tl.forEach((x, i) => {
       const t = i * STEP;
-      if (x && t % 2 === 0 && [-2, -1, 1, 2].every((k) => tl[i + k] === x)) times.push(t);
+      if (x && t % 2 === 0 && [-2, -1, 1, 2].every((k) => tl[i + k] === x)) all.push(t);
     });
+    // At most six times per pad, spread over its windows: each one flies a whole launch, and long windows
+    // would otherwise make this test run for hours.
+    const times = all.length <= 6 ? all : Array.from({ length: 6 }, (_, k) => all[Math.round((k * (all.length - 1)) / 5)]);
     for (const t of times) {
       for (const side of [0, 1, 2, 3]) {
         const w = { ...createWorld(tuning), pads: [pad] };

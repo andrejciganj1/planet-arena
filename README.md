@@ -5,14 +5,15 @@ and a moon. Every body has its own gravity. Blast the dummy off the tiny green p
 into the sun.
 
 From the sun outwards: the hot red planet (close to the sun, so watch your footing), the tiny green
-planet, the mid blue planet where you start, the heavy orange planet with its moon, and the big, light
-purple giant.
+planet, the mid blue planet where you start, the asteroid belt, the big heavy orange planet with its
+moon, the light purple giant with its ring, and the small teal far planet, where the sniper rifle is.
 
-Three comets loop round the sun on tilted, stretched paths, fast near the sun and slow far out. Fly into
+Four comets loop round the sun on tilted, stretched paths, fast near the sun and slow far out. Fly into
 one (or let it sweep into you) and you land on it; ride it, and jump off when it passes near a planet.
 The two fast comets pass the hot and tiny planets often, but hopping off near the sun takes good
-boosting. The slow one passes the heavy planet about every five minutes (the giant only rarely), where
-a plain jump gets you off. Stay on too long and it carries you close to the sun.
+boosting. The slow one passes the heavy or giant planet every few minutes, where a plain jump gets you
+off. The fourth swings out to almost 400 m, past the far planet's path, on a 14-minute lap. Stay on too
+long and any of them carries you close to the sun.
 
 The asteroid belt between the mid and heavy planets' paths and the giant's ring are scenery: you fly
 straight through them.
@@ -45,7 +46,7 @@ Then open http://localhost:8100 in a desktop browser and click the page to captu
 - You start with the pistol, which never runs out. Pickups float over fixed spots on every planet and the
   moon: health (white with a red cross), booster fuel (orange, fills the tank to double), weapons (long
   bars) and ammo (small boxes, in the weapon's colour). A taken pickup comes back after a while; its spot
-  shows a faint outline meanwhile. The sniper rifle is on the moon and the railgun on the hot planet. Dying
+  shows a faint outline meanwhile. The sniper rifle is on the far planet and the railgun on the hot planet. Dying
   costs you everything but the pistol.
 - Jump pads are the discs with an arrow. Green means a launch right now lands on another body; red means
   it won't. Stand near one to see the predicted path.

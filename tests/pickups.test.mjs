@@ -26,7 +26,7 @@ function onto(w, e, pk) {
 }
 const took = (w, pk) => w.events.some((ev) => ev.type === "pickup" && ev.pickupId === pk.id);
 
-test("layout: every planet and the moon have at least two pickups; each weapon but the pistol can be found; the sniper rifle and railgun only on the hot planet or the moon", () => {
+test("layout: every planet and the moon have at least two pickups; each weapon but the pistol can be found; the sniper rifle only on the far planet, the railgun only on the hot planet", () => {
   for (const b of BODIES.filter((b) => b.kind === "planet" || b.kind === "moon")) {
     assert.ok(PICKUPS.filter((p) => p.body === b.id).length >= 2, b.id);
   }
@@ -34,7 +34,7 @@ test("layout: every planet and the moon have at least two pickups; each weapon b
     assert.ok(PICKUPS.some((p) => p.kind === "weapon" && p.weapon === wpn), wpn);
   }
   for (const p of PICKUPS.filter((p) => p.kind === "weapon" && (p.weapon === "sniper" || p.weapon === "railgun"))) {
-    assert.ok(p.body === "hot" || p.body === "moon", `${p.id} on ${p.body}`);
+    assert.equal(p.body, p.weapon === "sniper" ? "far" : "hot", p.id);
   }
 });
 

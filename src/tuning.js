@@ -3,7 +3,7 @@
 
 export const TICK = 1 / 60;
 export const MAX_TICKS = 5; // per frame; a slow frame or hidden tab drops time instead of catching up
-export const VOID_RADIUS = 400; // from the sun; beyond it you are lost in space
+export const VOID_RADIUS = 460; // from the sun; beyond it you are lost in space (the far comet reaches 400)
 
 // g is the full pull within `reach` of the core, falling off as g * (reach / d)^2 beyond. Planets and the
 // moon keep it to 1.75x their radius, so a rocket blast or a booster burn doesn't easily throw you off.
@@ -14,23 +14,26 @@ export const BODIES = [
   { id: "hot", kind: "planet", radius: 7, g: 11, reach: 12.25, hold: 8, orbit: { around: "sun", radius: 46, period: 80, phase: 1.0 }, color: 0xe0525e },
   { id: "tiny", kind: "planet", radius: 6, g: 8, reach: 10.5, hold: 8, orbit: { around: "sun", radius: 78, period: 120, phase: 0 }, color: 0x7fd36b },
   { id: "mid", kind: "planet", radius: 12, g: 10, reach: 21, hold: 8, orbit: { around: "sun", radius: 120, period: 200, phase: 2.1 }, color: 0x4f9de8 },
-  { id: "heavy", kind: "planet", radius: 18, g: 13, reach: 31.5, hold: 10, orbit: { around: "sun", radius: 200, period: 300, phase: 4.2 }, color: 0xd9744a },
+  { id: "heavy", kind: "planet", radius: 23, g: 13, reach: 40.25, hold: 10, orbit: { around: "sun", radius: 200, period: 300, phase: 4.2 }, color: 0xd9744a },
   { id: "moon", kind: "moon", radius: 5, g: 3, reach: 8.75, hold: 4, orbit: { around: "heavy", radius: 40, period: 90, phase: 0 }, color: 0xc9c4bd },
-  { id: "giant", kind: "planet", radius: 22, g: 9, reach: 38.5, hold: 10, orbit: { around: "sun", radius: 290, period: 420, phase: 5.6 }, color: 0x8a6fd6, ring: { inner: 1.4, outer: 2.3, tilt: 18 } },
+  { id: "giant", kind: "planet", radius: 18, g: 9, reach: 31.5, hold: 10, orbit: { around: "sun", radius: 270, period: 420, phase: 5.6 }, color: 0x8a6fd6, ring: { inner: 1.4, outer: 2.3, tilt: 18 } },
+  { id: "far", kind: "planet", radius: 5, g: 8.5, reach: 8.75, hold: 6, orbit: { around: "sun", radius: 340, period: 840, phase: 0.7 }, color: 0x6fd3c9 },
   // Comets: tilted ellipses, peri and apo in metres from the sun, inc/node/arg in degrees, phase in radians
   // (see system.js). Searched so that over the full CYCLE no comet comes within 3 m of any body and some
   // comet passes close to some planet at least every 120 s (tests/system.test.mjs). Two fast ones meet the
-  // inner planets often; the slow one passes the heavy planet about every five minutes (the giant only rarely).
+  // inner planets often; the slow one (comet-c) passes the heavy or giant planet at least every six minutes;
+  // the far one (comet-d) swings out to 387 m, past the far planet's path, on a 14-minute lap.
   { id: "comet-a", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 38.8, apo: 260.3, period: 240, phase: 3.39, inc: 12.4, node: 37, arg: 219 }, color: 0xbfe8ff },
   { id: "comet-b", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 48.8, apo: 256.6, period: 240, phase: 0.019, inc: 22.6, node: 134, arg: 289 }, color: 0xbfe8ff },
-  { id: "comet-c", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 38, apo: 281.7, period: 600, phase: 5.894, inc: 8.1, node: 61, arg: 239 }, color: 0xbfe8ff },
+  { id: "comet-c", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 53.8, apo: 247.8, period: 600, phase: 5.633, inc: 11.1, node: 286, arg: 20 }, color: 0xbfe8ff },
+  { id: "comet-d", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 38, apo: 386.7, period: 840, phase: 5.495, inc: 12.4, node: 245, arg: 179 }, color: 0xbfe8ff },
 ];
 
 // Looks only, no collisions or gravity: you fly straight through both. The giant's `ring` is in multiples
 // of its radius, tilted `tilt` degrees from the orbital plane. The belt is a band of rocks round the sun
 // between the mid and heavy planets' paths (radii in m, `size` the range of rock sizes in m, one lap per
 // `period` s).
-export const BELT = { inner: 138, outer: 150, thick: 4, rocks: 500, size: [0.4, 1.8], period: 260 };
+export const BELT = { inner: 148, outer: 160, thick: 4, rocks: 500, size: [0.4, 1.8], period: 260 };
 
 // s; every orbit period divides it, so the whole system repeats exactly and can be checked over one cycle.
 export const CYCLE = 25200;
@@ -100,12 +103,15 @@ export const PADS = [
   { id: "mid-a", body: "mid", dir: heading(60), speed: 28 },
   { id: "mid-b", body: "mid", dir: heading(225), speed: 28 },
   { id: "mid-c", body: "mid", dir: heading(345), speed: 28 },
-  { id: "heavy-a", body: "heavy", dir: heading(30), speed: 39 },
-  { id: "heavy-b", body: "heavy", dir: heading(150), speed: 39 },
-  { id: "heavy-c", body: "heavy", dir: heading(255), speed: 39 },
-  { id: "giant-a", body: "giant", dir: heading(105), speed: 36 },
-  { id: "giant-b", body: "giant", dir: heading(225), speed: 36 },
-  { id: "giant-c", body: "giant", dir: heading(330), speed: 36 },
+  { id: "heavy-a", body: "heavy", dir: heading(45), speed: 44 },
+  { id: "heavy-b", body: "heavy", dir: heading(150), speed: 44 },
+  { id: "heavy-c", body: "heavy", dir: heading(225), speed: 44 },
+  { id: "giant-a", body: "giant", dir: heading(120), speed: 33 },
+  { id: "giant-b", body: "giant", dir: heading(240), speed: 33 },
+  { id: "giant-c", body: "giant", dir: heading(345), speed: 33 },
+  { id: "far-a", body: "far", dir: heading(45), speed: 24 },
+  { id: "far-b", body: "far", dir: heading(105), speed: 24 },
+  { id: "far-c", body: "far", dir: heading(300), speed: 24 },
 ];
 
 // The hook. range: m along the view it reaches; pull: m/s^2 towards the caught point, applied only while
@@ -118,8 +124,8 @@ export const HOOK = { range: 25, pull: 30, speed: 15, steady: 3, cooldown: 0.5 }
 // pickup fills the booster to this many tanks (the extra is used up, never refilled by standing);
 // respawn: seconds until a taken pickup comes back, by kind.
 export const PICKUP = { touch: 1.2, health: 25, fuelMax: 2, respawn: { health: 20, ammo: 15, weapon: 30, fuel: 40 } };
-// Fixed spots, the same every match, so players learn routes. The sniper rifle and railgun sit on the
-// moon and the hot planet, the hard places to reach (tests/pickups.test.mjs checks the layout rules).
+// Fixed spots, the same every match, so players learn routes. The sniper rifle sits on the far planet and
+// the railgun on the hot planet, the hard places to reach (tests/pickups.test.mjs checks the layout rules).
 export const PICKUPS = [
   { id: "hot-railgun", body: "hot", dir: heading(0, 50), kind: "weapon", weapon: "railgun" },
   { id: "hot-health", body: "hot", dir: heading(120, -45), kind: "health" },
@@ -136,7 +142,7 @@ export const PICKUPS = [
   { id: "heavy-health", body: "heavy", dir: heading(200, -40), kind: "health" },
   { id: "heavy-rocket-ammo", body: "heavy", dir: heading(300, 35), kind: "ammo", weapon: "rocket" },
   { id: "heavy-minigun-ammo", body: "heavy", dir: heading(0, -35), kind: "ammo", weapon: "minigun" },
-  { id: "moon-sniper", body: "moon", dir: heading(0, 40), kind: "weapon", weapon: "sniper" },
+  { id: "moon-health", body: "moon", dir: heading(0, 40), kind: "health" },
   { id: "moon-sniper-ammo", body: "moon", dir: heading(180, -40), kind: "ammo", weapon: "sniper" },
   { id: "giant-minigun", body: "giant", dir: heading(30, 40), kind: "weapon", weapon: "minigun" },
   { id: "giant-health", body: "giant", dir: heading(150, -40), kind: "health" },
@@ -145,6 +151,8 @@ export const PICKUPS = [
   { id: "giant-rocket-ammo", body: "giant", dir: heading(210, 35), kind: "ammo", weapon: "rocket" },
   { id: "giant-sniper-ammo", body: "giant", dir: heading(330, -35), kind: "ammo", weapon: "sniper" },
   { id: "giant-railgun-ammo", body: "giant", dir: heading(0, 60), kind: "ammo", weapon: "railgun" },
+  { id: "far-sniper", body: "far", dir: heading(0, 50), kind: "weapon", weapon: "sniper" },
+  { id: "far-sniper-ammo", body: "far", dir: heading(180, -50), kind: "ammo", weapon: "sniper" },
 ];
 
 // touch: feet within this of a pad launch; lockout: no relaunch for this long.

@@ -20,6 +20,14 @@ wss.on("listening", () => console.log(`planet-arena server listening on port ${p
 wss.on("connection", (ws) => {
   const conn = nextConn++;
   ws.on("message", (data) => {
+    // One bad message must never take the server down, whatever game.js does with it.
+    try {
+      handle(data);
+    } catch {
+      console.log("handler error");
+    }
+  });
+  function handle(data) {
     let msg;
     try {
       msg = JSON.parse(data.toString());
@@ -39,7 +47,7 @@ wss.on("connection", (ws) => {
     } else if (msg.type === "input") {
       game.input(conn, msg);
     }
-  });
+  }
   const gone = () => {
     if (!sockets.delete(conn)) return;
     game.drop(conn);
@@ -54,23 +62,27 @@ wss.on("connection", (ws) => {
 let last = performance.now() / 1000;
 let acc = 0;
 function loop() {
-  const now = performance.now() / 1000;
-  acc += now - last;
-  last = now;
-  let n = Math.floor(acc / TICK + 1e-9);
-  if (n > MAX_TICKS) {
-    n = MAX_TICKS;
-    acc = n * TICK;
-  }
-  for (let i = 0; i < n; i++) {
-    for (const { conn, msg } of game.step()) {
-      const ws = sockets.get(conn);
-      if (ws) send(ws, msg);
+  setTimeout(loop, 4); // scheduled first so a throw below can never stop the clock
+  try {
+    const now = performance.now() / 1000;
+    acc += now - last;
+    last = now;
+    let n = Math.floor(acc / TICK + 1e-9);
+    if (n > MAX_TICKS) {
+      n = MAX_TICKS;
+      acc = n * TICK;
     }
-    acc -= TICK;
+    for (let i = 0; i < n; i++) {
+      acc -= TICK;
+      for (const { conn, msg } of game.step()) {
+        const ws = sockets.get(conn);
+        if (ws) send(ws, msg);
+      }
+    }
+    acc = Math.max(0, acc);
+  } catch {
+    console.log("tick error");
   }
-  acc = Math.max(0, acc);
-  setTimeout(loop, 4);
 }
 loop();
 

@@ -8,7 +8,7 @@ import { add, sub, scale, dot, cross, len, norm, projectOnPlane, rotateAxis, rot
 import { bodyPull, shapedGravity } from "./gravity.js";
 import { surfaceInfo, sphereContacts } from "./collide.js";
 
-export const NO_INPUT = Object.freeze({ move: [0, 0], jump: false, boost: false, fire: false, weapon: null, hook: false, zoom: false, yawDelta: 0, pitchDelta: 0 });
+export const NO_INPUT = Object.freeze({ move: [0, 0], jump: false, boost: false, fire: false, weapon: null, hook: false, zoom: false, yawDelta: 0, pitchDelta: 0, lag: 0 });
 
 const MAX_PITCH = (89 * Math.PI) / 180;
 
@@ -19,9 +19,9 @@ export function createEntity(id, kind, pos, up) {
     groundId: null, fuel: BOOST.fuel, health: kind === "dummy" ? DUMMY.health : PLAYER.health,
     alive: true, respawnAt: 0, weapon: "pistol", cooldown: 0, lastHitBy: null, lastHitAt: -Infinity,
     // Everyone starts, and respawns, with the pistol only. ammo[w] is rounds left; the pistol never runs out.
-    weapons: ["pistol"], ammo: {},
+    weapons: ["pistol"], ammo: {}, shots: 0,
     hook: null, hookCooldown: 0, hookHeld: false, hookArmed: false,
-    boostLock: false, padLockUntil: -Infinity, airTime: 0,
+    boostLock: false, padLockUntil: -Infinity, airTime: 0, groundTime: 0,
   };
 }
 
@@ -144,6 +144,7 @@ export function stepEntity(world, e, input, dt) {
   e.groundId = groundId;
   e.vel = groundId ? sub(wv, poses[groundId].vel) : wv;
   e.airTime = groundId ? 0 : e.airTime + dt;
+  e.groundTime = groundId ? e.groundTime + dt : 0;
 
   // 9. Turn up towards the ground's normal, or away from the body you are falling to.
   const c = hitCentre(e);

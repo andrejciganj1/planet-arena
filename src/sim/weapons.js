@@ -27,6 +27,7 @@ export function fire(world, e) {
     }
   }
   e.cooldown = spec.cooldown;
+  e.shots++;
   if (spec.ammo && --e.ammo[e.weapon] <= 0) e.weapon = "pistol";
   return true;
 }

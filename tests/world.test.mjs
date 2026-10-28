@@ -25,7 +25,7 @@ test("an entity placed in the sun dies with cause sun", () => {
   d.pos = add(w.poses.sun.pos, [0, w.system.byId.sun.radius - 1, 0]);
   d.up = [0, 1, 0];
   stepWorld(w, {}, TICK);
-  assert.deepEqual(deaths(w), [{ type: "death", id: "dummy", cause: "sun" }]);
+  assert.deepEqual(deaths(w).map(({ type, id, cause }) => ({ type, id, cause })), [{ type: "death", id: "dummy", cause: "sun" }]);
   assert.equal(d.alive, false);
 });
 
@@ -35,7 +35,7 @@ test("an entity beyond the void radius dies with cause void", () => {
   p.groundId = null;
   p.pos = [VOID_RADIUS + 5, 0, 0];
   stepWorld(w, {}, TICK);
-  assert.deepEqual(deaths(w), [{ type: "death", id: "player", cause: "void" }]);
+  assert.deepEqual(deaths(w).map(({ type, id, cause }) => ({ type, id, cause })), [{ type: "death", id: "player", cause: "void" }]);
 });
 
 test("the dummy respawns on the tiny planet 3 s after dying", () => {
@@ -43,7 +43,7 @@ test("the dummy respawns on the tiny planet 3 s after dying", () => {
   const d = w.entities.dummy;
   d.health = 0;
   stepWorld(w, {}, TICK);
-  assert.deepEqual(deaths(w), [{ type: "death", id: "dummy", cause: "damage" }]);
+  assert.deepEqual(deaths(w).map(({ type, id, cause }) => ({ type, id, cause })), [{ type: "death", id: "dummy", cause: "damage" }]);
   const diedAt = w.t;
   while (w.t < diedAt + DUMMY.respawn - 2 * TICK) stepWorld(w, {}, TICK);
   assert.equal(d.alive, false);
@@ -161,7 +161,7 @@ test("an entity adrift too long is lost to the void", () => {
   d.vel = [0, 0, 0];
   let t = 0;
   while (d.alive && t < tuning.PLAYER.adrift + 1) stepWorld(w, {}, TICK), (t += TICK);
-  assert.deepEqual(deaths(w), [{ type: "death", id: "dummy", cause: "void" }]);
+  assert.deepEqual(deaths(w).map(({ type, id, cause }) => ({ type, id, cause })), [{ type: "death", id: "dummy", cause: "void" }]);
   assert.ok(t >= tuning.PLAYER.adrift - 2 * TICK, `died after ${t}`);
 });
 

@@ -121,7 +121,8 @@ test("a rocket under the dummy on the tiny planet sends it into the sun", () => 
     blastUnder(w, d, "player");
     const died = run(w, 20, {}, () => w.events.some((e) => e.type === "death"));
     assert.ok(died, `t=${t}`);
-    assert.deepEqual(w.events.find((e) => e.type === "death"), { type: "death", id: "dummy", cause: "sun" });
+    const { type, id, cause } = w.events.find((e) => e.type === "death");
+    assert.deepEqual({ type, id, cause }, { type: "death", id: "dummy", cause: "sun" });
   }
 });
 

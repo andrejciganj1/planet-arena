@@ -181,3 +181,105 @@ test("garbage never crashes the room or puts NaN into the world", () => {
   const bad = (v) => (typeof v === "number" ? !Number.isFinite(v) && Math.abs(v) !== Infinity : v && typeof v === "object" ? Object.values(v).some(bad) : false);
   for (const e of Object.values(g.world.entities)) assert.ok(!bad(e), e.id);
 });
+
+test("inputs too far ahead of the world, or too far behind what was applied, are dropped", () => {
+  const g = mk();
+  hi(g, "a", "A"); hi(g, "b", "B");
+  g.input("a", inp(NET.maxAhead + 1));
+  const out = steps(g, 2).filter((o) => o.conn === "a");
+  assert.equal(out[0].msg.slack, 0 - 2, "a far-ahead input does not raise slack");
+  const h = mk();
+  hi(h, "a", "A"); hi(h, "b", "B");
+  h.input("a", inp(NET.maxAhead));
+  assert.equal(steps(h, 2).find((o) => o.conn === "a").msg.slack, NET.maxAhead - 2, "the edge is kept");
+
+  // Behind: apply tick 100, then a weapon pick for tick 39 (too old) and tick 40 (just in).
+  const k = mk();
+  hi(k, "a", "A"); hi(k, "b", "B");
+  const pick = (g2) => Object.assign(g2.world.entities.p1, { weapons: ["pistol", "shotgun"] });
+  steps(k, 50);
+  pick(k);
+  k.input("a", inp(100));
+  steps(k, 50);
+  assert.equal(k.world.entities.p1.weapon, "pistol");
+  k.input("a", inp(100 - NET.maxAhead - 1, { weapon: "shotgun" }));
+  steps(k, 1);
+  assert.equal(k.world.entities.p1.weapon, "pistol", "too old");
+  k.input("a", inp(100 - NET.maxAhead, { weapon: "shotgun" }));
+  steps(k, 1);
+  assert.equal(k.world.entities.p1.weapon, "shotgun", "oldest allowed");
+});
+
+test("a late input's weapon pick is kept when the newest input has none", () => {
+  const g = mk();
+  hi(g, "a", "A"); hi(g, "b", "B");
+  steps(g, 10);
+  Object.assign(g.world.entities.p1, { weapons: ["pistol", "shotgun"] });
+  const T = g.world.tick;
+  steps(g, 1);
+  g.input("a", inp(T + 1, { weapon: "shotgun" }));
+  g.input("a", inp(T + 2));
+  steps(g, 1);
+  assert.equal(g.world.entities.p1.weapon, "shotgun");
+});
+
+test("lag is the view delay in seconds, clamped to NET.maxLag, in held ticks too", () => {
+  const lagsFor = (view) => {
+    const g = mk();
+    hi(g, "a", "A"); hi(g, "b", "B");
+    steps(g, 10);
+    Object.assign(g.world.entities.p1, { weapon: "minigun", weapons: ["pistol", "minigun"], ammo: { minigun: 300 } });
+    const T = g.world.tick;
+    g.input("a", { tick: T + 1, view: view(T + 1), input: { ...NO_INPUT, fire: true } });
+    const seen = new Map();
+    for (let i = 0; i < NET.hold; i++) {
+      g.step();
+      for (const s of g.world.projectiles) if (s.owner === "p1") seen.set(s.id, s.lag);
+    }
+    return seen;
+  };
+  const six = lagsFor((t) => t - 6);
+  assert.ok(six.size >= 2, "a first shot and held ones");
+  for (const lag of six.values()) assert.ok(Math.abs(lag - 6 * tuning.TICK) < 1e-12, `${lag}`);
+  // A view far behind is clamped.
+  const far = (() => {
+    const g = mk();
+    hi(g, "a", "A"); hi(g, "b", "B");
+    steps(g, 50);
+    Object.assign(g.world.entities.p1, { weapon: "minigun", weapons: ["pistol", "minigun"], ammo: { minigun: 300 } });
+    const T = g.world.tick;
+    g.input("a", { tick: T + 1, view: 0, input: { ...NO_INPUT, fire: true } });
+    const seen = new Map();
+    for (let i = 0; i < NET.hold; i++) {
+      g.step();
+      for (const s of g.world.projectiles) if (s.owner === "p1") seen.set(s.id, s.lag);
+    }
+    return seen;
+  })();
+  assert.ok(far.size >= 2);
+  for (const lag of far.values()) assert.equal(lag, NET.maxLag);
+});
+
+test("events do not pile up while nobody is connected", () => {
+  const g = mk();
+  hi(g, "a", "A");
+  g.drop("a");
+  g.world.events.push({ type: "marker" });
+  steps(g, 3);
+  assert.equal(g.world.events.length, 0);
+});
+
+test("a reconnect into a full room is told so, and the token still works once a seat is free", () => {
+  const g = mk();
+  const first = hi(g, "c0", "P");
+  for (let i = 1; i < NET.maxPlayers; i++) hi(g, "c" + i, "P");
+  g.world.scores.p1.kills = 4;
+  g.drop("c0");
+  hi(g, "extra", "Q"); // takes the seat
+  assert.equal(g.players(), NET.maxPlayers);
+  assert.deepEqual(hi(g, "c0b", "P", first.token), { type: "full" });
+  g.drop("c1");
+  const w = hi(g, "c0b", "P", first.token);
+  assert.equal(w.id, "p1");
+  assert.deepEqual(g.world.scores.p1, { kills: 4, deaths: 0 });
+});

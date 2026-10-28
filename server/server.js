@@ -10,15 +10,23 @@ const game = createGame(tuning);
 const wss = new WebSocketServer({ port, host: "0.0.0.0", maxPayload: 4096 }); // inputs are tiny; a big frame is abuse
 const sockets = new Map(); // conn -> ws, for those the game accepted
 let nextConn = 1;
+// A socket can die without a close (a laptop sleeps, Wi-Fi changes): its player would stand frozen for
+// minutes and snapshots pile up in memory. Every socket is pinged; one silent for PONG_WAIT is cut, and so
+// is one that has stopped taking what is sent (MAX_BUFFERED is several seconds of 8 players' snapshots).
+const PING_EVERY = 2000, PONG_WAIT = 5000, MAX_BUFFERED = 1 << 20; // ms, ms, bytes
 
 const send = (ws, msg) => {
-  if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
+  if (ws.readyState !== ws.OPEN) return;
+  if (ws.bufferedAmount > MAX_BUFFERED) ws.terminate();
+  else ws.send(JSON.stringify(msg));
 };
 
 wss.on("listening", () => console.log(`planet-arena server listening on port ${port}`));
 
 wss.on("connection", (ws) => {
   const conn = nextConn++;
+  ws.heardAt = Date.now();
+  ws.on("pong", () => (ws.heardAt = Date.now()));
   ws.on("message", (data) => {
     // One bad message must never take the server down, whatever game.js does with it.
     try {
@@ -36,10 +44,15 @@ wss.on("connection", (ws) => {
     }
     if (!msg || typeof msg !== "object") return;
     if (msg.type === "hello") {
-      const reply = game.hello(conn, msg);
+      const { replaced, ...reply } = game.hello(conn, msg);
       send(ws, reply);
       if (reply.type === "welcome") {
-        if (!sockets.has(conn)) console.log(`join: ${sockets.size + 1} players`);
+        // The same page on a new socket took its player over: the old socket goes quietly, no leave.
+        if (replaced !== undefined) {
+          const old = sockets.get(replaced);
+          sockets.delete(replaced); // first, so its close finds nothing to drop
+          old?.terminate();
+        } else if (!sockets.has(conn)) console.log(`join: ${sockets.size + 1} players`);
         sockets.set(conn, ws);
       } else {
         ws.close(); // full or wrong version: nothing more to say
@@ -56,6 +69,14 @@ wss.on("connection", (ws) => {
   ws.on("close", gone);
   ws.on("error", gone);
 });
+
+setInterval(() => {
+  const now = Date.now();
+  for (const ws of wss.clients) {
+    if (now - ws.heardAt > PONG_WAIT) ws.terminate(); // its close event drops the player
+    else if (ws.readyState === ws.OPEN) ws.ping();
+  }
+}, PING_EVERY);
 
 // Real elapsed time becomes ticks as in sim's advance, but each tick goes through game.step() and its
 // snapshots are sent. After a stall, ticks beyond MAX_TICKS are dropped rather than caught up.

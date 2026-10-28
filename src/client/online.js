@@ -45,6 +45,10 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
   let id = null, pred = null, interp = null, token = load("sessionStorage", TOKEN);
   let status = "connecting", outcome = null; // outcome: null, "full" or "version"
   let acc = 0, nudge = 0, nudgedAt = -Infinity;
+  // Which page a hello comes from, so this page's new socket can take its player back from an old socket
+  // the server has not yet noticed dead. In memory only: a duplicated tab copies the token from session
+  // storage but has its own nonce, and so gets a player of its own.
+  const nonce = [...crypto.getRandomValues(new Uint32Array(2))].map((x) => x.toString(16).padStart(8, "0")).join("");
   let own = []; // your shots, flown here; everyone else's are drawn from the snapshots
   const drawn = new Map(); // shot id -> when seen, for beams and blasts already on screen
   // The server's beams and blasts wait here for the next frame, with the server time they began. Only ticks
@@ -113,7 +117,7 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
 
   let conn = null;
   conn = connectFn(url, {
-    hello: () => ({ type: "hello", v: PROTOCOL, name, ...(token ? { token } : {}) }),
+    hello: () => ({ type: "hello", v: PROTOCOL, name, nonce, ...(token ? { token } : {}) }),
     onStatus: (s) => (status = s),
     onMessage(msg) {
       if (msg?.type === "welcome") welcome(msg);

@@ -11,7 +11,7 @@ const { TICK, COLOURS, NET } = tuning;
 const online = () => ({ ...createWorld(tuning, { solo: false }), pads: [] });
 
 test("cleanInput keeps good input and repairs or rejects the rest", () => {
-  assert.equal(PROTOCOL, 1);
+  assert.equal(PROTOCOL, 2);
   const good = { ...NO_INPUT, move: [0.5, -1], jump: true, fire: true, weapon: "rocket", yawDelta: 0.1, pitchDelta: -0.2, tick: 5, view: 3 };
   assert.deepEqual(cleanInput(good), good);
   const bad = cleanInput({ tick: 5, move: [NaN, 9], yawDelta: Infinity, pitchDelta: "1", fire: "yes", weapon: "bfg" });

@@ -7,7 +7,7 @@ import { PROTOCOL } from "../src/net/protocol.js";
 import { createGame } from "../server/game.js";
 
 const { NET } = tuning;
-const hi = (g, conn, name, token) => g.hello(conn, { type: "hello", v: PROTOCOL, name, token });
+const hi = (g, conn, name, token, nonce) => g.hello(conn, { type: "hello", v: PROTOCOL, name, token, nonce });
 const inp = (tick, extra = {}) => ({ type: "input", tick, view: tick - 6, input: { ...NO_INPUT, ...extra } });
 const steps = (g, n) => { const out = []; for (let i = 0; i < n; i++) out.push(...g.step()); return out; };
 const mk = () => { let n = 0; return createGame(tuning, { token: () => "tok" + ++n }); };
@@ -123,14 +123,49 @@ test("after 10 s the token is forgotten: a new player at 0/0", () => {
 
 test("the same token on two connections: the second gets a new player", () => {
   const g = mk();
-  const a = hi(g, "a", "A");
-  const w = hi(g, "a2", "A", a.token);
+  const a = hi(g, "a", "A", undefined, "n1");
+  const w = hi(g, "a2", "A", a.token, "n2"); // a duplicated tab: same token, its own page nonce
   assert.equal(w.id, "p2");
   assert.notEqual(w.token, a.token);
-  assert.equal(g.players(), 2);
+  assert.equal(w.replaced, undefined);
+  assert.equal(hi(g, "a4", "A", a.token).id, "p3", "no nonce never takes a body");
+  assert.equal(g.players(), 3);
   g.drop("a");
   const back = hi(g, "a3", "A", a.token);
   assert.equal(back.id, "p1");
+});
+
+test("the same page on a new socket, before the old one is dropped, takes its body back", () => {
+  const g = mk();
+  const a = hi(g, "a", "A", undefined, "n1");
+  for (let i = 1; i < NET.maxPlayers; i++) hi(g, "c" + i, "P"); // a full room still lets it back
+  steps(g, 5);
+  g.world.scores.p1.kills = 3; g.world.scores.p1.deaths = 1;
+  const body = g.world.entities.p1;
+  body.shots = 7;
+  const w = hi(g, "a2", "A", a.token, "n1");
+  assert.equal(w.type, "welcome");
+  assert.equal(w.id, "p1");
+  assert.equal(w.token, a.token);
+  assert.equal(w.replaced, "a", "the server closes the old socket");
+  assert.equal(g.players(), NET.maxPlayers);
+  assert.equal(g.world.entities.p1, body, "one body, the same one");
+  assert.equal(g.world.entities.p1.shots, 7);
+  assert.deepEqual(g.world.scores.p1, { kills: 3, deaths: 1 });
+  // The old socket's close, when it comes, changes nothing.
+  g.drop("a");
+  steps(g, 2);
+  assert.equal(g.players(), NET.maxPlayers);
+  assert.equal(g.world.entities.p1, body);
+  assert.deepEqual(g.world.scores.p1, { kills: 3, deaths: 1 });
+  // Inputs now come from the new socket.
+  g.input("a2", inp(g.world.tick + 1, { jump: true }));
+  g.input("a", inp(g.world.tick + 1, { yawDelta: 1 }));
+  const fwd = [...body.forward];
+  steps(g, 1);
+  const turned = Math.acos(Math.min(1, fwd.reduce((d, x, i) => d + x * body.forward[i], 0)));
+  assert.ok(turned < 0.1, `the old socket's turn is ignored (${turned} rad)`);
+  assert.equal(body.groundId, null, "the new socket's jump is applied");
 });
 
 test("when the last player is gone and the reconnect window is over, the game resets", () => {

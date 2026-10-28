@@ -138,3 +138,18 @@ test("a hidden tab's snapshots leave only the blasts and beams still showing", (
   // The newest are the ones left, aged by the snapshot clock.
   assert.ok(w.beams.some((b) => b.id === "x.2999.0"));
 });
+
+test("a page says hello with one nonce on every open; another page has its own", () => {
+  const hellos = [];
+  const connect = (url, { hello }) => {
+    hellos.push(hello(), hello()); // net.js says hello again on every reopen
+    return { send() {}, close() {} };
+  };
+  createOnlineGame(tuning, "memory", "Ana", connect);
+  createOnlineGame(tuning, "memory", "Ana", connect);
+  const [a, a2, b] = hellos.map((h) => h.nonce);
+  assert.equal(typeof a, "string");
+  assert.ok(a.length >= 8);
+  assert.equal(a2, a);
+  assert.notEqual(b, a);
+});

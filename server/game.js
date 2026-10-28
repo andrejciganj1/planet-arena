@@ -14,7 +14,7 @@ const rejoinTicks = Math.round(NET.rejoin / TICK);
 export function createGame(tuning, { token = () => randomUUID() } = {}) {
   let world = null;
   let nextId = 1;
-  const conns = new Map(); // conn -> { id, token, pending, lastInput, ack, newest }
+  const conns = new Map(); // conn -> { id, token, nonce, pending, lastInput, ack, newest }
   const away = new Map(); // token -> { id, name, colour, score, shots, until } (until: world tick)
 
   function colourFor() {
@@ -28,8 +28,8 @@ export function createGame(tuning, { token = () => randomUUID() } = {}) {
     return { type: "welcome", id: p.id, token: p.token, tick: world.tick, t: world.t, colour: world.players[p.id].colour };
   }
 
-  function join(conn, id, tok) {
-    const p = { id, token: tok, pending: new Map(), lastInput: null, ack: world.tick, newest: world.tick };
+  function join(conn, id, tok, nonce) {
+    const p = { id, token: tok, nonce, pending: new Map(), lastInput: null, ack: world.tick, newest: world.tick };
     conns.set(conn, p);
     return p;
   }
@@ -37,21 +37,29 @@ export function createGame(tuning, { token = () => randomUUID() } = {}) {
   function hello(conn, msg) {
     if (!isObject(msg) || msg.v !== PROTOCOL) return { type: "version" };
     if (conns.has(conn)) return welcome(conn, conns.get(conn));
+    const nonce = typeof msg.nonce === "string" && msg.nonce ? msg.nonce : null;
+    const holder = typeof msg.token === "string" ? [...conns].find(([, p]) => p.token === msg.token) : null;
+    // The same page on a new socket (a network change, a laptop waking) while its old socket is not yet
+    // noticed dead: it takes its body back, and the server closes the old one. Another tab with the same
+    // token has its own nonce and gets a new player.
+    if (holder && nonce && holder[1].nonce === nonce) {
+      conns.delete(holder[0]);
+      return { ...welcome(conn, join(conn, holder[1].id, msg.token, nonce)), replaced: holder[0] };
+    }
     if (conns.size >= NET.maxPlayers) return { type: "full" };
     world ||= createWorld(tuning, { solo: false });
-    const inUse = typeof msg.token === "string" && [...conns.values()].some((p) => p.token === msg.token);
-    const back = typeof msg.token === "string" && !inUse ? away.get(msg.token) : null;
+    const back = typeof msg.token === "string" && !holder ? away.get(msg.token) : null;
     if (back) {
       away.delete(msg.token);
       world.scores[back.id] = back.score;
       const e = addPlayer(world, back.id, { name: back.name, colour: back.colour });
       e.shots = back.shots; // shot ids are id.shots.k and must never repeat for one player
-      return welcome(conn, join(conn, back.id, msg.token));
+      return welcome(conn, join(conn, back.id, msg.token, nonce));
     }
     const id = "p" + nextId++;
     const name = cleanName(msg.name, Object.values(world.players).map((p) => p.name));
     addPlayer(world, id, { name, colour: colourFor() });
-    return welcome(conn, join(conn, id, token()));
+    return welcome(conn, join(conn, id, token(), nonce));
   }
 
   function input(conn, raw) {

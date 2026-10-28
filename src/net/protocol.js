@@ -1,11 +1,11 @@
 // Messages between browser and server (JSON), and the cleaning that stands between untrusted network data
-// and the shared world. Browser to server: { type: "hello", v, name, token? } and { type: "input", tick,
-// view, input }. Server to browser: { type: "welcome", id, token, tick, t, colour }, { type: "full" },
+// and the shared world. Browser to server: { type: "hello", v, name, nonce, token? } and { type: "input",
+// tick, view, input }. Server to browser: { type: "welcome", id, token, tick, t, colour }, { type: "full" },
 // { type: "version" } and snapshots.
 import { WEAPON_ORDER, NET } from "../tuning.js";
 import { NO_INPUT } from "../sim/entity.js";
 
-export const PROTOCOL = 1;
+export const PROTOCOL = 2;
 
 const num = (x) => typeof x === "number" && Number.isFinite(x);
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));

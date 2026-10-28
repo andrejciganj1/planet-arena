@@ -53,7 +53,8 @@ Nothing here is automatic; each step is the owner's.
 
 1. Create a personal Fly.io account, add a card, install `flyctl` and log in.
 2. `fly launch --no-deploy` (keep the existing `fly.toml`; the app name must be free, and if it differs,
-   change `SERVER` in `src/client/config.js`), then `fly deploy`. The machine stops when idle and starts on
+   change `SERVER` in `src/client/config.js`), then `fly deploy --ha=false`. Without `--ha=false` the first deploy makes two machines, and the match lives in one
+   machine's memory, so friends would land in separate games; if two exist, run `fly scale count 1`. The machine stops when idle and starts on
    the first connection, so the first join after a quiet spell takes a few seconds.
 3. Push `main` to GitHub and turn on Pages (branch `main`, root). `.nojekyll` keeps Pages from rebuilding the files.
 

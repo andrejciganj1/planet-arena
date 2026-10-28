@@ -1,8 +1,8 @@
-// Draws the simulation with three.js: flat-shaded bodies, pads with their cue, the dummy, shots and
-// blasts, and the weapon in view. It only reads the world; drawing happens between the last two ticks
-// (alpha) so motion stays smooth on screens faster than the 60 Hz simulation.
+// Draws the simulation with three.js: flat-shaded bodies, pads with their cue, the dummy and other
+// players, shots and blasts, and the weapon in view. It only reads the world; drawing happens between the
+// last two ticks (alpha) so motion stays smooth on screens faster than the 60 Hz simulation.
 import * as THREE from "three";
-import { PLAYER, ROCKET, PAD_CUE, BELT, TICK, PICKUPS, WEAPONS } from "../tuning.js";
+import { PLAYER, DUMMY, ROCKET, PAD_CUE, BELT, TICK, PICKUPS, WEAPONS, FEEDBACK } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
 import { pickupReady } from "../sim/pickups.js";
 import { posesAt } from "../sim/system.js";
@@ -12,6 +12,8 @@ import { add, sub, scale, lerp, norm, cross, dist, rotateAxis, rotateFromTo } fr
 const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const Y = new THREE.Vector3(0, 1, 0);
 const MAX_PITCH = (89 * Math.PI) / 180;
+// Where the camera looks from while you have no body yet (online, before the first snapshot).
+const OVERVIEW = [0, 260, 380, 0, 0, 0];
 
 // Deterministic randomness, so every load looks the same.
 function rng(seed) {
@@ -125,12 +127,51 @@ function starfield(rand) {
   return new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xdfe6ff, size: 1.6, sizeAttenuation: false }));
 }
 
-// A cartoon capsule with a face on its forward side.
+const DUMMY_COLOUR = 0xff7a3d;
+
+// The name and health bar over a head: a canvas drawn again only when what it shows changes. The depth
+// test hides it behind planets; it shrinks with distance like anything else in the scene.
+function tagSprite() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  const tex = new THREE.CanvasTexture(canvas);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sprite.scale.set(2.4, 0.6, 1);
+  sprite.position.y = PLAYER.height + 0.5;
+  let shown = null;
+  // fraction: health 0..1; flash: the bar is white for a moment after a hit.
+  sprite.userData.show = (name, fraction, flash) => {
+    const key = `${name}|${Math.round(fraction * 200)}|${flash}`;
+    if (key === shown) return;
+    shown = key;
+    ctx.clearRect(0, 0, 256, 64);
+    ctx.font = "bold 28px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#000a";
+    ctx.strokeText(name, 128, 28);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(name, 128, 28);
+    ctx.fillStyle = "#000a";
+    ctx.fillRect(24, 40, 208, 16);
+    ctx.fillStyle = flash ? "#fff" : "#5fd36b";
+    ctx.fillRect(28, 44, 200 * Math.max(0, Math.min(1, fraction)), 8);
+    tex.needsUpdate = true;
+  };
+  return sprite;
+}
+
+// A cartoon capsule with a face on its forward side, and its tag overhead.
 function dummyMesh() {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(PLAYER.radius, PLAYER.height - 2 * PLAYER.radius, 6, 16), new THREE.MeshLambertMaterial({ color: 0xff7a3d }));
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(PLAYER.radius, PLAYER.height - 2 * PLAYER.radius, 6, 16), new THREE.MeshLambertMaterial({ color: DUMMY_COLOUR }));
   body.position.y = PLAYER.height / 2;
   g.add(body);
+  g.userData.body = body;
+  g.userData.tag = tagSprite();
+  g.add(g.userData.tag);
   const white = new THREE.MeshBasicMaterial({ color: 0xffffff }), black = new THREE.MeshBasicMaterial({ color: 0x111111 });
   for (const sx of [-1, 1]) {
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), white);
@@ -206,7 +247,10 @@ function pickupMesh(pk, wire) {
   return g;
 }
 
-export function createRenderer(world, canvas, fixedView = null) {
+// selfId: your entity, whose eyes the camera uses. Online it is a function, as the id comes with the
+// server's welcome and changes if the server restarts.
+export function createRenderer(world, canvas, fixedView = null, selfId = "player") {
+  const self = typeof selfId === "function" ? selfId : () => selfId;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   const scene = new THREE.Scene();
@@ -281,8 +325,6 @@ export function createRenderer(world, canvas, fixedView = null) {
   path.frustumCulled = false;
   scene.add(path);
 
-  const dummy = dummyMesh();
-  scene.add(dummy);
   const weapons = weaponModels();
   camera.add(...Object.values(weapons));
 
@@ -304,6 +346,9 @@ export function createRenderer(world, canvas, fixedView = null) {
   const blastGeo = new THREE.SphereGeometry(1, 16, 12);
   const shots = [], blasts = [], beams = [];
   const pooled = (list, make) => (i) => list[i] || (list[i] = (() => { const m = make(); scene.add(m); return m; })());
+  const figures = [];
+  const figure = pooled(figures, dummyMesh); // everyone but you
+  const flashAt = {}; // entity id -> when its bar began to flash (real seconds: the match clock can go back)
   const shot = pooled(shots, () => new THREE.Mesh(rocketGeo, rocketMat));
   const blast = pooled(blasts, () => new THREE.Mesh(blastGeo, new THREE.MeshBasicMaterial({ color: 0xff9a2e, transparent: true, depthWrite: false })));
   const beam = pooled(beams, () => {
@@ -325,9 +370,20 @@ export function createRenderer(world, canvas, fixedView = null) {
   const between = (e, alpha) => (e.prev ? { pos: lerp(e.prev.pos, e.pos, alpha), up: norm(lerp(e.prev.up, e.up, alpha)) } : { pos: e.pos, up: e.up });
 
   return {
+    // A hit event for someone: their bar flashes white for a moment (it reacts to the server's confirmation).
+    // now: real seconds.
+    event(ev, now) {
+      if (ev.type === "hit") flashAt[ev.id] = now;
+    },
+    // The camera as last drawn: { pos, right, up, forward }, for the HUD's hit arcs.
+    camera() {
+      const m = camera.matrixWorld.elements;
+      return { pos: [m[12], m[13], m[14]], right: [m[0], m[1], m[2]], up: [m[4], m[5], m[6]], forward: [-m[8], -m[9], -m[10]] };
+    },
     // alpha: how far towards the next tick to draw (0..1); look: mouse turn not yet given to the sim;
-    // zoom: the sniper's magnification while zoomed, else 1.
-    draw(alpha, look, zoom = 1) {
+    // zoom: the sniper's magnification while zoomed, else 1; shift: added to where you are drawn (online,
+    // a prediction's correction eased in); now: real seconds, for the bars' hit flash.
+    draw(alpha, look, zoom = 1, shift = null, now = 0) {
       resize();
       if (camera.fov !== 80 / zoom) {
         camera.fov = 80 / zoom;
@@ -350,13 +406,19 @@ export function createRenderer(world, canvas, fixedView = null) {
       }
       belt.update(world.t + (alpha - 1) * TICK);
 
-      const p = world.entities.player;
-      if (fixedView) {
-        camera.position.set(fixedView[0], fixedView[1], fixedView[2]);
-        camera.up.set(0, 1, 0);
-        camera.lookAt(fixedView[3], fixedView[4], fixedView[5]);
-      } else {
+      const p = world.entities[self()];
+      // You, interpolated and shifted.
+      const mine = () => {
         const { pos, up } = between(p, alpha);
+        return { pos: shift ? add(pos, shift) : pos, up };
+      };
+      const free = fixedView || (!p && OVERVIEW);
+      if (free) {
+        camera.position.set(free[0], free[1], free[2]);
+        camera.up.set(0, 1, 0);
+        camera.lookAt(free[3], free[4], free[5]);
+      } else {
+        const { pos, up } = mine();
         let fwd = rotateFromTo(p.forward, p.up, up);
         fwd = rotateAxis(fwd, up, -look.yaw);
         const pitch = Math.min(MAX_PITCH, Math.max(-MAX_PITCH, p.pitch + look.pitch));
@@ -366,7 +428,7 @@ export function createRenderer(world, canvas, fixedView = null) {
         camera.up.copy(v3(up));
         camera.lookAt(v3(add(eye, dir)));
       }
-      for (const [name, m] of Object.entries(weapons)) m.visible = !fixedView && p.alive && p.weapon === name && zoom === 1;
+      for (const [name, m] of Object.entries(weapons)) m.visible = !free && p.alive && p.weapon === name && zoom === 1;
       const viewer = camera.position.toArray();
 
       let nearest = null;
@@ -394,16 +456,22 @@ export function createRenderer(world, canvas, fixedView = null) {
         pathMat.color.setHex(cue.landsOn ? 0x3ee05a : 0xe0443e);
       }
 
-      const d = world.entities.dummy;
-      dummy.visible = d.alive;
-      if (d.alive) {
+      let i = 0;
+      for (const [id, d] of Object.entries(world.entities)) {
+        if (d === p || !d.alive) continue;
+        const m = figure(i++);
+        m.visible = true;
+        const who = world.players[id];
+        m.userData.body.material.color.setHex(who ? who.colour : DUMMY_COLOUR);
+        m.userData.tag.userData.show(who ? who.name : "Dummy", d.health / (d.kind === "dummy" ? DUMMY.health : PLAYER.health), now >= flashAt[id] && now - flashAt[id] < FEEDBACK.flash);
         const { pos, up } = between(d, alpha);
         const fwd = norm(rotateFromTo(d.forward, d.up, up)), right = cross(fwd, up);
-        dummy.matrix.makeBasis(v3(right), v3(up), v3(scale(fwd, -1))).setPosition(v3(pos));
-        dummy.matrixAutoUpdate = false;
+        m.matrix.makeBasis(v3(right), v3(up), v3(scale(fwd, -1))).setPosition(v3(pos));
+        m.matrixAutoUpdate = false;
       }
+      for (; i < figures.length; i++) figures[i].visible = false;
 
-      let i = 0;
+      i = 0;
       for (const s of world.projectiles) {
         const m = shot(i++);
         m.visible = true;
@@ -427,7 +495,7 @@ export function createRenderer(world, canvas, fixedView = null) {
         const l = beam(i++);
         l.visible = true;
         // Your own beam starts at the gun, not your eye, or you would see it end-on as a dot.
-        const from = b.owner === p.id && !fixedView ? camera.localToWorld(new THREE.Vector3(0.17, -0.16, -0.9)) : v3(b.from);
+        const from = b.owner === p?.id && !free ? camera.localToWorld(new THREE.Vector3(0.17, -0.16, -0.9)) : v3(b.from);
         l.geometry.setFromPoints([from, v3(b.to)]);
         l.material.opacity = 1 - b.age / WEAPONS.railgun.showFor;
       }
@@ -449,9 +517,9 @@ export function createRenderer(world, canvas, fixedView = null) {
       }
 
       // The rope from just below the eye to the caught point (interpolated with its body).
-      rope.visible = p.alive && !!p.hook;
+      rope.visible = !!p?.alive && !!p.hook;
       if (rope.visible) {
-        const { pos, up } = between(p, alpha);
+        const { pos, up } = mine();
         const hand = add(pos, scale(up, PLAYER.eye - 0.4));
         const anchor = add(poses[p.hook.body], p.hook.offset);
         ropeGeo.setFromPoints([v3(hand), v3(anchor)]);

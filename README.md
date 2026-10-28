@@ -1,6 +1,6 @@
 # Planet Arena: prototype
 
-A single-player prototype of a physics arena shooter across a small solar system: one sun, five planets
+A prototype, playable alone or online with friends, of a physics arena shooter across a small solar system: one sun, five planets
 and a moon. Every body has its own gravity. Blast the dummy off the tiny green planet and watch it fall
 into the sun.
 
@@ -26,6 +26,40 @@ python3 -I tools/serve.py 8100
 
 Then open http://localhost:8100 in a desktop browser and click the page to capture the mouse
 (Esc lets it go).
+
+## Play online
+
+Open the game from the hosted page (GitHub Pages) and type a name; you join the shared match. To use another
+server, add `?server=ws://host:port` to the page address; `?solo` forces the single-player version. Several
+players share one solar system and one match clock; kills and scores show in the kill feed.
+
+## Run the server locally
+
+```
+cd server && npm install && cd ..
+node server/server.js            # listens on port 8787 (PORT overrides)
+python3 -I tools/serve.py 8100
+```
+
+Open `http://localhost:8100/?server=ws://localhost:8787` in two windows. The server runs the same `src/sim/`
+code as the browser, so both agree on the rules.
+
+To check two browsers at once (Playwright through `npx`, both servers running):
+`NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/net_check.cjs "http://localhost:8100/?server=ws://localhost:8787&debug" shots` prints `OK`.
+
+## Deploy
+
+Nothing here is automatic; each step is the owner's.
+
+1. Create a personal Fly.io account, add a card, install `flyctl` and log in.
+2. `fly launch --no-deploy` (keep the existing `fly.toml`; the app name must be free, and if it differs,
+   change `SERVER` in `src/client/config.js`), then `fly deploy --ha=false`. Without `--ha=false` the first deploy makes two machines, and the match lives in one
+   machine's memory, so friends would land in separate games; if two exist, run `fly scale count 1`. The machine stops when idle and starts on
+   the first connection, so the first join after a quiet spell takes a few seconds.
+3. Push `main` to GitHub and turn on Pages (branch `main`, root). `.nojekyll` keeps Pages from rebuilding the files.
+
+Whenever rules, tuning or messages change, bump `PROTOCOL` in `src/net/protocol.js` before deploying, so a page
+still cached from the old version says "reload the page" instead of playing by different rules.
 
 ## Controls
 

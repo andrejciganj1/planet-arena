@@ -121,7 +121,8 @@ test("a rocket under the dummy on the tiny planet sends it into the sun", () => 
     blastUnder(w, d, "player");
     const died = run(w, 20, {}, () => w.events.some((e) => e.type === "death"));
     assert.ok(died, `t=${t}`);
-    assert.deepEqual(w.events.find((e) => e.type === "death"), { type: "death", id: "dummy", cause: "sun" });
+    const { type, id, cause } = w.events.find((e) => e.type === "death");
+    assert.deepEqual({ type, id, cause }, { type: "death", id: "dummy", cause: "sun" });
   }
 });
 
@@ -290,6 +291,27 @@ test("the same seed fires the same spread", () => {
   }
   assert.deepEqual(a.w.projectiles.map((q) => q.vel), b.w.projectiles.map((q) => q.vel));
   assert.ok(new Set(a.w.projectiles.map((q) => q.vel.join())).size > 1, "spread varies");
+});
+
+test("spread depends only on who fires and which shot: the world's random numbers don't change it", () => {
+  const a = range(25, "minigun"), b = range(25, "minigun");
+  for (let i = 0; i < 20; i++) {
+    for (const x of [a, b]) {
+      x.p.cooldown = 0;
+      if (x === b) for (let k = 0; k < 7; k++) b.w.rand();
+      fire(x.w, x.p);
+    }
+  }
+  assert.deepEqual(a.w.projectiles.map((q) => q.vel), b.w.projectiles.map((q) => q.vel));
+  assert.deepEqual(a.w.projectiles.map((q) => q.id), Array.from({ length: 20 }, (_, i) => `player.${i}.0`));
+  assert.ok(new Set(a.w.projectiles.map((q) => q.vel.join())).size > 1, "spread varies");
+});
+
+test("shotgun pellets of one shot share the shot number and differ by pellet", () => {
+  const { w, p } = range(25, "shotgun");
+  fire(w, p);
+  assert.deepEqual(w.projectiles.map((q) => q.id), Array.from({ length: 10 }, (_, k) => `player.0.${k}`));
+  assert.equal(p.shots, 1);
 });
 
 test("no weapon is simply better: shotgun, minigun and a long gun each win at some range", () => {

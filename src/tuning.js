@@ -84,6 +84,25 @@ export const DUMMY = { health: 100, respawn: 3, body: "tiny" };
 
 export const PLAYER_BODY = "mid"; // where the player starts and respawns
 
+// Online players spawn on these only (the small outer planets and the hot one are for the long trips).
+export const SPAWN_BODIES = ["tiny", "mid", "heavy", "giant"];
+
+// standing: s on the ground, and since the last hit, after which a fall no longer counts as the hitter's kill.
+export const KILL = { standing: 1 };
+
+// One per player slot; index 0 is the solo player's.
+export const COLOURS = [0xffd23f, 0xe8505b, 0x4fb0e8, 0x6fd36b, 0xb06fe8, 0xff8a3d, 0x3fd9c4, 0xf08bc8];
+
+// What being hit and kills look like (seconds unless noted). Looks only. Vignette: full strength at `full`
+// damage, never above `max`; the bar over a hit player flashes white for `flash`.
+export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade: 1, feedFor: 5, flash: 0.15, feedMax: 6 };
+
+// Online play. Ticks unless noted: maxLag, history, rejoin, unreachable and smooth are seconds, snap is metres.
+export const NET = {
+  maxPlayers: 8, snapEvery: 2, interp: 6, slack: [2, 5], hold: 15, maxAhead: 60, maxLag: 0.5, history: 0.6,
+  rejoin: 10, unreachable: 30, smooth: 0.1, snap: 4, resync: 60, lead: 6, nameMax: 16,
+};
+
 // Pads: `dir` is the launch direction in world axes (nothing spins); the pad sits on its body out along
 // `dir`. heading(a, el) is the unit vector at `a` degrees round the
 // orbital plane (from +x towards +z) and `el` degrees above it. The layout was searched so every pad has a

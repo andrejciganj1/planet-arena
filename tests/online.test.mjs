@@ -1,0 +1,174 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import * as tuning from "../src/tuning.js";
+import { NO_INPUT } from "../src/sim/entity.js";
+import { dist } from "../src/sim/vec.js";
+import { createGame } from "../server/game.js";
+import { createOnlineGame, clockNudge } from "../src/client/online.js";
+
+const { TICK, NET } = tuning;
+const json = (x) => JSON.parse(JSON.stringify(x));
+
+test("clockNudge speeds up when inputs arrive late, slows down when far ahead", () => {
+  assert.equal(clockNudge(NET.slack[0] - 1), 1);
+  assert.equal(clockNudge(NET.slack[1] + 1), -1);
+  for (let s = NET.slack[0]; s <= NET.slack[1]; s++) assert.equal(clockNudge(s), 0);
+});
+
+// A game room and an in-memory stand-in for net.js: it opens at once, says hello as net.js does, and
+// carries messages both ways as JSON would.
+function room() {
+  const game = createGame(tuning);
+  const inbox = new Map(); // conn -> onMessage
+  const connect = (url, { hello, onMessage, onStatus }) => {
+    const conn = {};
+    inbox.set(conn, onMessage);
+    onStatus("open");
+    onMessage(json(game.hello(conn, json(hello()))));
+    return { send: (msg) => msg.type === "input" && game.input(conn, json(msg)), close() {} };
+  };
+  const sent = [];
+  const step = () => {
+    for (const { conn, msg } of game.step()) {
+      sent.push(msg);
+      inbox.get(conn)(json(msg));
+    }
+  };
+  // Hands a message to every browser, as if the server had sent it.
+  const deliver = (msg) => {
+    for (const onMessage of inbox.values()) onMessage(json(msg));
+  };
+  return { game, connect, step, sent, deliver };
+}
+
+// Browsers joined to the room; each frame is 1/60 s of real time and the room steps once per frame.
+function play(r) {
+  const browsers = [];
+  const join = (name, script) => {
+    const b = { g: createOnlineGame(tuning, "memory", name, r.connect), script, n: 0, predicted: new Map() };
+    browsers.push(b);
+    return b;
+  };
+  const frame = (each = () => {}) => {
+    for (const b of browsers) {
+      b.g.frame(TICK, () => b.script(b.n++));
+      if (b.g.me) b.predicted.set(b.g.world.tick, [...b.g.me.pos]);
+    }
+    r.step();
+    each();
+  };
+  return { browsers, join, frame };
+}
+
+test("a browser and the room, joined in memory, agree and see each other", () => {
+  const r = room();
+  const { browsers, join, frame } = play(r);
+  join("Ana", (i) => ({ ...NO_INPUT, move: [0, 1], yawDelta: 0.01, jump: i % 90 === 30 }));
+  let checked = 0;
+  for (let f = 0; f < 300; f++) {
+    if (f === 20) join("Ben", (i) => ({ ...NO_INPUT, move: [1, 0.5], yawDelta: -0.02, jump: i % 70 === 10 }));
+    frame(() => {
+      for (const b of browsers) {
+        const mine = b.predicted.get(r.game.world.tick);
+        if (!mine) continue;
+        const theirs = r.game.world.entities[b.g.id].pos;
+        assert.ok(dist(mine, theirs) < 1e-6, `${b.g.id} at tick ${r.game.world.tick}: ${mine} vs ${theirs}`);
+        checked++;
+      }
+    });
+  }
+  assert.ok(checked > 400, `compared ${checked} ticks`);
+  // The views start NET.lead ticks ahead and are nudged until their inputs arrive within NET.slack.
+  for (const m of r.sent.slice(-4)) assert.ok(m.slack >= NET.slack[0] && m.slack <= NET.slack[1], `slack ${m.slack}`);
+  const ids = browsers.map((b) => b.g.id).sort();
+  assert.equal(new Set(ids).size, 2);
+  for (const b of browsers) {
+    assert.deepEqual(Object.keys(b.g.world.players).sort(), ids);
+    for (const id of ids) assert.ok(b.g.world.entities[id]?.alive, `${b.g.id} sees ${id}`);
+    assert.equal(b.g.world.entities.dummy, undefined, "two players: no dummy");
+    assert.equal(b.g.world.selfId, b.g.id);
+  }
+});
+
+test("your own rocket's blast is drawn once, not again when the server's arrives", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  let fire = Infinity;
+  const a = join("Ana", (i) => ({ ...NO_INPUT, pitchDelta: i === 5 ? -2 : 0, weapon: i === 5 ? "rocket" : null, fire: i === fire }));
+  frame();
+  Object.assign(r.game.world.entities[a.g.id], { weapons: ["pistol", "rocket"], ammo: { rocket: 5 } });
+  for (let f = 0; f < 10; f++) frame();
+  assert.equal(a.g.me.weapon, "rocket");
+  fire = a.n;
+  let most = 0, events = 0;
+  for (let f = 0; f < 60; f++) {
+    frame();
+    most = Math.max(most, a.g.world.explosions.length);
+    events += a.g.world.events.filter((e) => e.type === "explode").length;
+    a.g.world.events.length = 0; // as main.js does each frame
+  }
+  assert.equal(r.sent.flatMap((m) => m.events).filter((e) => e.type === "explode").length, 1, "the room's rocket went off");
+  assert.equal(events, 1, "one blast event in the view");
+  assert.equal(most, 1, "one blast on screen");
+});
+
+test("a hidden tab's snapshots leave only the blasts and beams still showing", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  const a = join("Ana", () => NO_INPUT);
+  for (let f = 0; f < 10; f++) frame();
+  // 3000 snapshots (100 s) arrive with no frame drawn, each with someone's blast and beam.
+  const last = r.sent.at(-1);
+  let tick = last.tick, t = last.t;
+  for (let k = 0; k < 3000; k++) {
+    for (let i = 0; i < tuning.NET.snapEvery; i++) (tick++, (t += TICK));
+    const beam = { id: `x.${k}.0`, from: [0, 300, 0], to: [10, 300, 0], age: 0, owner: "x" };
+    r.deliver({ ...last, tick, t, slack: 3, beams: [beam], events: [{ type: "explode", pos: [0, 300, 0], id: `x.${k}.1` }] });
+  }
+  // At most what shows at once: one of each per snapshot for as long as they show.
+  const most = (showFor) => Math.ceil(showFor / (tuning.NET.snapEvery * TICK)) + 1;
+  const { ROCKET, WEAPONS } = tuning;
+  const w = a.g.world;
+  assert.ok(w.explosions.length <= most(ROCKET.showFor), `${w.explosions.length} blasts while hidden`);
+  assert.ok(w.beams.length <= most(WEAPONS.railgun.showFor), `${w.beams.length} beams while hidden`);
+  a.g.frame(TICK, () => NO_INPUT);
+  assert.ok(w.explosions.length > 0 && w.explosions.length <= most(ROCKET.showFor), `${w.explosions.length} blasts after`);
+  assert.ok(w.beams.length > 0 && w.beams.length <= most(WEAPONS.railgun.showFor), `${w.beams.length} beams after`);
+  assert.ok(w.explosions.every((x) => x.age < ROCKET.showFor) && w.beams.every((b) => b.age < WEAPONS.railgun.showFor));
+  // The newest are the ones left, aged by the snapshot clock.
+  assert.ok(w.beams.some((b) => b.id === "x.2999.0"));
+});
+
+test("after the clock restarts lower (snapshots stopped a while), the next late snapshot nudges again", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  const a = join("Ana", () => NO_INPUT);
+  for (let f = 0; f < 30; f++) frame();
+  const last = r.sent.at(-1);
+  const w = a.g.world;
+  const at = (k) => ({ ...last, tick: last.tick + k, t: last.t + k * TICK, events: [], beams: [] });
+  r.deliver({ ...at(2), slack: -10 }); // inputs late: one extra tick, and wait for the server to see it
+  a.g.frame(TICK, () => NO_INPUT);
+  // Snapshots stop while frames run on, until the view is more than NET.resync ticks ahead.
+  for (let f = 0; f < NET.resync + 10; f++) a.g.frame(TICK, () => NO_INPUT);
+  r.deliver({ ...at(4), slack: -10 }); // the clock restarts at this tick + NET.lead; inputs still late
+  assert.equal(w.tick, last.tick + 4 + NET.lead, "restarted lower");
+  const before = w.tick;
+  a.g.frame(TICK, () => NO_INPUT);
+  assert.equal(w.tick - before, 2, "one tick and the nudge");
+});
+
+test("a page says hello with one nonce on every open; another page has its own", () => {
+  const hellos = [];
+  const connect = (url, { hello }) => {
+    hellos.push(hello(), hello()); // net.js says hello again on every reopen
+    return { send() {}, close() {} };
+  };
+  createOnlineGame(tuning, "memory", "Ana", connect);
+  createOnlineGame(tuning, "memory", "Ana", connect);
+  const [a, a2, b] = hellos.map((h) => h.nonce);
+  assert.equal(typeof a, "string");
+  assert.ok(a.length >= 8);
+  assert.equal(a2, a);
+  assert.notEqual(b, a);
+});

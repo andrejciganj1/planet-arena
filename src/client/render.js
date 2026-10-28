@@ -217,8 +217,8 @@ export function createRenderer(world, canvas, fixedView = null) {
 
   // three.js r160 lights are physically based (diffuse divided by pi), hence the large numbers. The night
   // side of a planet must stay readable.
-  scene.add(new THREE.AmbientLight(0xa3acd0, 3.2));
-  const sunLight = new THREE.PointLight(0xfff1d6, 4, 0, 0);
+  scene.add(new THREE.AmbientLight(0xa3acd0, 0.45));
+  const sunLight = new THREE.PointLight(0xfff1d6, 7, 0, 0);
   scene.add(sunLight, starfield(rand));
 
   // Faint orbit rings, so you can see where a planet will come round. A moon's ring rides on its planet.

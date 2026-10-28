@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as tuning from "../src/tuning.js";
 import { createWorld, stepWorld, addPlayer, removePlayer, creditOf } from "../src/sim/world.js";
-import { explode } from "../src/sim/weapons.js";
+import { explode, fire } from "../src/sim/weapons.js";
 import { hitCentre, standOn } from "../src/sim/entity.js";
 import { add, sub, scale, norm, dist } from "../src/sim/vec.js";
 
@@ -219,4 +219,24 @@ test("the solo world: the player starts and respawns on PLAYER_BODY, with scores
   assert.equal(w.entities.player.alive, true);
   assert.equal(w.entities.player.groundId, tuning.PLAYER_BODY);
   assert.deepEqual(w.scores.player, { kills: 0, deaths: 1 });
+});
+
+test("shot numbers carry across a respawn, so no shot id repeats", () => {
+  const w = online();
+  const [a] = two(w);
+  const ids = () => w.projectiles.map((p) => p.id);
+  fire(w, a);
+  a.cooldown = 0;
+  fire(w, a);
+  assert.equal(a.shots, 2);
+  intoSun(w, a);
+  run(w, 0.1);
+  assert.equal(a.alive, false);
+  run(w, PLAYER.respawn + 0.1);
+  assert.equal(a.alive, true);
+  assert.equal(a.shots, 2);
+  a.cooldown = 0;
+  fire(w, a);
+  assert.equal(new Set(ids()).size, ids().length);
+  assert.ok(ids().includes("a.2.0"));
 });

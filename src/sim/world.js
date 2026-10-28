@@ -5,6 +5,7 @@ import { createEntity, standOn, stepEntity, hitCentre, NO_INPUT } from "./entity
 import { surfaceInfo, sphereContacts } from "./collide.js";
 import { padPos, touchPads, refreshCues } from "./pads.js";
 import { fire, stepProjectiles } from "./weapons.js";
+import { record } from "./lag.js";
 import { stepPickups } from "./pickups.js";
 import { stepHook } from "./hook.js";
 import { add, scale, dist, norm, anyPerpendicular } from "./vec.js";
@@ -77,7 +78,8 @@ function spawn(world, e) {
   const at = e.kind === "dummy" ? { body: DUMMY.body } : world.solo ? { body: PLAYER_BODY } : null;
   const { pos, up, body } = at ? { ...spawnPoint(world, at.body, e.id), body: at.body } : placeOnline(world, e);
   world.spawns++;
-  Object.assign(e, createEntity(e.id, e.kind, pos, up), { prev: null });
+  // `shots` survives a respawn, like the scores: bullets of the last life may still be flying under those ids.
+  Object.assign(e, createEntity(e.id, e.kind, pos, up), { prev: null, shots: e.shots });
   standOn(e, body);
 }
 
@@ -88,7 +90,7 @@ export function createWorld(tuning, { solo = true } = {}) {
   const poses = posesAt(system, 0);
   const world = {
     tuning, system, t: 0, tick: 0, poses, prevPoses: poses, entities: {}, projectiles: [], explosions: [], beams: [],
-    pads: tuning.PADS, cues: {}, events: [], spawns: 0, rand: seeded(1), pickups: {},
+    pads: tuning.PADS, cues: {}, events: [], history: [], spawns: 0, rand: seeded(1), pickups: {},
     solo, players: {}, scores: {}, noCues: !solo, // the server has no use for pad cues
   };
   if (solo) {
@@ -195,6 +197,7 @@ export function stepWorld(world, inputs, dt) {
     spawn(world, e);
     world.events.push({ type: "respawn", id: e.id });
   }
+  record(world);
 }
 
 // Look deltas, jumps and weapon picks belong to one moment, so only the first tick of a frame gets them.

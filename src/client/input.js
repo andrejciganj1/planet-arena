@@ -42,7 +42,7 @@ export function createInput() {
     // The weapon in hand and the weapons held (pickups and respawns change them), so the wheel steps
     // from there; zoom (the view's magnification) turns the mouse down by as much.
     sync(current, weapons = held, zoom = 1) {
-      selected = current;
+      if (weapon === null) selected = current; // a pick the sim hasn't seen yet stands (fast screens)
       held = weapons;
       lookScale = 1 / zoom;
     },

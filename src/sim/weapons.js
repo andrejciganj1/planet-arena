@@ -51,7 +51,7 @@ function rail(world, e, eye, dir, spec) {
   }
   const to = hit ? add(eye, scale(sub(end, eye), hit.f)) : end;
   if (hit?.entity) hurt(world, hit.entity, spec.damage, e.id);
-  world.beams.push({ from: eye, to, age: 0 });
+  world.beams.push({ from: eye, to, age: 0, owner: e.id });
   world.events.push({ type: "beam", from: eye, to });
 }
 

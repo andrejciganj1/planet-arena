@@ -113,3 +113,15 @@ test("holding space jumps once, so landing while boosting doesn't bounce you off
   assert.equal(i.take().jump, false);
   assert.equal(i.take().boost, true);
 });
+
+test("on a fast screen, wheel notches between ticks all count", () => {
+  // main.js syncs every frame with the weapon still in hand; a pick not yet handed to the sim must stand.
+  const i = createInput(), held = ["pistol", "shotgun", "rocket", "minigun"];
+  i.sync("pistol", held);
+  i.onWheel(1);
+  i.sync("pistol", held); // a frame with no tick
+  i.onWheel(1);
+  i.sync("pistol", held);
+  i.onWheel(1);
+  assert.equal(i.take().weapon, "minigun");
+});

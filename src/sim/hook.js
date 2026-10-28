@@ -28,14 +28,20 @@ function fireHook(world, e) {
 export function stepHook(world, e, held, dt) {
   const { HOOK } = world.tuning;
   e.hookCooldown = Math.max(0, e.hookCooldown - dt);
-  const fresh = held && !e.hookHeld;
+  // A press arms the hook; it fires as soon as the wait is over, while still held, so a press made a
+  // moment too early (right after letting go or a miss) isn't swallowed.
+  if (held && !e.hookHeld) e.hookArmed = true;
   e.hookHeld = held;
   if (!held) {
+    e.hookArmed = false;
     if (e.hook) release(world, e);
     return;
   }
   if (!e.hook) {
-    if (fresh && e.hookCooldown <= 0) fireHook(world, e);
+    if (e.hookArmed && e.hookCooldown <= 0) {
+      e.hookArmed = false;
+      fireHook(world, e);
+    }
     return;
   }
   if (e.groundId === e.hook.body) return release(world, e); // arrived

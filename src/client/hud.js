@@ -18,8 +18,8 @@ function el(parent, cls, html = "") {
 }
 
 // Whether the hook would catch something where the player is looking (same rules as the sim).
-function hookable(world, p) {
-  if (!p.alive || p.hook) return false;
+export function hookable(world, p) {
+  if (!p.alive || p.hook || p.hookCooldown > 0) return false;
   const eye = add(p.pos, scale(p.up, PLAYER.eye));
   const hit = segmentHit(world.system, world.poses, eye, add(eye, scale(viewDir(p), HOOK.range)));
   return !!hit && world.system.byId[hit.id].kind !== "sun" && hit.id !== p.groundId;

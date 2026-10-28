@@ -426,7 +426,9 @@ export function createRenderer(world, canvas, fixedView = null) {
       for (const b of world.beams) {
         const l = beam(i++);
         l.visible = true;
-        l.geometry.setFromPoints([v3(b.from), v3(b.to)]);
+        // Your own beam starts at the gun, not your eye, or you would see it end-on as a dot.
+        const from = b.owner === p.id && !fixedView ? camera.localToWorld(new THREE.Vector3(0.17, -0.16, -0.9)) : v3(b.from);
+        l.geometry.setFromPoints([from, v3(b.to)]);
         l.material.opacity = 1 - b.age / WEAPONS.railgun.showFor;
       }
       for (; i < beams.length; i++) beams[i].visible = false;

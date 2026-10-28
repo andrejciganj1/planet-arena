@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as tuning from "../src/tuning.js";
 import { createWorld, stepWorld } from "../src/sim/world.js";
 import { hookAnchor } from "../src/sim/hook.js";
+import { hookable } from "../src/client/hud.js";
 import { explode } from "../src/sim/weapons.js";
 import { createEntity, standOn, hitCentre, NO_INPUT } from "../src/sim/entity.js";
 import { add, sub, scale, norm, dist, len, dot, cross, anyPerpendicular } from "../src/sim/vec.js";
@@ -137,4 +138,20 @@ test("hooking empty space or the sun leaves no rope and no NaN", () => {
   for (let i = 0; i < 10; i++) stepWorld(w, HOLD, TICK);
   assert.equal(p.hook, null);
   assert.ok(NaNfree(p));
+});
+
+test("a press during the wait fires as soon as the wait ends, while still held, and the ring waits too", () => {
+  const w = world();
+  const p = above(w, "giant", 22);
+  for (let i = 0; i < 10; i++) stepWorld(w, HOLD, TICK);
+  stepWorld(w, {}, TICK); // let go: the wait starts
+  assert.equal(p.hook, null);
+  assert.equal(hookable(w, p), false, "no ring while waiting");
+  stepWorld(w, HOLD, TICK); // pressed during the wait, then held
+  assert.equal(p.hook, null);
+  for (let i = 0; i < HOOK.cooldown / TICK + 1 && !p.hook; i++) stepWorld(w, HOLD, TICK);
+  assert.ok(p.hook, "fired once the wait was over");
+  stepWorld(w, {}, TICK);
+  for (let i = 0; i < HOOK.cooldown / TICK + 1; i++) stepWorld(w, {}, TICK);
+  assert.equal(hookable(w, p), true, "ring back once ready");
 });

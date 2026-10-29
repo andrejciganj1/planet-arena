@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { loadAssets } from "../src/client/look/assets.js";
-import { createQuality } from "../src/client/look/quality.js";
+import { createQuality, pixelRatio } from "../src/client/look/quality.js";
 import { LOOK } from "../src/tuning.js";
 
 // A fetch that serves `files` (url -> bytes) and answers 404 for anything else; `offline` urls reject.
@@ -158,6 +158,22 @@ test("a borderline machine (fast one level down, slow at the top) settles on the
   assert.ok(gaps.at(-1) >= maxUp, `retries end up a maxUp apart (${gaps.map((g) => g.toFixed(0))})`);
   assert.ok(climbs.length <= 10, `${climbs.length} climbs in 20 min`);
   assert.ok(low / t >= 0.97, `at the lower level ${(100 * low / t).toFixed(1)} % of the time`);
+});
+
+test("lower quality draws fewer pixels only on a high-density screen, never under one per CSS pixel", () => {
+  const levels = LOOK.quality.res.length;
+  for (let l = 0; l < levels; l++) {
+    assert.equal(pixelRatio(1, l, LOOK.quality), 1, `1x screen, level ${l}`);
+    for (const dpr of [1.25, 1.5, 2, 3]) {
+      const r = pixelRatio(dpr, l, LOOK.quality);
+      assert.ok(r >= 1 && r <= Math.min(dpr, LOOK.quality.most), `${dpr}x screen, level ${l}: ${r}`);
+      if (l > 0) assert.ok(r >= pixelRatio(dpr, l - 1, LOOK.quality), `${dpr}x: a higher level never draws fewer pixels`);
+    }
+  }
+  assert.equal(pixelRatio(2, levels - 1, LOOK.quality), 2);
+  assert.ok(pixelRatio(2, 0, LOOK.quality) < 2, "a 2x screen steps down");
+  assert.equal(pixelRatio(2, 0, LOOK.quality), 1);
+  assert.equal(pixelRatio(0.8, 0, LOOK.quality), 0.8, "never over the screen's own (a zoomed-out page)");
 });
 
 test("a level that holds for maxUp s is trusted again: its next retry waits only twice `up`", () => {

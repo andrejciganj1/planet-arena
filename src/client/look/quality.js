@@ -7,6 +7,14 @@
 // seconds; holding a level for `maxUp` s trusts it again.
 // A single frame over `pause` s is a hidden tab coming back and is left out; a run of them is a machine
 // below a few frames a second, and counts.
+// The pixel ratio to draw at on a screen of `dpr` device pixels per CSS pixel, at `level`: at most `most`, and
+// the lower levels draw `res` of that, but never under one device pixel per CSS pixel (nor over the screen's
+// own). Below that a normal screen only blurs, and on this game a slow frame is mostly the CPU, not pixels.
+export function pixelRatio(dpr, level, { res, most }) {
+  const top = Math.min(dpr, most);
+  return Math.min(top, Math.max(1, top * res[level]));
+}
+
 export function createQuality({ levels = 3, down, up, window, pause = 0.25, maxUp = 8 * up }) {
   const need = Array(levels).fill(up); // s of steady windows before climbing into each level
   let time = 0, frames = 0, steady = 0, since = 0, long = 0, inRun = false;

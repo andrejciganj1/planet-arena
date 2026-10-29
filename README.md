@@ -121,10 +121,11 @@ by scripts in the repo or by shaders; nothing is downloaded or bought.
   weapons' accents are `LOOK.weapons.colors`; `tests/look.test.mjs` checks both against the files. Until a
   model loads (or if it fails) the game draws simple shapes.
 - **Quality.** The page drops a level when frames average under 50 fps for 2 s, and climbs back only after a
-  steady stretch (longer each time a level fails, so a borderline machine settles instead of flipping). Each
-  level draws at a share of the screen's resolution (half, three quarters, full; at most 2 pixels per CSS
-  pixel); the lower ones also cut the planets' close-up detail and the sun's churn, and the lowest its screen
-  glow.
+  steady stretch (longer each time a level fails, so a borderline machine settles instead of flipping). On a
+  high-density screen the lower levels draw fewer pixels (a 2x screen: 2, 1.5, then 1 per CSS pixel; never
+  under 1, so a normal screen stays sharp). Level 1 also draws one layer of the planets' close-up detail
+  instead of all and fewer octaves of the sun's churn; level 0 turns the close-up detail and the sun's screen
+  glow off and draws fewer octaves and corona streamers still.
 - **Look check** (Playwright through `npx`, static server running):
   `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/look_check.cjs "http://localhost:8100/" shots/look`
   takes a screenshot of every view (each planet from afar and by day and night, the sun, the sky, the alien,

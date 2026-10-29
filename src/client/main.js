@@ -45,7 +45,7 @@ if (still) {
 const view = params.get("view")?.split(",").map(Number);
 const canvas = document.getElementById("game");
 const renderer = createRenderer(world, canvas, view && view.length === 6 && !view.some(Number.isNaN) ? view : null, selfId,
-  { noSky: params.has("debug") && params.has("nosky"), hold: params.has("debug") && params.has("quality") ? Number(params.get("quality")) : null });
+  { noSky: params.has("debug") && params.has("nosky"), hold: params.has("debug") && /^\d+$/.test(params.get("quality") ?? "") ? Number(params.get("quality")) : null });
 if (params.has("debug")) window.game.renderer = renderer;
 let store = null;
 try {

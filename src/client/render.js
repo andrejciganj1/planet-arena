@@ -24,7 +24,7 @@ import { PROP_ASSETS, pickupLook, padLook, cuePath, ropeLine, cometTailLook, ast
 import { cometTails } from "./look/proppose.js";
 import { loadAssets } from "./look/assets.js";
 import { threeLoaders } from "./look/loaders.js";
-import { createQuality } from "./look/quality.js";
+import { createQuality, pixelRatio as levelRatio } from "./look/quality.js";
 
 const MAX_PITCH = (89 * Math.PI) / 180;
 // Where the camera looks from while you have no body yet (online, before the first snapshot).
@@ -37,9 +37,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const self = typeof selfId === "function" ? selfId : () => selfId;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   // The quality step's level sets the pixel ratio and which effects run; it starts at the top.
-  const { res, most } = LOOK.quality, pixelRatio = (l) => Math.min(window.devicePixelRatio, most) * res[l];
-  const quality = createQuality({ levels: res.length, ...LOOK.quality });
-  const pinned = Number.isInteger(hold) && hold >= 0 && hold < res.length ? hold : null;
+  const levels = LOOK.quality.res.length, pixelRatio = (l) => levelRatio(window.devicePixelRatio, l, LOOK.quality);
+  const quality = createQuality({ levels, ...LOOK.quality });
+  const pinned = Number.isInteger(hold) && hold >= 0 && hold < levels ? hold : null;
   let level = pinned ?? quality.level, lastNow = null;
   renderer.setPixelRatio(pixelRatio(level));
   const scene = new THREE.Scene();

@@ -18,7 +18,7 @@ A physics arena shooter across a small solar system, in the browser. Spec:
   prints each sound's level and length and `OK` when all are audible, unclipped and short (loops steady).
   `http://localhost:8100/sounds.html` plays each sound by hand.
 - Look check (static server running): `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/look_check.cjs "http://localhost:8100/" shots/look ['view pattern']`
-  screenshots every view with the clock still, measures night contrast, times each quality level at 1080p,
+  screenshots every view with the clock still, measures night contrast, times each quality level at 1080p (2x screen),
   runs a 4x CPU-throttled game (must drop a level within 10 s and stay) and sums asset bytes; prints `OK`.
   The pattern (a regex on view names, e.g. `'pickup|belt'`, or `throttled`) takes only those parts.
 - Models: `blender -b -P tools/blender/alien.py -- --body 0.4 0.4 --head 1.25 0.55 --out assets/models/alien.glb`,

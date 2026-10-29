@@ -11,11 +11,13 @@
 // rest and firing (a shot every frame, so the kick and the flash show), one firing on a night side, and in an
 // alien's hand firing, seen from the side. The props (propViews): pickups, pads, the belt, a flying rock and a
 // comet's tails. Sums the bytes of every file under assets/ the page fetched.
-// Performance, at 1080p: in one view, each quality level held for 5 s: the average frame time, the work per
-// frame (from the frame's start until the GPU has finished it, so it shows the cost under the 60 fps cap) and
-// the draw calls and triangles; a warning when the top level misses 60 fps. Then the quality step on a slow
-// machine: the live game with the CPU slowed 4x must drop a level within THROTTLE_DROP s and never climb back
-// within THROTTLE_FOR s (no flipping back and forth).
+// Performance, on a 2x screen with a 960x540 window (so the top level draws 1080p): in one view, each quality
+// level held for 5 s: the average frame time, the work per frame (from the frame's start until the GPU has
+// finished it, so it shows the cost under the 60 fps cap) and the draw calls and triangles; a warning when
+// the top level misses 60 fps. Then the quality step on a slow machine: the live game with the CPU slowed 4x
+// must drop a level within THROTTLE_DROP s, then stay down: no climb for LOOK.quality.up + window s after the
+// drop (the steady stretch a climb needs, so a climb in that time is flipping; later ones depend on the
+// machine, so they aren't judged).
 // Prints one line per view, then OK when there were no page errors, the dummy was seen, the frame time was
 // measured, the throttled run passed and the assets fit in LOOK.budget.
 // Usage: NODE_PATH=... node tools/look_check.cjs <base url, e.g. http://localhost:8100/> <out dir> [views]
@@ -31,7 +33,7 @@ const SEEN = ["dummy-night", "dummy-night-ocean"]; // the views whose dummy must
 const NIGHT_CONTRAST = 0.06; // of full scale (sRGB luminance), dummy against the ground behind it
 const SEEN_SHARE = 0.5; // of the dummy's projected outline that must differ from the empty ground
 const FOV = 80, W = 1280, H = 800; // the camera and the window
-const THROTTLE_DROP = 10, THROTTLE_FOR = 25; // s
+const THROTTLE_DROP = 10; // s
 
 const v = {
   add: (a, b) => a.map((x, i) => x + b[i]),
@@ -264,6 +266,7 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
       hit: PLAYER.hit,
       budget: LOOK.budget,
       levels: LOOK.quality.res.length,
+      quality: LOOK.quality,
       colours: COLOURS,
       weapons: WEAPON_ORDER,
       pickups: PICKUPS.map((pk) => ({
@@ -351,8 +354,8 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
     if (view.name === TIMED) timed = view;
   }
 
-  // Each quality level held in the timed view, at 1080p.
-  const big = await b.newContext({ viewport: { width: 1920, height: 1080 } });
+  // Each quality level held in the timed view, at 1080p on a 2x screen (a 1x screen draws 1 at every level).
+  const big = await b.newContext({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 2 });
   const q = await big.newPage();
   q.on("pageerror", (e) => ((bad = true), console.log("pageerror:", e.message)));
   if (timed) {
@@ -367,7 +370,8 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
           if (t0 === null) t0 = t; // the first frame only starts the clock
           else (n++, (work += performance.now() - t));
           if (t - t0 < 5000) return requestAnimationFrame(step);
-          done({ ms: (t - t0) / n, work: work / n, ...window.game.renderer.stats() });
+          const c = document.getElementById("game");
+          done({ ms: (t - t0) / n, work: work / n, size: `${c.width}x${c.height}`, ...window.game.renderer.stats() });
         };
         // Settle first: shaders compiled, every map painted.
         let warm = 60;
@@ -376,7 +380,7 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
       }));
       if (m.level !== level) (bad = true), console.log(`quality ${level}: drawn at level ${m.level}`);
       console.log(`quality ${level}: frame ${m.ms.toFixed(2)} ms (${(1000 / m.ms).toFixed(0)} fps), work ${m.work.toFixed(2)} ms, ` +
-        `${m.calls} draw calls, ${m.triangles} triangles, at 1920x1080 in ${TIMED}`);
+        `${m.calls} draw calls, ${m.triangles} triangles, drawn at ${m.size} in ${TIMED}`);
       if (level === world.levels - 1) frameMs = m.ms;
     }
   }
@@ -393,19 +397,21 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
     await frames(q, 60);
     const cdp = await big.newCDPSession(q);
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
-    const top = world.levels - 1, t0 = Date.now(), seen = [];
+    const top = world.levels - 1, t0 = Date.now(), seen = [], hold = world.quality.up + world.quality.window;
     let dropped = null, climbed = null, last = top;
-    while (Date.now() - t0 < THROTTLE_FOR * 1000) {
+    const elapsed = () => (Date.now() - t0) / 1000;
+    while (dropped === null ? elapsed() < THROTTLE_DROP : elapsed() < dropped + hold) {
       await q.waitForTimeout(250);
       const { level } = await q.evaluate(() => window.game.renderer.stats());
-      const t = (Date.now() - t0) / 1000;
+      const t = elapsed();
       if (level !== last) seen.push(`${t.toFixed(1)} s: level ${level}`);
       if (level < top && dropped === null) dropped = t;
       if (level > last && climbed === null) climbed = t;
       last = level;
     }
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
-    console.log(`throttled 4x: ${seen.join(", ") || "stayed at the top level"}, ${THROTTLE_FOR} s in all`);
+    console.log(`throttled 4x: ${seen.join(", ") || "stayed at the top level"}, watched ${elapsed().toFixed(1)} s` +
+      (dropped === null ? "" : ` (${hold} s after the first drop)`));
     if (dropped === null || dropped > THROTTLE_DROP) (bad = true), console.log(`throttled: no drop within ${THROTTLE_DROP} s`);
     if (climbed !== null) (bad = true), console.log(`throttled: climbed back at ${climbed.toFixed(1)} s`);
   }

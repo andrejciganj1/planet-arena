@@ -149,8 +149,9 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // back, not a slow frame, but a run of them is a very slow machine. Each time a level fails, the wait to
 // climb back into it doubles, up to `maxUp` s, so a machine fast one level down settles there; holding the
 // level for `maxUp` s trusts it again. res: the share of the screen's own resolution drawn at each level, lowest
-// first, of at most `most` pixels per CSS pixel (so a 1x screen gets a lower resolution too, and a 3x one
-// doesn't cost 9 pixels each); on a 2x screen the levels draw 1, 1.5 and 2.
+// first, of at most `most` pixels per CSS pixel (a 3x screen doesn't cost 9 pixels each), but never under one
+// device pixel per CSS pixel (look/quality.js pixelRatio): a 2x screen draws 1, 1.5 and 2, a 1x screen 1 at
+// every level.
 // sky (look/sky.js), painted once at load into a cube map of `size` px a face: intensity scales it all (dim,
 // so players and asteroids stand out); stars: the share of texels holding a faint distant star behind the
 // drawn ones. Each nebula: the direction it lies in, its size (radians), the two colours it shades between

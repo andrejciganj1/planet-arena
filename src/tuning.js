@@ -192,10 +192,11 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // props (look/props.js, the models from tools/blender/props.py; look/proppose.js): pickups float `float` m over
 // their spot, bobbing `bob` m at `bobRate` rad/s, turning `spin` rad/s; glow: how bright their coloured parts
 // glow in their own colour; night: how much the rest glows in its own colour where the sun doesn't reach (so a
-// pickup on a night side keeps a soft glow); halo: the soft light round one, m across and opacity; sun:
+// pickup on a night side keeps a soft glow), nightTint: and in the pickup's colour at full brightness (so a dark
+// part does too); halo: the soft light round one, m across and opacity; sun:
 // as alien.sun; weapon: a gun pickup's size against the gun in view. pads: the plate's lights, by cue (lands,
 // misses, cues hidden), how bright they glow, and the halo over the plate. rocks: the belt's colour and how much
-// one rock's shade differs from the next; cracks: how bright a flying rock's hollows glow in ROCK_LOOK.hot;
+// one rock's shade differs from the next (a share of it); cracks: how bright a flying rock's hollows glow in ROCK_LOOK.hot;
 // rim: the hot edge round it. comets: each tail's colour, length [base, reach, most] (m: base + reach / the
 // distance to the sun, at most `most`), width at the comet and at the tip (m) and opacity; the dust tail's bend
 // (m sideways per m along, at its tip), trailing the comet's path.
@@ -222,9 +223,9 @@ export const LOOK = {
     },
   },
   props: {
-    pickups: { float: 1, bob: 0.15, bobRate: 2, spin: 1, glow: 0.6, night: 0.3, halo: [1.8, 0.5], sun: 0.55, weapon: 2.2 },
+    pickups: { float: 1, bob: 0.15, bobRate: 2, spin: 1, glow: 0.6, night: 0.3, nightTint: 0.06, halo: [1.8, 0.5], sun: 0.55, weapon: 2.2 },
     pads: { lands: 0x3ee05a, misses: 0xe0443e, hidden: 0x8a8f9c, glow: 1.2, halo: [2.6, 0.3] },
-    rocks: { belt: 0x5e5650, variety: 0.12, cracks: 1.6, rim: 0.4 },
+    rocks: { belt: 0x34302d, variety: 0.3, cracks: 1.6, rim: 0.4 },
     comets: {
       ion: { color: 0x5fa8ff, length: [12, 2400, 80], width: [0.7, 1.4], opacity: 0.55 },
       dust: { color: 0xffe6a8, length: [8, 1500, 50], width: [2.2, 10], opacity: 0.55, bend: 0.5 },

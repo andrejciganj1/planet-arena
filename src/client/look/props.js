@@ -88,13 +88,19 @@ const dispose = (root) => root.traverse((o) => {
   if (o.material !== GHOST) o.material.dispose();
 });
 
+const nightTint = new THREE.Color();
+
 // A pickup: { group, dress(files), show(ready, sun) }. The caller places and turns the group (up +y). dress
 // swaps the model in once its file is in (files: { props, weapons }, GLTFLoader results or null); show sets
 // whether it is there to take (else the ghost) and how much sunlight reaches it (0..1).
 export function pickupLook(pk) {
   const group = new THREE.Group(), choice = pickupModel(pk);
   const colour = choice.tint ?? (pk.kind === "weapon" ? WEAPON_COLORS[pk.weapon] : pk.kind === "health" ? 0xff6a5a : 0xffa040);
-  const glow = halo(colour, P.pickups.halo);
+  // The pickup's colour at full brightness: a dim one (the rocket's green, the sniper's blue) would give a dark
+  // crate almost no glow and a faint halo at night.
+  const tint = new THREE.Color(colour), most = Math.max(tint.r, tint.g, tint.b, 1e-6);
+  tint.multiplyScalar(1 / most);
+  const glow = halo(tint, P.pickups.halo);
   let solid = pickupMesh(pk, false), ghost = pickupMesh(pk, true), lit = [], dull = [], dressed = false;
   group.add(solid, ghost, glow);
   return {
@@ -124,7 +130,9 @@ export function pickupLook(pk) {
       solid.visible = glow.visible = ready;
       ghost.visible = !ready;
       for (const m of lit) m.userData.sun.value = sun * P.pickups.sun;
-      for (const m of dull) m.emissive.copy(m.color).multiplyScalar(P.pickups.night * (1 - sun));
+      // Its own colour, and a little of the pickup's, so a dark part (the crate) still glows.
+      const dark = 1 - sun;
+      for (const m of dull) m.emissive.copy(m.color).multiplyScalar(P.pickups.night * dark).add(nightTint.copy(tint).multiplyScalar(P.pickups.nightTint * dark));
     },
   };
 }
@@ -280,13 +288,11 @@ const simpleRock = () => {
 };
 const HOLLOW_VERTEX = ["#include <begin_vertex>", "#include <begin_vertex>\nvHollow = hollow;"];
 
-// The asteroid belt: one instanced mesh of tumbling rocks, turning round the sun the way the planets go.
-// Looks only, so it lives here and not in the simulation. Until the model loads each rock is a dodecahedron;
-// then the four rocks share one geometry and each instance shows one (the others fold to a point), so the
-// whole belt stays one draw.
+// The asteroid belt: tumbling rocks turning round the sun the way the planets go. Looks only, so it lives here
+// and not in the simulation. Until the model loads it is one instanced mesh of dodecahedra; then one per rock
+// shape (rock i shows shape i % 4), so each draw carries only its own shape's vertices.
 export function asteroidBelt(rand) {
   const plain = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
-  const mesh = new THREE.InstancedMesh(simpleRock(), plain, BELT.rocks);
   const rocks = [], base = new THREE.Color(P.rocks.belt);
   for (let i = 0; i < BELT.rocks; i++) {
     const r = BELT.inner + rand() * (BELT.outer - BELT.inner), a = rand() * 2 * Math.PI;
@@ -296,62 +302,49 @@ export function asteroidBelt(rand) {
       scale: new THREE.Vector3(s, s * (0.6 + rand() * 0.4), s * (0.7 + rand() * 0.3)),
       axis: new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).normalize(),
       rate: 0.2 + rand() * 0.8,
+      color: base.clone().multiplyScalar(1 + (rand() - 0.5) * 2 * P.rocks.variety),
     });
-    mesh.setColorAt(i, base.clone().offsetHSL(0, 0, (rand() - 0.5) * 2 * P.rocks.variety));
   }
   const group = new THREE.Group();
-  group.add(mesh);
+  // An instanced mesh of `geo` drawing the rocks in `ids`, each in its own shade.
+  const draw = (geo, mat, ids) => {
+    const mesh = new THREE.InstancedMesh(geo, mat, ids.length);
+    ids.forEach((id, j) => mesh.setColorAt(j, rocks[id].color));
+    mesh.userData.ids = ids;
+    group.add(mesh);
+    return mesh;
+  };
+  let meshes = [draw(simpleRock(), plain, rocks.map((_, i) => i))];
   const q = new THREE.Quaternion(), m = new THREE.Matrix4();
-  let dressed = false;
   return {
     group,
     dress(props) {
       const parts = props && [0, 1, 2, 3].map((k) => props.scene.getObjectByName(`rock_${k}`));
-      if (dressed || !parts || parts.some((p) => !p?.isMesh)) return;
-      dressed = true;
-      const geo = mergeRocks(parts.map((p) => withHollows(p.geometry)));
-      geo.setAttribute("pick", new THREE.InstancedBufferAttribute(Float32Array.from(rocks, (_, i) => i % parts.length), 1));
+      if (meshes.length > 1 || !parts || parts.some((p) => !p?.isMesh)) return;
       const mat = plain.clone();
       mat.onBeforeCompile = (sh) => {
         sh.vertexShader = sh.vertexShader
-          .replace("#include <common>", "#include <common>\nattribute float variant, pick, hollow;\nvarying float vHollow;")
-          .replace(HOLLOW_VERTEX[0], `${HOLLOW_VERTEX[1]}\nif (abs(variant - pick) > 0.5) transformed = vec3(0.0);`);
+          .replace("#include <common>", "#include <common>\nattribute float hollow;\nvarying float vHollow;")
+          .replace(HOLLOW_VERTEX[0], HOLLOW_VERTEX[1]);
         sh.fragmentShader = sh.fragmentShader
           .replace("#include <common>", "#include <common>\nvarying float vHollow;")
           .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= 1.0 - 0.55 * vHollow;");
       };
       mat.customProgramCacheKey = () => "belt-rock";
-      mesh.geometry.dispose();
-      mesh.geometry = geo;
-      mesh.material = mat;
+      for (const old of meshes) group.remove(old), old.geometry.dispose(), old.dispose();
+      meshes = parts.map((p, k) => draw(withHollows(p.geometry), mat, rocks.map((_, i) => i).filter((i) => i % parts.length === k)));
     },
     update(t) {
       group.rotation.y = (-2 * Math.PI * t) / BELT.period; // three's +y turn runs x towards -z; orbits go x towards +z
-      rocks.forEach((k, i) => mesh.setMatrixAt(i, m.compose(k.pos, q.setFromAxisAngle(k.axis, k.rate * t), k.scale)));
-      mesh.instanceMatrix.needsUpdate = true;
+      for (const mesh of meshes) {
+        mesh.userData.ids.forEach((id, j) => {
+          const k = rocks[id];
+          mesh.setMatrixAt(j, m.compose(k.pos, q.setFromAxisAngle(k.axis, k.rate * t), k.scale));
+        });
+        mesh.instanceMatrix.needsUpdate = true; // rocks only tumble in place, so the first frame's bounds hold
+      }
     },
   };
-}
-
-// The rocks' geometries as one, each vertex marked with the rock it belongs to (`variant`).
-function mergeRocks(geos) {
-  const pos = [], nrm = [], hollow = [], variant = [], index = [];
-  geos.forEach((g, k) => {
-    const base = pos.length / 3;
-    pos.push(...g.attributes.position.array);
-    nrm.push(...g.attributes.normal.array);
-    hollow.push(...g.attributes.hollow.array);
-    for (let i = 0; i < g.attributes.position.count; i++) variant.push(k);
-    for (const i of g.index.array) index.push(base + i);
-  });
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
-  geo.setAttribute("hollow", new THREE.Float32BufferAttribute(hollow, 1));
-  geo.setAttribute("variant", new THREE.Float32BufferAttribute(variant, 1));
-  geo.setIndex(index);
-  geo.computeBoundingSphere();
-  return geo;
 }
 
 // Flying asteroids: a dark rough rock, glowing orange-hot in its hollows and round its edge, in a hot haze, and

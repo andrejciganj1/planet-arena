@@ -38,6 +38,11 @@ The sounds are made in the browser (`src/client/synth.js`). To check them withou
 through `npx`): `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/sound_check.cjs "http://localhost:8100/sounds.html"`
 prints each sound's level and length and `OK` when all are audible, unclipped and short (loops steady).
 
+The one sound from a file is the announcer's "Sun kill!" (`assets/sun-kill.wav`): spoken by the Norman voice
+by Bryce Beattie (public domain, trained on LibriVox recordings, https://brycebeattie.com/files/tts/) with
+[Piper](https://github.com/OHF-Voice/piper1-gpl) 1.8.0, used only to make the file, then trimmed. The game
+plays it deeper and adds its own echo.
+
 ## Play online
 
 Open the game from the hosted page (GitHub Pages) and type a name; you join the shared match. To use another

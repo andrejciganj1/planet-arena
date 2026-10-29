@@ -1,7 +1,7 @@
 // How each sound is made: Web Audio oscillators, noise, filters and envelopes, our own recipes in the spirit
-// of Quake 3 (short and punchy), copied from no game. A recipe builds its sound now into `out` and returns
-// { end } (the context time it falls silent) or, for a loop, { stop }. Nothing touches Web Audio until a
-// recipe is called, so node tests can load this.
+// of Quake 3 (short and punchy), copied from no game; only the announcer's voice is a file. A recipe builds its
+// sound now into `out` and returns { end } (the context time it falls silent) or, for a loop, { stop }.
+// Nothing touches Web Audio until a recipe is called, so node tests can load this.
 
 // The loops: they sound until stopped, the rest are one-shots of at most 1.5 s.
 export const LOOPS = new Set(["rocketFlight", "rockIncoming", "hookPull", "boost"]);
@@ -84,6 +84,56 @@ function tone(ctx, out, t0, o) {
     n.stop(end + 0.02);
   }
   return end;
+}
+
+// The announcer's line, the one sound from a file (assets/sun-kill.wav, made with Piper, see README). The
+// bytes are fetched as the page loads, so the first sun kill needn't wait for the network; only in a browser,
+// since node tests load this file too. Decoding needs a context, so it waits for the first one; the decoded
+// buffer then serves every context.
+const voiceBytes = typeof document === "undefined" ? null
+  : fetch(new URL("../../assets/sun-kill.wav", import.meta.url))
+    .then((r) => (r.ok ? r.arrayBuffer() : null))
+    .catch(() => null);
+let line = null, decoding = null;
+
+// Resolves once the line can play, or once it is clear it can't (then the announcer stays silent).
+export function loadVoice(ctx) {
+  decoding ??= Promise.resolve(voiceBytes)
+    .then((bytes) => bytes && ctx.decodeAudioData(bytes))
+    .then((buf) => (line = buf || null))
+    .catch((e) => console.warn("the announcer is silent:", e?.message));
+  return decoding;
+}
+
+// Lower than recorded (a bigger, more cartoonish announcer), then a few late, darker copies: a big hall
+// answering. The echoes are ours, so the file stays a plain voice.
+const SAY = { rate: 0.85, dry: 0.7 };
+const ECHO = [[0.12, 0.32, 2400], [0.25, 0.18, 1600], [0.38, 0.09, 1100]]; // [delay s, gain, lowpass Hz]
+
+function say(ctx, out, t) {
+  const src = ctx.createBufferSource();
+  src.buffer = line;
+  src.playbackRate.value = SAY.rate;
+  const dry = ctx.createGain();
+  dry.gain.value = SAY.dry;
+  src.connect(dry);
+  dry.connect(out);
+  const len = line.duration / SAY.rate;
+  for (const [delay, gain, cutoff] of ECHO) {
+    const d = ctx.createDelay(1);
+    d.delayTime.value = delay;
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.value = cutoff;
+    const g = ctx.createGain();
+    g.gain.value = gain;
+    src.connect(d);
+    d.connect(f);
+    f.connect(g);
+    g.connect(out);
+  }
+  src.start(t);
+  return { end: t + len + ECHO[ECHO.length - 1][0] };
 }
 
 // A one-shot from layers: [hiss or tone, options] each. Returns { end }.
@@ -252,13 +302,16 @@ export const RECIPES = {
     [tone, { wave: "sawtooth", f: 380, f1: 55, vib: [7, 60], filter: ["lowpass", 1400], peak: 0.4, a: 0.01, d: 0.9 }],
     [tone, { f: 90, f1: 35, peak: 0.5, a: 0.003, d: 0.3 }],
   ]),
-  // A placeholder until Task 5's voice file: a short rising three-note fanfare.
-  announcer: (ctx, out) => shot(ctx, out, [
-    [tone, { wave: "square", f: 523.25, filter: ["lowpass", 2500], peak: 0.2, a: 0.005, d: 0.11 }],
-    [tone, { at: 0.12, wave: "square", f: 659.25, filter: ["lowpass", 2500], peak: 0.2, a: 0.005, d: 0.11 }],
-    [tone, { at: 0.24, wave: "square", f: 783.99, filter: ["lowpass", 2500], peak: 0.22, a: 0.005, d: 0.5 }],
-    [tone, { at: 0.24, wave: "triangle", f: 392, peak: 0.2, a: 0.005, d: 0.5 }],
-  ]),
+  // "Sun kill!": the recorded line, deeper and with an arena echo. The first call may come before the file
+  // is decoded; it then plays as soon as it is, unless that is too late to still belong to the kill.
+  announcer: (ctx, out) => {
+    const t = ctx.currentTime;
+    if (line) return say(ctx, out, t);
+    loadVoice(ctx)
+      .then(() => line && ctx.currentTime < t + 0.25 && say(ctx, out, ctx.currentTime))
+      .catch(() => {}); // the context closed meanwhile: nothing to play into
+    return { end: t + 1.5 };
+  },
   // A spring: the pitch leaps up and wobbles fast, the wobble dying away.
   boink: (ctx, out) => shot(ctx, out, [
     [tone, { wave: "triangle", f: 220, f1: 560, glide: 0.12, vib: [16, 300, 1], peak: 0.55, a: 0.005, d: 0.4 }],

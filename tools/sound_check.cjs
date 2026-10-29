@@ -2,7 +2,8 @@
 // mono) and prints per sound the peak, the RMS and when it falls below -50 dB. OK when every one-shot is
 // audible (peak above -30 dB), never clips (peak at most 0 dB) and ends within 1.5 s, and every loop is
 // audible, never clips, is steady (RMS of its second second within 6 dB of its first) and, stopped at 1 s,
-// is silent by 1.5 s. We can't hear; this says each sound is there, whole and short.
+// is silent by 1.5 s. We can't hear; this says each sound is there, whole and short. The announcer's file is
+// loaded before rendering, so a missing file fails it as too quiet.
 // Usage: NODE_PATH=... node tools/sound_check.cjs <url of sounds.html>
 const { chromium } = require("playwright");
 (async () => {
@@ -16,6 +17,9 @@ const { chromium } = require("playwright");
   const rows = await p.evaluate(async () => {
     const { SOUNDS, RECIPES, LOOPS } = window.soundtest;
     const rate = 44100, len = 2 * rate, quiet = 10 ** (-50 / 20);
+    // The announcer's file must be decoded first, or its render would be silent.
+    const { loadVoice } = await import(new URL("src/client/synth.js", location.href).href);
+    await loadVoice(new OfflineAudioContext(1, 1, rate));
     const render = async (name, stopAt) => {
       const ctx = new OfflineAudioContext(1, len, rate);
       const h = RECIPES[name](ctx, ctx.destination, {});

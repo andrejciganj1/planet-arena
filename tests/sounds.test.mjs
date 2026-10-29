@@ -124,6 +124,14 @@ test("drifting out of the system screams: yours in your head, another's where it
   }
 });
 
+test("a void death gives only the scream", () => {
+  const w = scene(["me", "you"]), d = createDirector({ selfId: "me", online: false });
+  play(d, w);
+  const lost = (id) => ({ type: "death", id, cause: "void", by: null, pos: [700, 0, 0] });
+  assert.deepEqual(names(play(d, w, [lost("me")])), ["scream"], "yours");
+  assert.deepEqual(names(play(d, w, [lost("you")])), ["scream"], "another's");
+});
+
 test("a sun kill by you plays the announcer; by someone else, quieter", () => {
   const w = scene(["me", "you", "them"]), d = createDirector({ selfId: "me", online: false });
   play(d, w);

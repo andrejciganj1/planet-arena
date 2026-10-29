@@ -42,11 +42,12 @@ export function createDirector({ selfId, online }) {
           else if (ev.by === selfId && settings.get("hits")) once.push({ name: "ding", pos: null, own: true, src: selfId });
           break;
         case "death":
-          if (ev.id === selfId) once.push({ name: "death", pos: null, own: true, src: selfId });
-          else once.push({ name: "death", pos: ev.pos, own: false, src: ev.id });
-          // Lost in space: an alien's "Nooo!" as it drifts away. Another's is out at the edge, so usually beyond
-          // SOUND.range; it is placed there anyway rather than faked nearer.
+          // Lost in space: only an alien's "Nooo!" as it drifts away (the cartoon fall under it would clash).
+          // Another's is out at the edge, so usually beyond SOUND.range; it is placed there anyway rather than
+          // faked nearer.
           if (ev.cause === "void") once.push({ name: "scream", ...placed(ev.id, ev.pos) });
+          else if (ev.id === selfId) once.push({ name: "death", pos: null, own: true, src: selfId });
+          else once.push({ name: "death", pos: ev.pos, own: false, src: ev.id });
           // A sun kill is an event for the whole game: the killer hears it full, everyone else quieter.
           if (ev.cause === "sun" && ev.by) {
             if (ev.by === selfId) once.push({ name: "announcer", pos: null, own: true });

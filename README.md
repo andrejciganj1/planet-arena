@@ -115,8 +115,8 @@ The two sounds from files are the announcer's "Sun kill!" (`assets/sun-kill.wav`
 lost in space, "Noooo!" (`assets/scream.wav`): both spoken by the Norman voice by Bryce Beattie (public domain,
 trained on LibriVox recordings, https://brycebeattie.com/files/tts/) with
 [Piper](https://github.com/OHF-Voice/piper1-gpl) 1.8.0, used only to make the files, then trimmed. The game
-plays the announcer deeper with its own echo, and the scream higher, wobbling and sagging away like a small
-creature's.
+plays the announcer deeper with its own echo, and the scream higher, its "o" held on a loop, then sagging
+away like a small creature's.
 
 ## Tuning
 

@@ -165,41 +165,62 @@ function say(ctx, out, t, line) {
   return { end: t + len + ECHO[ECHO.length - 1][0] };
 }
 
-// The scream: a small creature, not a sped-up man. Played higher than recorded, which raises the voice's
-// formants with its pitch (what makes it small); a wobble that grows as it goes; and at the end the pitch,
-// level and brightness sag together as the alien drifts away. One late, dark echo. rate: the playback rate
-// held, from: where it starts (a quick rise into the scream), to: where the sag ends, up and sag: their s.
-const CRY = { from: 1.65, rate: 1.8, to: 1.05, up: 0.12, sag: 0.5, vib: [6.5, 30, 90], dry: 0.55, far: 0.35, echo: [0.16, 0.18, 2000] };
+// The scream: a small creature, not a sped-up man. The file is one short "No!"; its "o" is held by looping
+// three pitch periods from its steadiest stretch, so the vowel stays one even "ooo" (a string of o's from the
+// speech tool dips between syllables: "nowowowo"). Played higher than recorded, which raises the voice's
+// formants with its pitch (what makes it small), with a slow, shallow vibrato. At `release` s the rest of the
+// file takes over and the pitch, level and brightness sag together as the alien drifts away; one late, dark
+// echo. loop: [start, end] s in the file, at upward zero crossings in the vowel's steadiest stretch, where the
+// period after each matches the other. rate: the playback rate held; to: where the sag ends.
+export const CRY = {
+  loop: [0.3439, 0.37102], rate: 1.8, release: 1.45, sag: 0.45, to: 1.1, vib: [5, 12], fade: 0.03,
+  dry: 0.55, far: 0.3, echo: [0.16, 0.18, 2000],
+};
+
+// When the held vowel starts and when the release takes over, in s from the start. The release waits for a
+// loop boundary, so the rest of the file starts in step with the held loop and the handover can't dip.
+export function cryHeld({ loop: [a, b], rate, release } = CRY) {
+  const first = b / rate, period = (b - a) / rate;
+  return { from: a / rate, to: first + Math.max(0, Math.round((release - first) / period)) * period };
+}
 
 function cry(ctx, out, t, clip) {
-  const { from, rate, to, up, sag, vib: [hz, cents, centsEnd], dry, far, echo: [delay, gain, cutoff] } = CRY;
-  // The time held at full rate is what the rise and the sag leave of the file (the sag is exponential: its
-  // mean rate is (rate - to) / ln(rate / to)), so the sag lands on the file's last syllable.
-  const used = up * (from + rate) / 2 + sag * (rate - to) / Math.log(rate / to);
-  const t1 = t + up, t2 = t1 + Math.max(0, (clip.duration - used) / rate), end = t2 + sag;
-  const src = ctx.createBufferSource();
-  src.buffer = clip;
-  src.playbackRate.setValueAtTime(from, t);
-  src.playbackRate.linearRampToValueAtTime(rate, t1);
-  src.playbackRate.setValueAtTime(rate, t2);
-  src.playbackRate.exponentialRampToValueAtTime(to, end);
+  const { loop: [a, b], rate, sag, to, vib: [hz, cents], fade, dry, far, echo: [delay, gain, cutoff] } = CRY;
+  const tr = t + cryHeld().to, end = tr + sag;
+  const held = ctx.createBufferSource(), rest = ctx.createBufferSource();
+  held.buffer = rest.buffer = clip;
+  held.loop = true;
+  held.loopStart = a;
+  held.loopEnd = b;
+  held.playbackRate.value = rate;
+  rest.playbackRate.setValueAtTime(rate, tr);
+  rest.playbackRate.exponentialRampToValueAtTime(to, end);
+  // The vibrato runs whole cycles up to the handover, so it has moved the loop neither ahead nor behind there.
   const lfo = ctx.createOscillator(), depth = ctx.createGain();
-  lfo.frequency.value = hz;
-  depth.gain.setValueAtTime(cents, t);
-  depth.gain.linearRampToValueAtTime(centsEnd, end);
+  lfo.frequency.value = Math.max(1, Math.round(hz * (tr - t))) / (tr - t);
+  depth.gain.value = cents;
   lfo.connect(depth);
-  depth.connect(src.detune);
+  depth.connect(held.detune);
+  depth.connect(rest.detune);
+  const heldGain = ctx.createGain(), restGain = ctx.createGain();
+  heldGain.gain.setValueAtTime(1, tr);
+  heldGain.gain.linearRampToValueAtTime(0, tr + fade);
+  restGain.gain.setValueAtTime(0, tr);
+  restGain.gain.linearRampToValueAtTime(1, tr + fade);
   const tone = ctx.createBiquadFilter();
   tone.type = "lowpass";
   // A param holds its default until its first event, so each is set from t too, not only from the sag.
   tone.frequency.setValueAtTime(9000, t);
-  tone.frequency.setValueAtTime(9000, t2);
+  tone.frequency.setValueAtTime(9000, tr);
   tone.frequency.exponentialRampToValueAtTime(1500, end);
   const g = ctx.createGain();
   g.gain.setValueAtTime(dry, t);
-  g.gain.setValueAtTime(dry, t2);
+  g.gain.setValueAtTime(dry, tr);
   g.gain.exponentialRampToValueAtTime(dry * far, end);
-  src.connect(tone);
+  held.connect(heldGain);
+  rest.connect(restGain);
+  heldGain.connect(tone);
+  restGain.connect(tone);
   tone.connect(g);
   g.connect(out);
   const d = ctx.createDelay(1), f = ctx.createBiquadFilter(), e = ctx.createGain();
@@ -211,10 +232,13 @@ function cry(ctx, out, t, clip) {
   d.connect(f);
   f.connect(e);
   e.connect(out);
-  src.start(t);
+  held.start(t);
+  held.stop(tr + fade + 0.01);
+  rest.start(tr, b);
   lfo.start(t);
   lfo.stop(end + 0.3);
-  return { end: end + delay };
+  // The rest of the file plays out at about `to` after the sag.
+  return { end: end + Math.max(0, clip.duration - b - sag * (rate - to) / Math.log(rate / to)) / to + delay };
 }
 
 // A one-shot from layers: [hiss or tone, options] each. Returns { end }.
@@ -384,7 +408,7 @@ export const RECIPES = {
     [tone, { f: 90, f1: 35, peak: 0.5, a: 0.003, d: 0.3 }],
   ]),
   // "Nooo!": lost in space, the alien screams as it drifts away (see cry).
-  scream: (ctx, out) => voiced(ctx, out, nooo, cry, 1.7),
+  scream: (ctx, out) => voiced(ctx, out, nooo, cry, 2.2),
   // "Sun kill!": the recorded line, deeper and with an arena echo. The first call may come before the file
   // is decoded; it then plays as soon as it is, unless that is too late to still belong to the kill.
   announcer: (ctx, out) => voiced(ctx, out, sunKill, say, 1.5),

@@ -121,6 +121,11 @@ export const COLOURS = [0xffd23f, 0xe8505b, 0x4fb0e8, 0x6fd36b, 0xb06fe8, 0xff8a
 
 // What being hit and kills look like (seconds unless noted). Looks only. Vignette: full strength at `full`
 // damage, never above `max`; the bar over a hit player flashes white for `flash`.
+// Looks of a flying asteroid: `trail` drawn positions kept behind it, `glow` the hot shell's size as a
+// multiple of the rock's radius and `glowOpacity` how solid it is, `trailSize` the m across of each trail
+// dot, colours as hex.
+export const ROCK_LOOK = { trail: 60, trailSize: 1.6, glow: 1.3, glowOpacity: 0.25, rock: 0x3a3330, hot: 0xff7a1f, trailColor: 0xffa040 };
+
 export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade: 1, feedFor: 5, flash: 0.15, feedMax: 6 };
 
 // Online play. Ticks unless noted: maxLag, history, rejoin, unreachable and smooth are seconds, snap is metres.

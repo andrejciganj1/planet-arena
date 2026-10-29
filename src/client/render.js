@@ -2,7 +2,7 @@
 // players, shots and blasts, and the weapon in view. It only reads the world; drawing happens between the
 // last two ticks (alpha) so motion stays smooth on screens faster than the 60 Hz simulation.
 import * as THREE from "three";
-import { PLAYER, DUMMY, ROCKET, PAD_CUE, BELT, TICK, PICKUPS, WEAPONS, FEEDBACK } from "../tuning.js";
+import { PLAYER, DUMMY, ROCKET, PAD_CUE, BELT, TICK, PICKUPS, WEAPONS, FEEDBACK, ASTEROID, ROCK_LOOK } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
 import { pickupReady } from "../sim/pickups.js";
 import { posesAt } from "../sim/system.js";
@@ -350,6 +350,31 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const blastGeo = new THREE.SphereGeometry(1, 16, 12);
   const shots = [], blasts = [], beams = [];
   const pooled = (list, make) => (i) => list[i] || (list[i] = (() => { const m = make(); scene.add(m); return m; })());
+  // Flying asteroids: a dark rough rock in a faint orange shell, and a fading streak of where it has been.
+  // The trail is kept per rock id and dropped with the rock.
+  const rockGeo = new THREE.DodecahedronGeometry(ASTEROID.radius, 0);
+  const rockMat = new THREE.MeshLambertMaterial({ color: ROCK_LOOK.rock, emissive: ROCK_LOOK.hot, emissiveIntensity: 0.35, flatShading: true });
+  const glowGeo = new THREE.SphereGeometry(ASTEROID.radius * ROCK_LOOK.glow, 12, 8);
+  const glowMat = new THREE.MeshBasicMaterial({ color: ROCK_LOOK.hot, transparent: true, opacity: ROCK_LOOK.glowOpacity, depthWrite: false });
+  const rockTrails = new Map(); // rock id -> { mesh, line, pts: [x, y, z, ...] newest first, seen }
+  const rockTrail = (id) => {
+    let k = rockTrails.get(id);
+    if (!k) {
+      const mesh = new THREE.Mesh(rockGeo, rockMat);
+      mesh.add(new THREE.Mesh(glowGeo, glowMat));
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * ROCK_LOOK.trail), 3));
+      geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(3 * ROCK_LOOK.trail), 3));
+      // Points, not a line: a line is one pixel wide and vanishes at distance. Close together they read as a streak.
+      const line = new THREE.Points(geo, new THREE.PointsMaterial({ size: ROCK_LOOK.trailSize, vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      line.frustumCulled = false;
+      scene.add(mesh, line);
+      rockTrails.set(id, (k = { mesh, line, pts: [], seen: 0 }));
+    }
+    return k;
+  };
+  const hot = new THREE.Color(ROCK_LOOK.trailColor);
+  let rockFrame = 0;
   const figures = [];
   const figure = pooled(figures, dummyMesh); // everyone but you
   const flashAt = {}; // entity id -> when its bar began to flash (real seconds: the match clock can go back)
@@ -485,6 +510,32 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         m.quaternion.setFromUnitVectors(Y, v3(norm(s.vel)));
       }
       for (; i < shots.length; i++) shots[i].visible = false;
+      const frameNo = ++rockFrame;
+      for (const a of world.asteroids) {
+        const k = rockTrail(a.id);
+        k.seen = frameNo;
+        k.mesh.position.copy(v3(a.pos));
+        k.mesh.rotation.set(a.age, a.age * 0.7, 0); // tumbling, from its age so it needs no state
+        // One trail point per frame, but not while paused or drawn twice at the same spot.
+        const [x, y, z] = a.pos, last = k.pts;
+        if (!last.length || last[0] !== x || last[1] !== y || last[2] !== z) last.unshift(x, y, z);
+        last.length = Math.min(last.length, 3 * ROCK_LOOK.trail);
+        const n = last.length / 3, pos = k.line.geometry.attributes.position, col = k.line.geometry.attributes.color;
+        pos.array.set(last);
+        for (let j = 0; j < n; j++) {
+          const f = 0.5 * (1 - j / n) ** 1.5; // additive dots pile up, so start dim or the near end whites out
+          col.array.set([hot.r * f, hot.g * f, hot.b * f], 3 * j);
+        }
+        pos.needsUpdate = col.needsUpdate = true;
+        k.line.geometry.setDrawRange(0, n);
+      }
+      for (const [id, k] of rockTrails) {
+        if (k.seen === frameNo) continue;
+        scene.remove(k.mesh, k.line);
+        k.line.geometry.dispose();
+        k.line.material.dispose();
+        rockTrails.delete(id);
+      }
       i = 0;
       for (const x of world.explosions) {
         const m = blast(i++), k = x.age / ROCKET.showFor;

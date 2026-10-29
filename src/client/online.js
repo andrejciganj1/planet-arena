@@ -55,6 +55,9 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
   // age what is on screen, and a hidden tab runs none, so until then they are aged and dropped by the
   // snapshots' clock instead.
   let heard = [], newest = 0; // newest: the latest snapshot's t
+  // Rocks whose blast or burn has been heard: the view samples slightly older snapshots, which still list
+  // them, so they are held back from drawing.
+  const gone = new Set();
   const showFor = { beams: tuning.WEAPONS.railgun.showFor, explosions: tuning.ROCKET.showFor };
   save("localStorage", NAME, name);
 
@@ -73,6 +76,7 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
     Object.assign(view, { selfId: id, entities: {}, projectiles: [], beams: [], explosions: [], players: {}, scores: {}, pickups: {}, cues: {}, asteroids: [] });
     own = [];
     heard = [];
+    gone.clear();
     drawn.clear();
     acc = nudge = 0;
     nudgedAt = -Infinity;
@@ -107,6 +111,7 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
       heard.push({ list: "beams", item: b, at: msg.t - b.age });
     }
     for (const ev of msg.events) {
+      if ((ev.type === "explode" || ev.type === "burn") && ev.id?.startsWith("rock.")) gone.add(ev.id);
       if (ev.type === "explode" && drawn.has(ev.id)) continue; // your own rocket, drawn when it hit here
       if (ev.type === "explode" || (ev.type === "death" && ev.cause !== "void")) heard.push({ list: "explosions", item: { pos: ev.pos, age: 0 }, at: msg.t });
       view.events.push(ev);
@@ -179,7 +184,7 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
     view.projectiles = own.concat(seen.shots.filter((s) => s.owner !== id));
     // Rocks only from the server, as they were at the others' view time: the view never steps the world, so
     // it launches none, and your shots meet them where you see them (the server rewinds them to the same).
-    view.asteroids = seen.rocks;
+    view.asteroids = seen.rocks.filter((k) => !gone.has(k.id));
     refreshCues(view);
   }
 

@@ -262,3 +262,22 @@ test("a cosmetic world never sets a rock off: your rocket's blast beside one lea
   assert.deepEqual(w.events.map((e) => e.id), ["me.1.0", "me.2.0"], "only your rockets' blasts");
   assert.equal(w.projectiles.length, 0);
 });
+
+test("a rock stops being drawn once its blast or burn is heard, even if an older snapshot still lists it", () => {
+  for (const type of ["explode", "burn"]) {
+    const r = room();
+    const { join, frame } = play(r);
+    const a = join("Ana", () => NO_INPUT);
+    const w = a.g.world;
+    for (let f = 0; f < 10; f++) frame();
+    r.game.world.asteroids.push({ id: "rock.99", pos: [0, 80, 0], vel: [3, 0, 0], age: 0, owner: null });
+    for (let f = 0; f < 20 && !w.asteroids.some((x) => x.id === "rock.99"); f++) frame();
+    assert.ok(w.asteroids.some((x) => x.id === "rock.99"), `${type}: the rock is drawn`);
+    // The event arrives in a snapshot that still lists the rock, as the server's blast does.
+    const last = r.sent.at(-1);
+    assert.ok(last.rocks.some((k) => k.id === "rock.99"), "the snapshot lists the rock");
+    r.deliver({ ...last, tick: last.tick + 1, t: last.t + TICK, events: [{ type, id: "rock.99", pos: [0, 80, 0] }] });
+    a.g.frame(TICK, () => NO_INPUT);
+    assert.ok(!w.asteroids.some((x) => x.id === "rock.99"), `${type}: no longer drawn`);
+  }
+});

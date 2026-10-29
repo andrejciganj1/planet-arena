@@ -441,34 +441,39 @@ export const RECIPES = {
     [hiss, { filter: ["highpass", 4000], peak: 0.25, d: 0.01 }],
     [tone, { wave: "triangle", f: 600, f1: 1400, peak: 0.15, d: 0.08 }],
   ]),
-  // Being reeled in: zipper teeth (pulsed noise) through a resonance that rises like a bottle filling, the
-  // teeth speeding up with it. The level falls as the band widens, so the loop stays even.
+  // Being reeled in: soft zipper teeth (gently pulsed noise) through a resonance that rises like a bottle
+  // filling, the teeth speeding up with it. Kept under the other sounds: a narrow, slow rise that ends low, a
+  // lowpass over it and a sine pulse instead of a square, so it never whines. The level falls as the band
+  // rises, so the loop stays even.
   hookPull: (ctx, out) => looped(ctx, out, (g, t) => {
-    const rise = 1.0; // s, the time constant of the rise
+    const rise = 1.4, lo = 380, hi = 1300; // s, the time constant of the rise; Hz, where the band starts and ends
     const band = ctx.createBiquadFilter();
     band.type = "bandpass";
-    band.Q.value = 4;
-    band.frequency.setValueAtTime(450, t);
-    band.frequency.setTargetAtTime(2600, t, rise);
+    band.Q.value = 3;
+    band.frequency.setValueAtTime(lo, t);
+    band.frequency.setTargetAtTime(hi, t, rise);
+    const soft = ctx.createBiquadFilter();
+    soft.type = "lowpass";
+    soft.frequency.value = 2200;
     const teeth = ctx.createGain();
-    teeth.gain.value = 0.5; // the pulse below swings it 0..1
+    teeth.gain.value = 0.7; // the pulse below swings it 0.4..1
     const even = ctx.createGain();
-    even.gain.setValueAtTime(1.7, t);
-    even.gain.setTargetAtTime(1.7 * Math.sqrt(450 / 2600), t, rise);
+    even.gain.setValueAtTime(0.65, t);
+    even.gain.setTargetAtTime(0.65 * Math.sqrt(lo / hi), t, rise);
     const n = noise(ctx);
     n.connect(teeth);
     teeth.connect(band);
-    band.connect(even);
+    band.connect(soft);
+    soft.connect(even);
     even.connect(g);
     n.start(t, rand(0, 1.5));
-    const pulse = wobble(ctx, teeth.gain, t, 24, 0.5, "square");
-    pulse.frequency.setTargetAtTime(42, t, rise);
-    // The bottle's note, rising with the band.
+    const pulse = wobble(ctx, teeth.gain, t, 18, 0.3);
+    pulse.frequency.setTargetAtTime(28, t, rise);
+    // The bottle's note, rising with the band, a faint sine.
     const note = ctx.createOscillator();
-    note.type = "triangle";
-    note.frequency.setValueAtTime(300, t);
-    note.frequency.setTargetAtTime(1200, t, rise);
-    return [n, pulse, bed(ctx, g, t, note, null, 0.035)];
+    note.frequency.setValueAtTime(260, t);
+    note.frequency.setTargetAtTime(700, t, rise);
+    return [n, pulse, bed(ctx, g, t, note, null, 0.015)];
   }),
   // The booster: a steady breathy jet over a low rumble, with a fast flutter.
   boost: (ctx, out) => looped(ctx, out, (g, t) => {

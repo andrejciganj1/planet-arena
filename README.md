@@ -22,7 +22,7 @@ planet or moon. A flying rock explodes like a rocket on a planet, moon, comet or
 sets one off, with the blast counted as the shooter's. Online, the server decides where they go.
 
 Shots hit two spheres on a player, the head (the bubble helmet) and the body, so aim at the middle.
-Floating in space no longer kills; only leaving the system (460 m from the sun) does.
+Floating in space no longer kills; only leaving the system (600 m from the sun) does.
 
 ## Start it
 

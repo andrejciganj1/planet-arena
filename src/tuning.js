@@ -3,7 +3,7 @@
 
 export const TICK = 1 / 60;
 export const MAX_TICKS = 5; // per frame; a slow frame or hidden tab drops time instead of catching up
-export const VOID_RADIUS = 460; // from the sun; beyond it you are lost in space (the far comet reaches 376)
+export const VOID_RADIUS = 600; // from the sun; beyond it you are lost in space (the far comet reaches 376)
 
 // g is the full pull within `reach` of the core, falling off as g * (reach / d)^2 beyond. Planets and
 // moons keep it to 1.75x their radius, so a rocket blast or a booster burn doesn't easily throw you off.

@@ -7,10 +7,19 @@ test("a failed decode is tried again on the next load, not remembered for the se
   const warn = console.warn;
   console.warn = () => {};
   let calls = 0;
-  const ctx = { decodeAudioData: async () => { if (++calls === 1) throw new Error("bad"); return { duration: 1 }; } };
+  // As a browser does, decoding detaches the bytes it was given, so a retry needs bytes of its own.
+  const ctx = {
+    decodeAudioData: async (b) => {
+      if (b.byteLength === 0) throw new Error("detached");
+      structuredClone(b, { transfer: [b] });
+      if (++calls === 1) throw new Error("bad");
+      return { duration: 1 };
+    },
+  };
+  const bytes = new ArrayBuffer(8); // the page fetches the file once
   try {
-    await loadVoice(ctx, new ArrayBuffer(8));
-    await loadVoice(ctx, new ArrayBuffer(8));
+    await loadVoice(ctx, bytes);
+    await loadVoice(ctx, bytes);
   } finally {
     console.warn = warn;
   }

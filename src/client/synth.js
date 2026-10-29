@@ -102,7 +102,7 @@ let line = null, decoding = null;
 export function loadVoice(ctx, bytes = voiceBytes) {
   if (line) return Promise.resolve();
   decoding ??= Promise.resolve(bytes)
-    .then((b) => b && ctx.decodeAudioData(b))
+    .then((b) => b && ctx.decodeAudioData(b.slice(0))) // decoding detaches what it is given; keep ours for a retry
     .then((buf) => {
       line = buf || null;
       if (!line) decoding = null;

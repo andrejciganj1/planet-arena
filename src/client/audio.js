@@ -9,11 +9,12 @@ import { RECIPES, LOOPS, loadVoice } from "./synth.js";
 export const audible = (d) => d <= SOUND.range;
 
 // Loops skip the limiter (they hold, they don't burst), so a swarm of rockets is capped here instead: the
-// SOUND.maxLoops nearest the listener; one in your head (pos null) is nearest of all.
-export function nearest(want, ear, max = SOUND.maxLoops) {
+// SOUND.maxLoops nearest the listener; one in your head (pos null) is nearest of all. One already `playing`
+// counts SOUND.loopKeep m nearer, so two at nearly the same distance don't swap (and restart) every frame.
+export function nearest(want, ear, max = SOUND.maxLoops, playing = new Set()) {
   if (want.size <= max) return want;
-  const d = (s) => (s.pos ? dist(s.pos, ear) : -1);
-  return new Map([...want].sort((a, b) => d(a[1]) - d(b[1])).slice(0, max));
+  const d = ([key, s]) => (s.pos ? dist(s.pos, ear) : -1) - (playing.has(key) ? SOUND.loopKeep : 0);
+  return new Map([...want].sort((a, b) => d(a) - d(b)).slice(0, max));
 }
 
 // The limiter's memory: when each playing voice ends, and when each name from each source last played.
@@ -142,7 +143,7 @@ export function createAudio({ AudioContextImpl = globalThis.AudioContext, preloa
     // The loops that should sound now, keyed per instance: new ones start, gone ones fade, the rest move.
     setLoops: guard((all) => {
       if (!ctx) return;
-      const on = live(), want = nearest(all, ear);
+      const on = live(), want = nearest(all, ear, SOUND.maxLoops, loops);
       for (const [key, l] of loops) {
         const s = want.get(key);
         if (!on || !s || s.name !== l.name || far(s)) stopLoop(key);

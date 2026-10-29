@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createSettings } from "../src/client/settings.js";
+import { createSettings, TOGGLES, toggleText } from "../src/client/settings.js";
 
 const memory = () => {
   const m = new Map();
@@ -52,4 +52,15 @@ test("sound and hits are on by default and toggle like the others", () => {
     assert.equal(s.toggle(name), false);
     assert.equal(s.get(name), false);
   }
+});
+
+test("O, P, M and H each toggle a setting and say which way it went", () => {
+  assert.deepEqual(TOGGLES, { KeyO: "orbits", KeyP: "cues", KeyM: "sound", KeyH: "hits" });
+  assert.equal(toggleText("orbits", false), "Orbit lines off");
+  assert.equal(toggleText("orbits", true), "Orbit lines on");
+  assert.equal(toggleText("cues", false), "Pad cues off");
+  assert.equal(toggleText("sound", false), "Sound off");
+  assert.equal(toggleText("sound", true), "Sound on");
+  assert.equal(toggleText("hits", false), "Hit sound off");
+  assert.equal(toggleText("hits", true), "Hit sound on");
 });

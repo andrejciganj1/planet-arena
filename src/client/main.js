@@ -10,7 +10,7 @@ import { createWorld, advance } from "../sim/world.js";
 import { NO_INPUT } from "../sim/entity.js";
 import { createInput } from "./input.js";
 import { createRenderer } from "./render.js";
-import { createSettings } from "./settings.js";
+import { createSettings, TOGGLES, toggleText } from "./settings.js";
 import { createHud, askName } from "./hud.js";
 import { createOnlineGame, storedName } from "./online.js";
 import { createDirector, heard } from "./sounds.js";
@@ -71,15 +71,16 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault(); // focus stays on the game
     hud.scores(true);
   }
-  // O and P work on the start screen too; only your own screen changes.
-  if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.code === "KeyO" || e.code === "KeyP")) {
-    settings.toggle(e.code === "KeyO" ? "orbits" : "cues");
+  // O, P, M and H work on the start screen too; only your own screen and sound change. The director reads
+  // "hits" every frame. A toast says which way it went (M and H show nothing else).
+  const toggle = TOGGLES[e.code];
+  if (toggle && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const on = settings.toggle(toggle);
     applyShown();
-  }
-  // M and H likewise; the director reads "hits" every frame.
-  if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.code === "KeyM" || e.code === "KeyH")) {
-    settings.toggle(e.code === "KeyM" ? "sound" : "hits");
     applySound();
+    // On the clock frame() hands the HUD: a frame's time can be just before now, and a toast "from the
+    // future" would be hidden at once.
+    hud.toast(toggleText(toggle, on), last / 1000);
   }
   if (!locked) return;
   if (e.code === "Space") e.preventDefault();

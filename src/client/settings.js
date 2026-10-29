@@ -4,6 +4,11 @@
 const KEY = "planet-arena.settings";
 const DEFAULTS = { orbits: true, cues: true };
 
+// The keys that toggle a setting, and what the toast says after (M and H change nothing on screen).
+export const TOGGLES = { KeyO: "orbits", KeyP: "cues", KeyM: "sound", KeyH: "hits" };
+const LABELS = { orbits: "Orbit lines", cues: "Pad cues", sound: "Sound", hits: "Hit sound" };
+export const toggleText = (name, on) => `${LABELS[name]} ${on ? "on" : "off"}`;
+
 export function createSettings(storage) {
   const values = { ...DEFAULTS };
   try {

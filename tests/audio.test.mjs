@@ -117,6 +117,24 @@ test("past SOUND.maxLoops only the loops nearest the listener sound", () => {
   assert.deepEqual([...nearest(few, ear).keys()].sort(), [...few.keys()].sort());
 });
 
+test("at the loop cap a playing loop keeps its place unless a newcomer is clearly nearer", () => {
+  const ear = [0, 0, 0], max = 2;
+  const rock = (x) => ({ name: "rockIncoming", pos: [x, 0, 0], own: false });
+  const playing = new Set(["a", "b"]);
+  // c is a little nearer than b: b plays on rather than the two swapping every frame.
+  const want = new Map([["a", rock(10)], ["b", rock(50)], ["c", rock(50 - SOUND.loopKeep / 2)]]);
+  assert.deepEqual([...nearest(want, ear, max, playing).keys()].sort(), ["a", "b"]);
+  // Back and forth around b's distance, nothing restarts.
+  want.set("c", rock(50 + SOUND.loopKeep / 2));
+  assert.deepEqual([...nearest(want, ear, max, playing).keys()].sort(), ["a", "b"]);
+  // Nearer by more than the margin: c takes b's place.
+  want.set("c", rock(50 - SOUND.loopKeep * 2));
+  assert.deepEqual([...nearest(want, ear, max, playing).keys()].sort(), ["a", "c"]);
+  // Nothing playing yet: plain nearest.
+  want.set("c", rock(50 - SOUND.loopKeep / 2));
+  assert.deepEqual([...nearest(want, ear, max).keys()].sort(), ["a", "c"]);
+});
+
 test("the engine reports its state for the page check: waiting, running or disabled", () => {
   const param = () => ({ value: 0, setTargetAtTime() {} });
   const node = () => ({ connect() {}, disconnect() {}, gain: param(), threshold: param(), knee: param(), ratio: param(), attack: param(), release: param() });

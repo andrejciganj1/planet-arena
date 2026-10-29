@@ -102,6 +102,8 @@ export function createHud(root, online = false) {
   };
 
   return {
+    // A short line in the middle of the screen. now: real seconds, as in update.
+    toast: say,
     // Tab held: the scoreboard (online only).
     scores(on) {
       boardOn = on && online;

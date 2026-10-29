@@ -33,6 +33,11 @@ python3 -I tools/serve.py 8100
 Then open http://localhost:8100 in a desktop browser and click the page to capture the mouse
 (Esc lets it go).
 
+To hear every sound on its own, open http://localhost:8100/sounds.html (linked from nowhere in the game).
+The sounds are made in the browser (`src/client/synth.js`). To check them without listening (Playwright
+through `npx`): `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/sound_check.cjs "http://localhost:8100/sounds.html"`
+prints each sound's level and length and `OK` when all are audible, unclipped and short (loops steady).
+
 ## Play online
 
 Open the game from the hosted page (GitHub Pages) and type a name; you join the shared match. To use another

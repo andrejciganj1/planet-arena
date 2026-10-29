@@ -131,8 +131,12 @@ export const ROCK_LOOK = { trail: 60, trailSize: 1.6, glow: 1.3, glowOpacity: 0.
 // are only remembered, not played (a hidden tab coming back); stride: m walked per footstep; stepSpeed: m/s
 // below which walking is silent; maxVoices at once; repeat: s between two plays of one name;
 // announcerOthers: the gain of a sun kill that isn't yours; hold: s a booster hiss outlasts the last fuel
-// drop seen, as others' fuel arrives in steps with the snapshots.
-export const SOUND = { range: 120, near: 6, own: 1, others: 0.7, gap: 0.5, stride: 1.6, stepSpeed: 2, maxVoices: 24, repeat: 0.05, announcerOthers: 0.4, hold: 0.15 };
+// drop seen, as others' fuel arrives in steps with the snapshots; voice: s a sound counts as playing until
+// it reports its real end (the longest one-shot); master: the overall gain before the compressor.
+export const SOUND = {
+  range: 120, near: 6, own: 1, others: 0.7, gap: 0.5, stride: 1.6, stepSpeed: 2, maxVoices: 24, repeat: 0.05,
+  announcerOthers: 0.4, hold: 0.15, voice: 1.5, master: 0.8,
+};
 
 export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade: 1, feedFor: 5, flash: 0.15, feedMax: 6 };
 

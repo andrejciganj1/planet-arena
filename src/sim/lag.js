@@ -1,5 +1,5 @@
 // Lag compensation: where the shooter saw a target when they pulled the trigger. The server keeps a short
-// history of every entity and rewinds hits to the shooter's view delay.
+// history of every entity and asteroid and rewinds hits to the shooter's view delay.
 import { add, sub, lerp, norm } from "./vec.js";
 
 // Called at the end of each world step. Planets are not stored: they are scripted from the clock, so a
@@ -13,7 +13,9 @@ export function record(world) {
       pos: [...e.pos], up: [...e.up], groundId: e.groundId, rel: e.groundId ? sub(e.pos, world.poses[e.groundId].pos) : null,
     };
   }
-  world.history.push({ t: world.t, ents });
+  const rocks = {};
+  for (const r of world.asteroids || []) rocks[r.id] = [...r.pos];
+  world.history.push({ t: world.t, ents, rocks });
   while (world.history[0].t < world.t - NET.history) world.history.shift();
 }
 
@@ -44,4 +46,16 @@ export function seenPose(world, e, lag) {
     }
   } else if (a && !b) rec = a;
   return { pos: placeRec(rec, world.poses), up: rec.up };
+}
+
+// Where the shooter saw a rock `lag` seconds ago (capped). Rocks fly free, so a plain lerp between records.
+export function seenRock(world, rock, lag) {
+  const h = world.history;
+  if (!(lag > 0) || !h?.length) return rock.pos;
+  const at = world.t - Math.min(lag, world.tuning.NET.maxLag);
+  let i = h.length - 1;
+  while (i > 0 && h[i].t > at) i--;
+  const a = h[i].rocks?.[rock.id], b = h[i + 1]?.rocks?.[rock.id];
+  if (a && b) return lerp(a, b, Math.min(1, Math.max(0, (at - h[i].t) / (h[i + 1].t - h[i].t))));
+  return b || a || rock.pos;
 }

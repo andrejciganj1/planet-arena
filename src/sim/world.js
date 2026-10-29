@@ -1,5 +1,5 @@
-// The whole simulation: bodies on the clock, entities, deaths in the sun and the void, respawns, and
-// the fixed 60 Hz tick driven from real elapsed time.
+// The whole simulation: bodies on the clock, entities, asteroids, deaths in the sun and the void, respawns,
+// and the fixed 60 Hz tick driven from real elapsed time.
 import { createSystem, posesAt } from "./system.js";
 import { createEntity, standOn, stepEntity, hitCentre, NO_INPUT } from "./entity.js";
 import { surfaceInfo, sphereContacts } from "./collide.js";
@@ -8,6 +8,7 @@ import { fire, stepProjectiles } from "./weapons.js";
 import { record } from "./lag.js";
 import { stepPickups } from "./pickups.js";
 import { stepHook } from "./hook.js";
+import { stepAsteroids } from "./asteroids.js";
 import { add, scale, dist, norm, anyPerpendicular } from "./vec.js";
 
 // Spawn candidates: an evenly spread, fixed list of directions (Fibonacci sphere).
@@ -90,7 +91,7 @@ export function createWorld(tuning, { solo = true } = {}) {
   const poses = posesAt(system, 0);
   const world = {
     tuning, system, t: 0, tick: 0, poses, prevPoses: poses, entities: {}, projectiles: [], explosions: [], beams: [],
-    pads: tuning.PADS, cues: {}, events: [], history: [], spawns: 0, rand: seeded(1), pickups: {},
+    pads: tuning.PADS, cues: {}, events: [], history: [], spawns: 0, rand: seeded(1), pickups: {}, asteroids: [], rocksLaunched: 0,
     solo, players: {}, scores: {}, noCues: !solo, // the server has no use for pad cues
   };
   if (solo) {
@@ -179,6 +180,7 @@ export function stepWorld(world, inputs, dt) {
   }
   stepPickups(world);
   stepProjectiles(world, dt);
+  stepAsteroids(world, dt);
   if (!world.noCues) refreshCues(world);
 
   const sun = world.system.bodies.find((b) => b.kind === "sun");

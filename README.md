@@ -8,12 +8,12 @@ From the sun outwards: the hot red planet (close to the sun, so watch your footi
 planet, the mid blue planet where you start, the asteroid belt, the big heavy orange planet with its
 moon, the light purple giant with its ring, and the small teal far planet, where the sniper rifle is.
 
-Four comets loop round the sun on tilted, stretched paths, fast near the sun and slow far out. Fly into
-one (or let it sweep into you) and you land on it; ride it, and jump off when it passes near a planet.
-The two fast comets pass the hot and tiny planets often, but hopping off near the sun takes good
-boosting. The slow one passes the heavy or giant planet every few minutes, where a plain jump gets you
-off. The fourth swings out to almost 400 m, past the far planet's path, on a 14-minute lap. Stay on too
-long and any of them carries you close to the sun.
+Four comets loop round the sun on tilted, stretched paths, quickest near the sun but never crawling far
+out. Fly into one (or let it sweep into you) and you land on it; ride it, and jump off when it passes near a
+planet. The two fast comets (80 s laps) pass the hot and tiny planets often, but hopping off near the sun
+takes good boosting. The slow one shares the heavy planet's 5-minute lap and passes it every time round,
+where a plain jump gets you off. The fourth swings out to about 375 m, past the far planet's path, also on
+a 5-minute lap. Stay on too long and any of them carries you close to the sun.
 
 The asteroid belt between the mid and heavy planets' paths and the giant's ring are scenery: you fly
 straight through them.

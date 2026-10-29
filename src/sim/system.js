@@ -1,6 +1,6 @@
 // The solar system's bodies and where they are at a given match time. Orbits are scripted from the clock
-// alone, so every machine computes the same positions: circles in the XZ plane for planets and the moon,
-// tilted ellipses with Kepler timing (fast near the sun, slow far out) for comets.
+// alone, so every machine computes the same positions: circles in the XZ plane for planets and moons,
+// tilted ellipses for comets. Comet timing is softened Kepler (see ellipse), so far out they don't crawl.
 
 import { add } from "./vec.js";
 
@@ -8,13 +8,16 @@ const DEG = Math.PI / 180;
 
 // Position and velocity on a tilted ellipse round the parent: the orbit in its own plane (x towards the
 // closest point), turned by arg within that plane, tilted by inc, then turned about y by node.
-function ellipse({ peri, apo, period, phase, inc, node, arg }, t) {
+// Timing: M = E - kepler * e * sin E. kepler 1 is Kepler's law (very fast at peri, a crawl at apo); 0 moves
+// evenly in E. In between keeps a rush past the sun without the long slow stretch far out.
+function ellipse({ peri, apo, period, phase, inc, node, arg, kepler }, t) {
   const a = (peri + apo) / 2, e = (apo - peri) / (apo + peri), b = a * Math.sqrt(1 - e * e), n = (2 * Math.PI) / period;
   // Mean anomaly wrapped first, so hours into a match it stays exact.
   const M = (((phase + n * t) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
   let E = M;
-  for (let i = 0; i < 12; i++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
-  const dE = n / (1 - e * Math.cos(E));
+  const k = kepler * e;
+  for (let i = 0; i < 12; i++) E -= (E - k * Math.sin(E) - M) / (1 - k * Math.cos(E));
+  const dE = n / (1 - k * Math.cos(E));
   const turn = ([x, y]) => {
     const cw = Math.cos(arg * DEG), sw = Math.sin(arg * DEG), ci = Math.cos(inc * DEG), si = Math.sin(inc * DEG);
     const cn = Math.cos(node * DEG), sn = Math.sin(node * DEG);

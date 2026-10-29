@@ -79,15 +79,18 @@ test("a comet's distance from the sun runs from peri to apo", () => {
   }
 });
 
-test("a comet is fast near the sun and slow far out", () => {
+// Each comet's fastest speed (m/s) under the old Kepler timing, measured before the change to a more even speed.
+const keplerTop = { "comet-a": 10.14, "comet-b": 9.16, "comet-c": 3.39, "comet-d": 5.07 };
+
+test("comets keep a more even speed: fastest at most 2.5x slowest, and near the sun about as fast as before", () => {
   for (const c of comets) {
-    let near = null, far = null;
+    let lo = Infinity, hi = 0;
     for (let t = 0; t < c.orbit.period; t += 0.05) {
-      const p = posesAt(system, t)[c.id], d = len(p.pos);
-      if (!near || d < near.d) near = { d, v: len(p.vel) };
-      if (!far || d > far.d) far = { d, v: len(p.vel) };
+      const v = len(posesAt(system, t)[c.id].vel);
+      (lo = Math.min(lo, v)), (hi = Math.max(hi, v));
     }
-    assert.ok(near.v > 3 * far.v, `${c.id}: ${near.v} near, ${far.v} far`);
+    assert.ok(hi <= 2.5 * lo, `${c.id}: ${hi} fastest, ${lo} slowest`);
+    assert.ok(hi >= 0.75 * keplerTop[c.id], `${c.id}: fastest ${hi}, was ${keplerTop[c.id]}`);
   }
 });
 

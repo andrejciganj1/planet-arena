@@ -3,7 +3,7 @@
 
 export const TICK = 1 / 60;
 export const MAX_TICKS = 5; // per frame; a slow frame or hidden tab drops time instead of catching up
-export const VOID_RADIUS = 460; // from the sun; beyond it you are lost in space (the far comet reaches 400)
+export const VOID_RADIUS = 460; // from the sun; beyond it you are lost in space (the far comet reaches 376)
 
 // g is the full pull within `reach` of the core, falling off as g * (reach / d)^2 beyond. Planets and
 // moons keep it to 1.75x their radius, so a rocket blast or a booster burn doesn't easily throw you off.
@@ -26,15 +26,18 @@ export const BODIES = [
   { id: "ring-moon", kind: "moon", radius: 3, g: 3, reach: 5.25, hold: 4, orbit: { around: "giant", radius: 32, period: 90, phase: 0.19 }, color: 0xc9bde0 },
   { id: "outer-moon", kind: "moon", radius: 4, g: 3, reach: 7, hold: 4, orbit: { around: "giant", radius: 52, period: 140, phase: 4.89 }, color: 0xd8cfae },
   { id: "far", kind: "planet", radius: 5, g: 8.5, reach: 8.75, hold: 6, orbit: { around: "sun", radius: 340, period: 840, phase: 0.7 }, color: 0x6fd3c9 },
-  // Comets: tilted ellipses, peri and apo in metres from the sun, inc/node/arg in degrees, phase in radians
-  // (see system.js). Searched so that over the full CYCLE no comet comes within 3 m of any body and some
-  // comet passes close to some planet at least every 120 s (tests/system.test.mjs). Two fast ones meet the
-  // inner planets often; the slow one (comet-c) passes the heavy or giant planet at least every six minutes;
-  // the far one (comet-d) swings out to 387 m, past the far planet's path, on a 14-minute lap.
-  { id: "comet-a", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 38.8, apo: 260.3, period: 240, phase: 3.39, inc: 12.4, node: 37, arg: 219 }, color: 0xbfe8ff },
-  { id: "comet-b", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 48.8, apo: 256.6, period: 240, phase: 0.019, inc: 22.6, node: 134, arg: 289 }, color: 0xbfe8ff },
-  { id: "comet-c", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 53.8, apo: 247.8, period: 600, phase: 5.633, inc: 11.1, node: 286, arg: 20 }, color: 0xbfe8ff },
-  { id: "comet-d", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 38, apo: 386.7, period: 840, phase: 5.495, inc: 12.4, node: 245, arg: 179 }, color: 0xbfe8ff },
+  // Comets: tilted ellipses, peri and apo in metres from the sun, inc/node/arg in degrees, phase in radians,
+  // kepler how much they rush past the sun and slow far out (1 is Kepler's law, see system.js). Softened so
+  // the fastest point is at most about twice the slowest: far out they no longer crawl, so they lap sooner
+  // and pass by more often. Found by tools/comet_search.mjs so that over the full CYCLE no comet comes within
+  // 3 m of any body and some comet passes close to some planet at least every 120 s (tests/system.test.mjs).
+  // The two fast ones meet the inner planets often on 80 s laps. The slow one (comet-c) shares the heavy
+  // planet's 5-minute lap and crosses its path where the planet is, so it passes it every lap to hop off
+  // onto. The far one (comet-d, also 5 minutes) swings out to 376 m, past the far planet's path.
+  { id: "comet-a", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 34.8, apo: 208.1, period: 80, phase: 0.317, inc: 24.4, node: 142, arg: 307, kepler: 0.41 }, color: 0xbfe8ff },
+  { id: "comet-b", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 41.2, apo: 202.2, period: 80, phase: 4.388, inc: 21.1, node: 281, arg: 246, kepler: 0.28 }, color: 0xbfe8ff },
+  { id: "comet-c", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 74.2, apo: 222.5, period: 300, phase: 2.576, inc: 10.1, node: 87, arg: 333, kepler: 0.34 }, color: 0xbfe8ff },
+  { id: "comet-d", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 44, apo: 375.6, period: 300, phase: 5.435, inc: 14.9, node: 287, arg: 289, kepler: 0.26 }, color: 0xbfe8ff },
 ];
 
 // Looks only, no collisions or gravity: you fly straight through both. The giant's `ring` is in multiples

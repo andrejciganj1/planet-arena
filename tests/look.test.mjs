@@ -193,3 +193,15 @@ test("the sun is in sight unless a body covers it, and half covered reads as par
   assert.equal(sunInSight([88, 0, 0], sun, R, [{ pos: [80, 0, 0], radius: 7 }]), 0);
   assert.equal(sunInSight([72.5, 0, 0], sun, R, [{ pos: [80, 0, 0], radius: 7 }]), 1);
 });
+
+test("the sky counts as painted only when the bake ran clean and left its colour behind", async () => {
+  const { skyPainted } = await import("../src/client/look/skycheck.js");
+  const floor = [5, 6, 13, 255]; // the darkest the sky shader paints, read back as sRGB bytes
+  assert.equal(skyPainted({ pixel: floor, glError: 0 }), true);
+  assert.equal(skyPainted({ pixel: [40, 20, 90, 255], glError: 0 }), true);
+  assert.equal(skyPainted({ error: new Error("no context"), pixel: floor, glError: 0 }), false);
+  assert.equal(skyPainted({ pixel: floor, glError: 0x0506 }), false); // e.g. an incomplete framebuffer
+  assert.equal(skyPainted({ pixel: [0, 0, 0, 255], glError: 0 }), false); // only the clear colour: nothing drew
+  assert.equal(skyPainted({ pixel: [0, 0, 0, 0], glError: 0 }), false);
+  assert.equal(skyPainted({ pixel: null, glError: 0 }), false);
+});

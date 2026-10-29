@@ -4,6 +4,7 @@
 import * as THREE from "three";
 import { LOOK } from "../../tuning.js";
 import { NOISE_GLSL } from "./common.js";
+import { skyPainted } from "./skycheck.js";
 
 export function starfield(rand) {
   const pos = [];
@@ -93,9 +94,34 @@ void main() {
   gl_FragColor = vec4(col, 1.0);
 }`;
 
-// Paints the sky with `renderer` into a cube map for scene.background.
-export function nebulaSky(renderer, cfg = LOOK.sky) {
-  const rt = new THREE.WebGLCubeRenderTarget(cfg.size, { colorSpace: THREE.SRGBColorSpace, generateMipmaps: false });
+// The plain dark backdrop the sky falls back to when it can't be painted.
+export const PLAIN_SPACE = 0x05060d;
+
+// Paints the sky with `renderer` into a cube map and returns the render target (its texture is for
+// scene.background), or null after one warning if it couldn't: the caller then keeps plain space.
+// skip: draws nothing, so the check below sees a failed bake (?debug&nosky, to try the fallback).
+export function nebulaSky(renderer, { cfg = LOOK.sky, skip = false } = {}) {
+  const gl = renderer.getContext();
+  let rt = null, error = null, pixel = null;
+  gl.getError(); // start from no error
+  try {
+    rt = new THREE.WebGLCubeRenderTarget(cfg.size, { colorSpace: THREE.SRGBColorSpace, generateMipmaps: false });
+    paint(renderer, rt, cfg, skip);
+    pixel = new Uint8Array(4);
+    renderer.readRenderTargetPixels(rt, cfg.size >> 1, cfg.size >> 1, 1, 1, pixel, 0);
+  } catch (e) {
+    error = e;
+  }
+  const glError = gl.getError();
+  if (skyPainted({ error, pixel, glError })) return rt;
+  console.warn(`look: the sky could not be painted (${error?.message ?? (glError ? `WebGL error ${glError}` : "nothing drew")}), plain space instead`);
+  try {
+    rt?.dispose();
+  } catch {} // a broken context may refuse even this; nothing more to free
+  return null;
+}
+
+function paint(renderer, rt, cfg, skip) {
   const lin = (hex) => new THREE.Color(hex); // three keeps colours linear
   const dir = (a) => new THREE.Vector3(...a).normalize();
   const g = cfg.galaxy, gd = dir(g.dir);
@@ -116,9 +142,8 @@ export function nebulaSky(renderer, cfg = LOOK.sky) {
     vertexShader, fragmentShader: fragmentShader(cfg.nebulas.length), side: THREE.BackSide, depthTest: false, depthWrite: false,
   });
   const scene = new THREE.Scene(), box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), mat);
-  scene.add(box);
+  if (!skip) scene.add(box);
   new THREE.CubeCamera(0.1, 10, rt).update(renderer, scene);
   box.geometry.dispose();
   mat.dispose();
-  return rt.texture;
 }

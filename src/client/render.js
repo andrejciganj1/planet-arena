@@ -12,7 +12,7 @@ import { posesAt } from "../sim/system.js";
 import { surfaceInfo } from "../sim/collide.js";
 import { add, sub, scale, lerp, norm, cross, dist, rotateAxis, rotateFromTo } from "../sim/vec.js";
 import { rng, v3, Y } from "./look/common.js";
-import { starfield, nebulaSky } from "./look/sky.js";
+import { starfield, nebulaSky, PLAIN_SPACE } from "./look/sky.js";
 import { glowSprite, sunLook } from "./look/sun.js";
 import { sphereMesh, planetRing, orbitLines } from "./look/planets.js";
 import { DUMMY_COLOUR, dummyMesh } from "./look/aliens.js";
@@ -27,8 +27,8 @@ const MAX_PITCH = (89 * Math.PI) / 180;
 const OVERVIEW = [0, 260, 380, 0, 0, 0];
 
 // selfId: your entity, whose eyes the camera uses. Online it is a function, as the id comes with the
-// server's welcome and changes if the server restarts.
-export function createRenderer(world, canvas, fixedView = null, selfId = "player") {
+// server's welcome and changes if the server restarts. noSky: skip painting the sky, to see its fallback.
+export function createRenderer(world, canvas, fixedView = null, selfId = "player", { noSky = false } = {}) {
   const self = typeof selfId === "function" ? selfId : () => selfId;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   // The quality step's level sets the pixel ratio and which effects run; it starts at the top.
@@ -36,8 +36,15 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   let level = quality.level, lastNow = null;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOOK.quality.ratio[level]));
   const scene = new THREE.Scene();
-  scene.background = nebulaSky(renderer);
+  // The sky is painted once; plain space if it can't be. A lost and restored WebGL context loses the painting
+  // too (three remakes its own resources, not what was drawn into them), so it is painted again.
+  const paintSky = () => {
+    const sky = nebulaSky(renderer, { skip: noSky });
+    scene.background = sky ? sky.texture : new THREE.Color(PLAIN_SPACE);
+  };
+  paintSky();
   scene.backgroundIntensity = LOOK.sky.intensity;
+  canvas.addEventListener("webglcontextrestored", paintSky);
   const camera = new THREE.PerspectiveCamera(80, 1, 0.05, 5000);
   scene.add(camera);
   const rand = rng(7);

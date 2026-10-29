@@ -154,9 +154,10 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // drawn ones. Each nebula: the direction it lies in, its size (radians), the two colours it shades between
 // and a seed for its shape. galaxy: its direction, size (radians to the disc's edge), tilt (degrees from
 // face on) and turn (degrees round the line of sight).
-// sun (look/sun.js): octaves of churn on the surface at each quality level; churn: how fast it moves;
-// corona: how far it reaches, in sun radii; flare: the screen glow's strength looking straight at the sun,
-// drawn from level `flareFrom` up; fade: 1/s, how fast the glow follows the sun going behind a planet.
+// sun (look/sun.js): octaves of churn on the surface and of the corona's streamers at each quality level;
+// churn: how fast the surface moves; corona: how far it reaches, in sun radii; flare: the screen glow's
+// strength looking straight at the sun, drawn from level `flareFrom` up; fade: 1/s, how fast the glow
+// follows the sun going behind a planet.
 export const LOOK = {
   budget: 4_000_000,
   quality: { down: 1 / 50, up: 10, window: 2, pause: 0.25, maxUp: 240, ratio: [1, 1.5, 2] },
@@ -170,7 +171,7 @@ export const LOOK = {
     ],
     galaxy: { dir: [0.5, 0.82, 0.05], size: 0.2, tilt: 60, turn: 25 },
   },
-  sun: { octaves: [2, 3, 5], churn: 0.06, corona: 3.2, flare: 0.5, flareFrom: 1, fade: 8 },
+  sun: { octaves: [2, 3, 5], streamers: [2, 4, 4], churn: 0.06, corona: 3.2, flare: 0.5, flareFrom: 1, fade: 8 },
 };
 
 // Online play. Ticks unless noted: maxLag, history, rejoin, unreachable and smooth are seconds, snap is metres.

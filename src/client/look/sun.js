@@ -121,18 +121,18 @@ void main() {
 // scene as the sun's body and the flare to the scene; blockers are { pos, radius } of every other body.
 export function sunLook(body, rand, cfg = LOOK.sun) {
   // The faceted sun this replaced drew a shade per face from the shared random stream; drawing as many keeps
-  // every body made after it looking as it did.
-  for (let i = new THREE.IcosahedronGeometry(1, 4).attributes.position.count / 3; i > 0; i--) rand();
+  // every body made after it looking as it did. It was an icosahedron split 4 times: 20 (4 + 1)^2 faces.
+  for (let i = 20 * 5 * 5; i > 0; i--) rand();
   const time = { value: 0 };
   const surface = new THREE.ShaderMaterial({
-    uniforms: { time }, defines: { OCTAVES: 5 }, vertexShader: surfaceVertex, fragmentShader: surfaceFragment,
+    uniforms: { time }, defines: { OCTAVES: cfg.octaves.at(-1) }, vertexShader: surfaceVertex, fragmentShader: surfaceFragment,
   });
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 48), surface);
   mesh.scale.setScalar(body.radius);
 
   const reach = { value: cfg.corona }, radius = { value: body.radius };
   const coronaMat = new THREE.ShaderMaterial({
-    uniforms: { time, reach, radius }, defines: { STREAMERS: 4 }, vertexShader: coronaVertex, fragmentShader: coronaFragment,
+    uniforms: { time, reach, radius }, defines: { STREAMERS: cfg.streamers.at(-1) }, vertexShader: coronaVertex, fragmentShader: coronaFragment,
     blending: THREE.AdditiveBlending, transparent: true, depthWrite: false,
   });
   const corona = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), coronaMat);
@@ -151,36 +151,43 @@ export function sunLook(body, rand, cfg = LOOK.sun) {
   flare.renderOrder = 1000; // over everything, the weapon too: it is glare in the eye
 
   let level = null, sight = null;
-  const at = new THREE.Vector3(), view = new THREE.Vector3();
+  const at = new THREE.Vector3(), view = new THREE.Vector3(), eye = [0, 0, 0];
   return {
     mesh, flare,
     setLevel(l) {
       if (l === level) return;
       level = l;
       surface.defines.OCTAVES = cfg.octaves[l];
-      coronaMat.defines.STREAMERS = l > 0 ? 4 : 2;
+      coronaMat.defines.STREAMERS = cfg.streamers[l];
       surface.needsUpdate = coronaMat.needsUpdate = true;
     },
     // t: s on the match clock, so a still clock shows a still sun; dt: real s since the last frame.
     update(t, dt, camera, sunPos, blockers) {
       time.value = t * cfg.churn;
       camera.updateMatrixWorld();
-      const eye = camera.position.toArray(), d = Math.hypot(...sunPos.map((x, i) => x - eye[i]));
-      const seen = sunInSight(eye, sunPos, body.radius, blockers);
-      sight = sight === null ? seen : sight + (seen - sight) * (1 - Math.exp(-cfg.fade * Math.max(0, dt)));
-      at.set(...sunPos);
+      at.set(sunPos[0], sunPos[1], sunPos[2]);
       view.copy(at).applyMatrix4(camera.matrixWorldInverse);
       at.project(camera);
       const edge = Math.max(Math.abs(at.x), Math.abs(at.y));
       const inView = view.z < 0 ? 1 - THREE.MathUtils.smoothstep(edge, 0.85, 1.35) : 0;
-      const half = Math.tan((camera.fov * Math.PI) / 360);
+      // Off screen, behind you or at a level without the glow, nothing to work out; the next look starts
+      // from what is in sight then rather than easing in from a stale value.
+      if (inView === 0 || level < cfg.flareFrom) {
+        sight = null;
+        flare.visible = false;
+        return;
+      }
+      camera.position.toArray(eye);
+      const seen = sunInSight(eye, sunPos, body.radius, blockers);
+      sight = sight === null ? seen : sight + (seen - sight) * (1 - Math.exp(-cfg.fade * Math.max(0, dt)));
+      const d = view.length(), half = Math.tan((camera.fov * Math.PI) / 360);
       const size = Math.tan(Math.asin(Math.min(1, body.radius / Math.max(d, body.radius)))) / half;
       u.sun.value.set(at.x, at.y);
       u.aspect.value = camera.aspect;
       u.size.value = Math.min(size, 1.5);
       u.centre.value = (1 - THREE.MathUtils.smoothstep(Math.hypot(at.x, at.y), 0, 1.2)) ** 2;
       u.strength.value = cfg.flare * sight * inView;
-      flare.visible = level >= cfg.flareFrom && u.strength.value > 0.002;
+      flare.visible = u.strength.value > 0.002;
     },
   };
 }

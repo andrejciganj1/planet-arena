@@ -114,7 +114,8 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
       if ((ev.type === "explode" || ev.type === "burn") && ev.id?.startsWith("rock.")) gone.add(ev.id);
       if (ev.type === "explode" && drawn.has(ev.id)) continue; // your own rocket, drawn when it hit here
       if (ev.type === "explode" || (ev.type === "death" && ev.cause !== "void")) heard.push({ list: "explosions", item: { pos: ev.pos, age: 0, splash: ev.id?.startsWith("rock.") ? tuning.ASTEROID.blast.splash : tuning.ROCKET.splash }, at: msg.t });
-      view.events.push(ev);
+      // Marked on a copy: sounds skip the server's echo of what your own prediction already played.
+      view.events.push({ ...ev, remote: true });
     }
     if (view.events.length > EVENTS_KEPT) view.events.splice(0, view.events.length - EVENTS_KEPT);
     heard = heard.filter((h) => msg.t - h.at < showFor[h.list]);

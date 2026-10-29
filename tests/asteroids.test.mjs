@@ -204,9 +204,20 @@ test("a rock reaching the sun burns with no blast", () => {
   rock(w, "rock.x", add(w.poses.sun.pos, [0, 30, 0]), [0, -20, 0]);
   for (let i = 0; i < 60 && w.asteroids.length; i++) stepWorld(w, {}, TICK);
   assert.equal(w.asteroids.length, 0);
-  assert.deepEqual(of(w, "burn"), [{ type: "burn", id: "rock.x" }]);
+  assert.deepEqual(of(w, "burn").map(({ type, id }) => ({ type, id })), [{ type: "burn", id: "rock.x" }]);
   assert.equal(of(w, "explode").length, 0);
   assert.equal(w.explosions.length, 0);
+});
+
+test("the beam event carries its owner and the burn event its position", () => {
+  // The beam half is in weapons.test.mjs. A burn sounds where the rock met the sun.
+  const w = bare();
+  rock(w, "rock.x", add(w.poses.sun.pos, [0, 30, 0]), [0, -20, 0]);
+  for (let i = 0; i < 60 && w.asteroids.length; i++) stepWorld(w, {}, TICK);
+  const [burn] = of(w, "burn");
+  assert.ok(burn?.pos, JSON.stringify(burn));
+  const sun = w.system.byId.sun;
+  assert.ok(Math.abs(dist(burn.pos, w.poses.sun.pos) - (sun.radius + ASTEROID.radius)) < 1e-6, JSON.stringify(burn.pos));
 });
 
 test("a rock leaving the system is dropped", () => {

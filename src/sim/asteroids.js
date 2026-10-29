@@ -58,7 +58,7 @@ export function stepAsteroids(world, dt) {
       if (hit.id !== sun.id) detonate(world, rock, null, 0);
       else {
         world.asteroids = world.asteroids.filter((r) => r !== rock);
-        world.events.push({ type: "burn", id: rock.id });
+        world.events.push({ type: "burn", id: rock.id, pos: [...rock.pos] });
       }
       continue;
     }

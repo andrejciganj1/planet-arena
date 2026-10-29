@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planet Arena sounds</title>
+<link rel="icon" href="data:,">
+<style>
+  body { margin: 0; padding: 24px; background: #05060d; color: #f4f1e8; font-family: system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  p { margin: 0 0 16px; opacity: 0.75; font-size: 14px; }
+  label { font-size: 14px; }
+  .list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; max-width: 760px; }
+  button { font: inherit; font-size: 14px; padding: 8px 12px; border-radius: 6px; border: 2px solid #fff3;
+    background: #1a1d2e; color: inherit; cursor: pointer; }
+  button:hover { border-color: #ffb43d; }
+  button.loop { border-style: dashed; }
+  button.on { background: #ffb43d; color: #05060d; }
+</style>
+</head>
+<body>
+<h1>Planet Arena sounds</h1>
+<p>Click a name to hear it. Dashed names are loops: click to start, again to stop.</p>
+<label>Heard from <select id="where"></select></label>
+<div class="list" id="list"></div>
+<script type="module" src="src/client/soundtest.js"></script>
+</body>
+</html>

@@ -9,6 +9,7 @@ import { explode, detonate, stepProjectiles } from "../src/sim/weapons.js";
 import { createGame } from "../server/game.js";
 import { createOnlineGame, clockNudge } from "../src/client/online.js";
 import { tumble, trailPush } from "../src/client/rocklook.js";
+import { createDirector } from "../src/client/sounds.js";
 
 const { TICK, NET } = tuning;
 const json = (x) => JSON.parse(JSON.stringify(x));
@@ -114,6 +115,26 @@ test("your own rocket's blast is drawn once, not again when the server's arrives
   assert.equal(r.sent.flatMap((m) => m.events).filter((e) => e.type === "explode").length, 1, "the room's rocket went off");
   assert.equal(events, 1, "one blast event in the view");
   assert.equal(most, 1, "one blast on screen");
+});
+
+test("your own rocket's blast sounds once online, not again when the server's arrives", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  let fire = Infinity;
+  const a = join("Ana", (i) => ({ ...NO_INPUT, pitchDelta: i === 5 ? -2 : 0, weapon: i === 5 ? "rocket" : null, fire: i === fire }));
+  frame();
+  Object.assign(r.game.world.entities[a.g.id], { weapons: ["pistol", "rocket"], ammo: { rocket: 5 } });
+  for (let f = 0; f < 10; f++) frame();
+  const d = createDirector({ selfId: a.g.id, online: true });
+  fire = a.n;
+  let blasts = 0;
+  for (let f = 0; f < 60; f++) {
+    frame();
+    blasts += d.frame(a.g.world, a.g.world.events, TICK).once.filter((s) => s.name === "explode").length;
+    a.g.world.events.length = 0; // as main.js does each frame
+  }
+  assert.equal(r.sent.flatMap((m) => m.events).filter((e) => e.type === "explode").length, 1, "the room's rocket went off");
+  assert.equal(blasts, 1);
 });
 
 test("a hidden tab's snapshots leave only the blasts and beams still showing", () => {
@@ -329,4 +350,19 @@ test("online, a rock's blast is heard at the rock's reach, a rocket's at the roc
   const by = (y) => a.g.world.explosions.find((x) => x.pos[1] === y);
   assert.equal(by(80).splash, tuning.ASTEROID.blast.splash);
   assert.equal(by(90).splash, tuning.ROCKET.splash);
+});
+
+test("the server's events reach the view marked remote, so sounds can skip echoes of your own", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  const a = join("Ana", () => NO_INPUT);
+  for (let f = 0; f < 10; f++) frame();
+  a.g.world.events.length = 0;
+  const last = r.sent.at(-1);
+  const sent = { type: "explode", id: "rock.99", pos: [0, 80, 0] };
+  r.deliver({ ...last, tick: last.tick + 1, t: last.t + TICK, events: [sent] });
+  assert.deepEqual(a.g.world.events, [{ ...sent, remote: true }]);
+  // Your own predicted steps add events unmarked (here none: Ana stands still).
+  a.g.frame(TICK, () => NO_INPUT);
+  assert.ok(a.g.world.events.every((e) => e.remote), JSON.stringify(a.g.world.events));
 });

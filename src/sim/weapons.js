@@ -77,7 +77,7 @@ function rail(world, e, eye, dir, spec, id, lag) {
   if (hit?.entity) hurt(world, hit.entity, spec.damage, e.id, eye);
   else if (hit?.rock) detonate(world, hit.rock, e.id, lag);
   world.beams.push({ id, from: eye, to, age: 0, owner: e.id });
-  world.events.push({ type: "beam", from: eye, to });
+  world.events.push({ type: "beam", from: eye, to, owner: e.id });
 }
 
 // `from` is where the hit came from (the shooter's eye or the blast), for the victim's damage cue. The

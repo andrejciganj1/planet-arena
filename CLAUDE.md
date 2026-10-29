@@ -9,12 +9,15 @@ A physics arena shooter across a small solar system, in the browser. Spec:
   `http://localhost:8100/?server=ws://localhost:8787`.
 - Page check (server running): `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/page_check.cjs "http://localhost:8100/?debug" shots/start.png`
   prints `OK` when the page has no errors and the clock keeps real time. `?view=x,y,z,tx,ty,tz` fixes a free
-  camera for screenshots; `?debug` exposes `window.game = { world }`.
+  camera for screenshots; `?debug` exposes `window.game = { world, audio }`.
 - Two-browser check (both servers running): `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/net_check.cjs "http://localhost:8100/?server=ws://localhost:8787&debug" shots`
   prints `OK` when two players see each other and both clocks keep real time.
+- Sound check (static server running): `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/sound_check.cjs "http://localhost:8100/sounds.html"`
+  prints each sound's level and length and `OK` when all are audible, unclipped and short (loops steady).
+  `http://localhost:8100/sounds.html` plays each sound by hand.
 - Controls: click to capture the mouse; mouse look, WASD move, space jump (held in the air: booster),
   left mouse fire, right mouse hook (held), 1 to 6 weapons (pistol, shotgun, rocket launcher, minigun, sniper
-  rifle, railgun), wheel cycles held weapons, Shift zooms the sniper rifle, O shows or hides orbit lines, P pad cues.
+  rifle, railgun), wheel cycles held weapons, Shift zooms the sniper rifle, O shows or hides orbit lines, P pad cues, M sound on or off, H the hit sound.
 
 ## Constraints
 

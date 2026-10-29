@@ -3,7 +3,7 @@
 
 export const TICK = 1 / 60;
 export const MAX_TICKS = 5; // per frame; a slow frame or hidden tab drops time instead of catching up
-export const VOID_RADIUS = 460; // from the sun; beyond it you are lost in space (the far comet reaches 376)
+export const VOID_RADIUS = 600; // from the sun; beyond it you are lost in space (the far comet reaches 376)
 
 // g is the full pull within `reach` of the core, falling off as g * (reach / d)^2 beyond. Planets and
 // moons keep it to 1.75x their radius, so a rocket blast or a booster burn doesn't easily throw you off.
@@ -125,6 +125,21 @@ export const COLOURS = [0xffd23f, 0xe8505b, 0x4fb0e8, 0x6fd36b, 0xb06fe8, 0xff8a
 // multiple of the rock's radius and `glowOpacity` how solid it is, `trailSize` the m across of each trail
 // dot, colours as hex.
 export const ROCK_LOOK = { trail: 60, trailSize: 1.6, glow: 1.3, glowOpacity: 0.25, rock: 0x3a3330, hot: 0xff7a1f, trailColor: 0xffa040 };
+
+// Sound, looks only. range: m beyond which nothing is heard; near: m within which a sound is at full volume;
+// own, others: gains for your sounds and everyone else's; gap: s of frame or clock jump after which changes
+// are only remembered, not played (a frame that long drops its events too: a hidden tab coming back);
+// stride: m walked per footstep; stepSpeed: m/s below which walking is silent; maxVoices at once; repeat: s
+// between two plays of one name from one source; announcerOthers: the gain of a sun kill that isn't yours;
+// hold: s a booster hiss outlasts the last fuel drop seen, as others' fuel arrives in steps with the
+// snapshots; voice: s a sound counts as playing until it reports its real end (the longest one-shot); master:
+// the overall gain before the compressor; maxLoops: loops at once, the nearest kept (a swarm of rockets stays
+// a few hisses); loopKeep: m nearer a new loop must be to take a playing one's place at the cap, so two at
+// nearly the same distance don't swap every frame.
+export const SOUND = {
+  range: 120, near: 6, own: 1, others: 0.7, gap: 0.5, stride: 1.6, stepSpeed: 2, maxVoices: 24, repeat: 0.05,
+  announcerOthers: 0.4, hold: 0.15, voice: 1.5, master: 0.8, maxLoops: 8, loopKeep: 5,
+};
 
 export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade: 1, feedFor: 5, flash: 0.15, feedMax: 6 };
 

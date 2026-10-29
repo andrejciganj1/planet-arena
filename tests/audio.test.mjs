@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { SOUND } from "../src/tuning.js";
 import { SOUNDS } from "../src/client/sounds.js";
 import { RECIPES, LOOPS } from "../src/client/synth.js";
-import { audible, admit, limiter, createAudio } from "../src/client/audio.js";
+import { audible, admit, limiter, nearest, createAudio } from "../src/client/audio.js";
 
 test("beyond SOUND.range nothing is audible", () => {
   assert.equal(audible(0), true);
@@ -75,4 +75,50 @@ test("every sound name from sounds.js has a recipe", () => {
   for (const name of SOUNDS) assert.equal(typeof RECIPES[name], "function", `no recipe for ${name}`);
   for (const name of Object.keys(RECIPES)) assert.ok(SOUNDS.includes(name), `${name} is played by nothing`);
   assert.deepEqual([...LOOPS].sort(), ["boost", "hookPull", "rockIncoming", "rocketFlight"]);
+});
+
+test("past SOUND.maxLoops only the loops nearest the listener sound", () => {
+  const ear = [100, 0, 0];
+  const want = new Map();
+  // Farthest first, so keeping the first ones would be wrong.
+  for (let k = SOUND.maxLoops + 4; k > 0; k--) want.set(`rock:${k}`, { name: "rockIncoming", pos: [100 + k, 0, 0], own: false });
+  want.set("boost:me", { name: "boost", pos: null, own: true });
+  const kept = nearest(want, ear);
+  assert.equal(kept.size, SOUND.maxLoops);
+  assert.ok(kept.has("boost:me"), "a loop in your head is nearest of all");
+  for (let k = 1; k < SOUND.maxLoops; k++) assert.ok(kept.has(`rock:${k}`), `rock ${k} is among the nearest`);
+  assert.ok(!kept.has(`rock:${SOUND.maxLoops}`));
+  assert.deepEqual(kept.get("rock:1"), want.get("rock:1"));
+  // Within the cap nothing is dropped.
+  const few = new Map([...want].slice(0, 3));
+  assert.deepEqual([...nearest(few, ear).keys()].sort(), [...few.keys()].sort());
+});
+
+test("the engine reports its state for the page check: waiting, running or disabled", () => {
+  const param = () => ({ value: 0, setTargetAtTime() {} });
+  const node = () => ({ connect() {}, disconnect() {}, gain: param(), threshold: param(), knee: param(), ratio: param(), attack: param(), release: param() });
+  class Fake {
+    state = "suspended";
+    currentTime = 0;
+    destination = {};
+    listener = {};
+    resume() {
+      this.state = "running";
+      return Promise.resolve();
+    }
+    createGain() { return node(); }
+    createDynamicsCompressor() { return node(); }
+  }
+  const a = createAudio({ AudioContextImpl: Fake });
+  assert.equal(a.state(), "waiting", "nothing is made before the first click");
+  a.unlock();
+  assert.equal(a.state(), "running");
+
+  class Throws { constructor() { throw new Error("no audio here"); } }
+  const b = createAudio({ AudioContextImpl: Throws });
+  b.unlock();
+  assert.equal(b.state(), "disabled");
+  const c = createAudio({ AudioContextImpl: undefined });
+  c.unlock();
+  assert.equal(c.state(), "disabled");
 });

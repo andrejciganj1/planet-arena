@@ -260,7 +260,7 @@ test("a pickup coming back chimes once", () => {
   assert.deepEqual(names(play(d, w)), []);
 });
 
-test("after a 2 s gap nothing but events plays", () => {
+test("after a 2 s gap (a hidden tab coming back) nothing plays, not even the events", () => {
   const w = scene(["me", "you"]), me = w.entities.me, d = createDirector({ selfId: "me", online: false });
   arm(me, "minigun", 50);
   Object.assign(w.entities.you, { groundId: "mid", vel: [9, 0, 0] });
@@ -270,8 +270,27 @@ test("after a 2 s gap nothing but events plays", () => {
   me.weapon = "pistol";
   me.hook = { body: "mid", offset: [0, 12, 0], len: 10 };
   const out = play(d, w, [{ type: "explode", pos: [0, 0, 0], id: "rock.1" }], 2);
-  assert.deepEqual(names(out), ["explode"]);
+  assert.deepEqual(names(out), []);
+  assert.ok(out.loops.has("hook:me"), "what goes on now still sounds");
   assert.deepEqual(names(play(d, w)), [], "and the frame after has nothing left over");
+  assert.deepEqual(names(play(d, w, [{ type: "explode", pos: [0, 0, 0], id: "rock.2" }])), ["explode"], "new events sound again");
+});
+
+test("the backlog an online tab keeps while hidden does not play in one frame", () => {
+  const w = scene(["me", "you"]), d = createDirector({ selfId: "me", online: true });
+  play(d, w);
+  const backlog = Array.from({ length: 200 }, (_, k) => (k % 2
+    ? { type: "explode", pos: [k, 0, 0], id: `rock.${k}`, remote: true }
+    : { type: "hit", id: "you", by: "me", damage: 10, from: [0, 0, 0], remote: true }));
+  assert.deepEqual(names(play(d, w, backlog, 30)), []);
+});
+
+test("a clock jump in a frame of normal length (a server reset) still plays its events", () => {
+  const w = scene(["me"]), d = createDirector({ selfId: "me", online: true });
+  w.t = 50;
+  play(d, w);
+  w.t = 0;
+  assert.deepEqual(names(play(d, w, [{ type: "explode", pos: [0, 0, 0], id: "rock.1", remote: true }])), ["explode"]);
 });
 
 test("a respawn is not a burst of steps", () => {

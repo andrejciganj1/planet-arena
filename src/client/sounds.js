@@ -104,7 +104,9 @@ export function createDirector({ selfId, online }) {
     const gap = lastT === null || dt > SOUND.gap || world.t < lastT || world.t - lastT > SOUND.gap;
     const ticked = gap ? 0 : world.t - lastT; // game time, so a frame that ran no tick walks no distance
 
-    fromEvents(world, events, settings, once);
+    // A long frame is a hidden tab coming back: its backlog (online keeps up to 200) would all sound at once.
+    // A clock jump in a normal frame (a reset, a resync) brings events of now, so they still sound.
+    if (dt <= SOUND.gap) fromEvents(world, events, settings, once);
 
     const present = new Set();
     for (const e of Object.values(world.entities)) {

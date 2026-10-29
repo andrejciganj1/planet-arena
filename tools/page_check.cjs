@@ -1,6 +1,8 @@
 // Local check: loads the page with the installed Chrome, fails on any page error or console error, and
 // prints the simulation clock after 5 s of real time (it must be about 5). Online (?server=...), give a
-// name: it is typed into the name box, and the clock is timed once you have a body.
+// name: it is typed into the name box, and the clock is timed once you have a body. Then it clicks the
+// canvas (the click that starts sound) and plays on for a second: the sound engine must report a running,
+// suspended (a headless browser may hold audio back) or disabled context, never fail the page.
 // Usage: NODE_PATH=... node tools/page_check.cjs <url with ?debug> [screenshot.png] [seconds, default 5] [name]
 const { chromium } = require("playwright");
 (async () => {
@@ -28,6 +30,11 @@ const { chromium } = require("playwright");
   const t = await p.evaluate(() => window.game?.world.t ?? NaN);
   console.log(`world.t ${t.toFixed(2)} (advanced ${(t - t0).toFixed(2)} in ${secs} s)`);
   if (!(Math.abs(t - t0 - secs) < 0.25 * secs)) (bad = true), console.log("the clock did not keep up with real time");
+  await p.click("#game");
+  await p.waitForTimeout(1000);
+  const sound = await p.evaluate(() => window.game?.audio?.state?.() ?? "missing");
+  console.log(`sound ${sound}`);
+  if (!["running", "suspended", "disabled"].includes(sound)) (bad = true), console.log("the click did not start the sound engine");
   if (process.argv[3]) {
     require("fs").mkdirSync(require("path").dirname(process.argv[3]), { recursive: true });
     await p.screenshot({ path: process.argv[3] });

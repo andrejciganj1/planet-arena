@@ -8,6 +8,14 @@ import { RECIPES, LOOPS } from "./synth.js";
 
 export const audible = (d) => d <= SOUND.range;
 
+// Loops skip the limiter (they hold, they don't burst), so a swarm of rockets is capped here instead: the
+// SOUND.maxLoops nearest the listener; one in your head (pos null) is nearest of all.
+export function nearest(want, ear, max = SOUND.maxLoops) {
+  if (want.size <= max) return want;
+  const d = (s) => (s.pos ? dist(s.pos, ear) : -1);
+  return new Map([...want].sort((a, b) => d(a[1]) - d(b[1])).slice(0, max));
+}
+
 // The limiter's memory: when each playing voice ends, and when each name last played.
 export const limiter = () => ({ ends: [], last: new Map() });
 
@@ -129,9 +137,9 @@ export function createAudio({ AudioContextImpl = globalThis.AudioContext } = {})
       release(v.nodes, end - now + 0.2);
     }),
     // The loops that should sound now, keyed per instance: new ones start, gone ones fade, the rest move.
-    setLoops: guard((want) => {
+    setLoops: guard((all) => {
       if (!ctx) return;
-      const on = live();
+      const on = live(), want = nearest(all, ear);
       for (const [key, l] of loops) {
         const s = want.get(key);
         if (!on || !s || s.name !== l.name || far(s)) stopLoop(key);
@@ -144,6 +152,9 @@ export function createAudio({ AudioContextImpl = globalThis.AudioContext } = {})
         loops.set(key, { name: s.name, panner: v.panner, nodes: v.nodes, handle: RECIPES[s.name](ctx, v.input) });
       }
     }),
+    // For the page check: "waiting" before the first click, then the context's state, "disabled" once Web
+    // Audio failed or is missing.
+    state: () => (dead ? "disabled" : ctx ? ctx.state : "waiting"),
     // M: off fades everything out and stops the loops; the next setLoops starts them again.
     setEnabled: guard((on) => {
       enabled = on;

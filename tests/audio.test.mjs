@@ -31,6 +31,29 @@ test("the limiter admits at most maxVoices and drops a repeat within SOUND.repea
   assert.equal(admit(r, "step", 2 + SOUND.repeat * 1.1), true);
 });
 
+test("each source's repeats are limited on their own: two miniguns firing together both sound", () => {
+  const every = 5 / 60; // the minigun fires every 5 ticks
+  for (const offset of [0, 0.01, 0.03, 0.045, 0.06, 0.07]) {
+    const s = limiter(), got = { me: 0, you: 0 };
+    for (let k = 0; k < 30; k++) {
+      for (const [src, t] of [["you", 1 + k * every], ["me", 1 + k * every + offset]]) {
+        if (!admit(s, "minigun", t, src)) continue;
+        got[src]++;
+        s.ends[s.ends.length - 1] = t + 0.2; // play() puts in the voice's real end, as here
+      }
+    }
+    assert.deepEqual(got, { me: 30, you: 30 }, `offset ${offset}`);
+  }
+  // One player's rapid repeats are still limited.
+  const r = limiter();
+  assert.equal(admit(r, "step", 1, "me"), true);
+  assert.equal(admit(r, "step", 1 + SOUND.repeat / 2, "me"), false);
+  assert.equal(admit(r, "step", 1 + SOUND.repeat / 2, "you"), true, "another's step is no repeat of yours");
+  // A sound with no source (a chain of blasts) is limited by its name alone.
+  assert.equal(admit(r, "explode", 2), true);
+  assert.equal(admit(r, "explode", 2 + SOUND.repeat / 2), false);
+});
+
 test("a burst of one name never fills more than its share of voices", () => {
   // Ten pellets or a minigun burst in one instant: one voice, not ten.
   const s = limiter();

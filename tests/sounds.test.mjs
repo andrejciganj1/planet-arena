@@ -51,7 +51,7 @@ test("ten pellets of one shot make one shotgun sound", () => {
   assert.equal(w.projectiles.length, 10);
   const out = play(d, w);
   assert.deepEqual(names(out), ["shotgun"]);
-  near(out.once[0].pos, eye(me));
+  assert.equal(out.once[0].pos, null, "your own gun is in your head");
   assert.equal(out.once[0].own, true);
   assert.deepEqual(names(play(d, w)), [], "the pellets in flight make no more");
 });
@@ -136,7 +136,7 @@ test("blasts, burns, pad launches and pickups sound where they happen", () => {
   near(out.once[0].pos, [1, 1, 1]);
   near(out.once[1].pos, [2, 2, 2]);
   near(out.once[2].pos, w.entities.you.pos);
-  near(out.once[3].pos, w.entities.me.pos);
+  assert.equal(out.once[3].pos, null, "your own pickup is in your head");
   assert.deepEqual(out.once.map((s) => s.own), [false, false, false, true]);
 });
 
@@ -152,8 +152,9 @@ test("another's railgun sounds from its beam, yours from your shot counter", () 
   const out = play(d, w, beams);
   assert.deepEqual(names(out), ["railgun", "railgun"]);
   const own = out.once.find((s) => s.own), theirs = out.once.find((s) => !s.own);
-  near(own.pos, eye(w.entities.me));
+  assert.equal(own.pos, null);
   near(theirs.pos, beams[1].from);
+  assert.deepEqual(out.once.map((s) => s.src).sort(), ["me", "you"]);
 });
 
 test("your own launch sounds once online: the server's echo is skipped", () => {
@@ -186,13 +187,55 @@ test("the hook fires once and pulls while it holds", () => {
   me.hook = { body: "mid", offset: [0, 12, 0], len: 10 };
   const out = play(d, w);
   assert.deepEqual(names(out), ["hookFire"]);
-  near(out.once[0].pos, eye(me));
+  assert.equal(out.once[0].pos, null);
   assert.ok(out.loops.get("hook:me")?.name === "hookPull");
   const held = play(d, w);
   assert.deepEqual(names(held), []);
   assert.ok(held.loops.has("hook:me"));
   me.hook = null;
   assert.ok(!play(d, w).loops.has("hook:me"));
+});
+
+test("your own sounds are in your head, another's where they are, each with its source", () => {
+  const w = scene(["me", "you"]), me = w.entities.me, you = w.entities.you;
+  const d = createDirector({ selfId: "me", online: false });
+  arm(me, "minigun", 50);
+  arm(you, "minigun", 50);
+  play(d, w);
+  const by = (out, name, src) => out.once.find((s) => s.name === name && s.src === src);
+  // Fire and hook.
+  me.shots++;
+  you.shots++;
+  me.hook = you.hook = { body: "mid", offset: [0, 12, 0], len: 10 };
+  let out = play(d, w);
+  assert.equal(by(out, "minigun", "me").pos, null);
+  near(by(out, "minigun", "you").pos, eye(you));
+  assert.equal(by(out, "hookFire", "me").pos, null);
+  near(by(out, "hookFire", "you").pos, eye(you));
+  assert.equal(out.loops.get("hook:me").pos, null);
+  near(out.loops.get("hook:you").pos, eye(you));
+  // Pad launches and pickups.
+  out = play(d, w, ["me", "you"].flatMap((id) => [{ type: "launch", id, padId: "p" }, { type: "pickup", id, pickupId: "mid-health" }]));
+  for (const name of ["boink", "pickup"]) {
+    assert.equal(by(out, name, "me").pos, null, name);
+    near(by(out, name, "you").pos, you.pos);
+  }
+  // The booster.
+  me.hook = you.hook = null;
+  me.groundId = you.groundId = null;
+  me.fuel -= 0.1;
+  you.fuel -= 0.1;
+  out = play(d, w);
+  assert.equal(out.loops.get("boost:me").pos, null);
+  near(out.loops.get("boost:you").pos, you.pos);
+  // Steps.
+  for (const e of [me, you]) Object.assign(e, { groundId: "mid", vel: [9, 0, 0] });
+  const steps = [];
+  for (let f = 0; f < 30; f++) steps.push(...play(d, w).once.filter((s) => s.name === "step"));
+  const mine = steps.filter((s) => s.src === "me"), theirs = steps.filter((s) => s.src === "you");
+  assert.ok(mine.length > 0 && theirs.length > 0);
+  assert.ok(mine.every((s) => s.pos === null));
+  for (const s of theirs) near(s.pos, you.pos);
 });
 
 test("the booster hisses while fuel falls in the air, through frames with no news, and stops after", () => {

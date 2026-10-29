@@ -130,7 +130,7 @@ export const ROCK_LOOK = { trail: 60, trailSize: 1.6, glow: 1.3, glowOpacity: 0.
 // own, others: gains for your sounds and everyone else's; gap: s of frame or clock jump after which changes
 // are only remembered, not played (a frame that long drops its events too: a hidden tab coming back);
 // stride: m walked per footstep; stepSpeed: m/s below which walking is silent; maxVoices at once; repeat: s
-// between two plays of one name; announcerOthers: the gain of a sun kill that isn't yours; hold: s a booster
+// between two plays of one name from one source; announcerOthers: the gain of a sun kill that isn't yours; hold: s a booster
 // hiss outlasts the last fuel drop seen, as others' fuel arrives in steps with the snapshots; voice: s a
 // sound counts as playing until it reports its real end (the longest one-shot); master: the overall gain
 // before the compressor; maxLoops: loops at once, the nearest kept (a swarm of rockets stays a few hisses).

@@ -16,18 +16,19 @@ export function nearest(want, ear, max = SOUND.maxLoops) {
   return new Map([...want].sort((a, b) => d(a[1]) - d(b[1])).slice(0, max));
 }
 
-// The limiter's memory: when each playing voice ends, and when each name last played.
+// The limiter's memory: when each playing voice ends, and when each name from each source last played.
 export const limiter = () => ({ ends: [], last: new Map() });
 
-// Whether a one-shot may play now: at most SOUND.maxVoices at once, and one name not again within
-// SOUND.repeat s (a minigun burst or a chain of blasts stays a rhythm, not a roar). An admitted voice counts
-// for SOUND.voice s until play() learns its real end.
-export function admit(state, name, now) {
+// Whether a one-shot may play now: at most SOUND.maxVoices at once, and one name from one source not again
+// within SOUND.repeat s (a minigun burst stays a rhythm, not a roar). Per source, so another's minigun never
+// mutes yours; a sound with no source (a chain of blasts) is limited by name. An admitted voice counts for
+// SOUND.voice s until play() learns its real end.
+export function admit(state, name, now, src = "") {
   state.ends = state.ends.filter((e) => e > now);
   if (state.ends.length >= SOUND.maxVoices) return false;
-  const last = state.last.get(name);
+  const key = `${name}:${src}`, last = state.last.get(key);
   if (last !== undefined && now - last < SOUND.repeat) return false;
-  state.last.set(name, now);
+  state.last.set(key, now);
   state.ends.push(now + SOUND.voice);
   return true;
 }
@@ -127,12 +128,12 @@ export function createAudio({ AudioContextImpl = globalThis.AudioContext, preloa
         l.setOrientation(...forward, ...up);
       }
     }),
-    // A one-shot: { name, pos | null, own, gain? }. A suspended context would queue it for a burst later,
+    // A one-shot: { name, pos | null, own, src?, gain? }. A suspended context would queue it for a burst later,
     // so nothing plays until it runs.
     play: guard((sound) => {
       if (!live() || LOOPS.has(sound.name) || !RECIPES[sound.name] || far(sound)) return;
       const now = ctx.currentTime;
-      if (!admit(lim, sound.name, now)) return;
+      if (!admit(lim, sound.name, now, sound.src)) return;
       const v = voice(sound);
       const end = RECIPES[sound.name](ctx, v.input)?.end ?? now + SOUND.voice;
       lim.ends[lim.ends.length - 1] = end; // admit just pushed this voice's provisional end

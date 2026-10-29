@@ -96,12 +96,21 @@ const voiceBytes = typeof document === "undefined" ? null
     .catch(() => null);
 let line = null, decoding = null;
 
-// Resolves once the line can play, or once it is clear it can't (then the announcer stays silent).
-export function loadVoice(ctx) {
-  decoding ??= Promise.resolve(voiceBytes)
-    .then((bytes) => bytes && ctx.decodeAudioData(bytes))
-    .then((buf) => (line = buf || null))
-    .catch((e) => console.warn("the announcer is silent:", e?.message));
+// Resolves once the line can play, or once it is clear it can't (then the announcer stays silent). A failure
+// isn't remembered: the next call (the engine asks on every unlock) tries again, so one bad moment doesn't
+// silence the announcer for the session. `bytes` is for tests.
+export function loadVoice(ctx, bytes = voiceBytes) {
+  if (line) return Promise.resolve();
+  decoding ??= Promise.resolve(bytes)
+    .then((b) => b && ctx.decodeAudioData(b))
+    .then((buf) => {
+      line = buf || null;
+      if (!line) decoding = null;
+    })
+    .catch((e) => {
+      decoding = null;
+      console.warn("the announcer is silent:", e?.message);
+    });
   return decoding;
 }
 

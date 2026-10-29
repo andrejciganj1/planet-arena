@@ -6,7 +6,7 @@ import { createEntity } from "../src/sim/entity.js";
 import { fire } from "../src/sim/weapons.js";
 import { pickupPos } from "../src/sim/pickups.js";
 import { add, scale, dist } from "../src/sim/vec.js";
-import { createDirector, SOUNDS } from "../src/client/sounds.js";
+import { createDirector, heard, SOUNDS } from "../src/client/sounds.js";
 
 const { SOUND, PLAYER } = tuning;
 const FRAME = 1 / 60;
@@ -339,4 +339,13 @@ test("a shot count put back by a correction does not sound twice", () => {
     return names(play(d, w)).length;
   });
   assert.deepEqual(counts, [1, 0, 0, 1]);
+});
+
+test("while a status screen covers the game, nothing plays and no loop is held", () => {
+  const sounds = { once: [{ name: "pistol", pos: null, own: true }], loops: new Map([["boost", { name: "boost", pos: null, own: true }]]) };
+  assert.equal(heard(sounds, false), sounds, "playing: unchanged");
+  const quiet = heard(sounds, true);
+  assert.deepEqual(quiet.once, []);
+  assert.equal(quiet.loops.size, 0);
+  assert.equal(heard(undefined, true).loops.size, 0, "no director yet: still silent");
 });

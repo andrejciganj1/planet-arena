@@ -4,7 +4,7 @@
 // turns sound off for good instead of reaching the game.
 import { SOUND } from "../tuning.js";
 import { dist } from "../sim/vec.js";
-import { RECIPES, LOOPS } from "./synth.js";
+import { RECIPES, LOOPS, loadVoice } from "./synth.js";
 
 export const audible = (d) => d <= SOUND.range;
 
@@ -40,7 +40,7 @@ function place(panner, [x, y, z]) {
   } else panner.setPosition(x, y, z);
 }
 
-export function createAudio({ AudioContextImpl = globalThis.AudioContext } = {}) {
+export function createAudio({ AudioContextImpl = globalThis.AudioContext, preloadVoice = loadVoice } = {}) {
   let ctx = null, master = null, dead = false, enabled = true;
   let ear = [0, 0, 0];
   const lim = limiter();
@@ -94,7 +94,8 @@ export function createAudio({ AudioContextImpl = globalThis.AudioContext } = {})
   }
 
   return {
-    // On every click that should start sound: makes the context the first time, wakes it after.
+    // On every click that should start sound: makes the context the first time, wakes it after. The announcer's
+    // voice is decoded here too (it needs a context), so the first sun kill isn't silent.
     unlock: guard(() => {
       if (!ctx) {
         ctx = new AudioContextImpl();
@@ -110,6 +111,7 @@ export function createAudio({ AudioContextImpl = globalThis.AudioContext } = {})
         master.connect(comp);
         comp.connect(ctx.destination);
       } else if (ctx.state !== "running") ctx.resume()?.catch?.(() => {});
+      preloadVoice(ctx)?.catch?.(() => {});
     }),
     // The camera: where you hear from and which way is front and up.
     setListener: guard((pos, forward, up) => {

@@ -13,6 +13,10 @@ export const SOUNDS = [
   "switch", "empty",
 ];
 
+// While a status screen covers the game (online: connecting, unreachable, full, version, no player yet) the
+// view is frozen, and its last loops would hold until it moves again: play nothing then.
+export const heard = (sounds, covered) => (covered ? { once: [], loops: new Map() } : sounds);
+
 const ALWAYS = { get: () => true };
 
 // online: events marked `remote` came from the server; the echo of your own pad launch was already played

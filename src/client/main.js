@@ -13,7 +13,7 @@ import { createRenderer } from "./render.js";
 import { createSettings } from "./settings.js";
 import { createHud, askName } from "./hud.js";
 import { createOnlineGame, storedName } from "./online.js";
-import { createDirector } from "./sounds.js";
+import { createDirector, heard } from "./sounds.js";
 import { createAudio } from "./audio.js";
 import { SERVER } from "./config.js";
 
@@ -125,7 +125,7 @@ function frame(now) {
     director = id ? createDirector({ selfId: id, online: !!game }) : null;
     directorFor = id;
   }
-  const sounds = director?.frame(world, world.events, elapsed, settings);
+  const sounds = heard(director?.frame(world, world.events, elapsed, settings), game && statusText() !== null);
   world.events.length = 0;
   renderer.draw(alpha, locked ? input.pending() : { yaw: 0, pitch: 0 }, zoom, shift, secs);
   const cam = renderer.camera();

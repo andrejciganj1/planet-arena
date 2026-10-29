@@ -33,16 +33,6 @@ python3 -I tools/serve.py 8100
 Then open http://localhost:8100 in a desktop browser and click the page to capture the mouse
 (Esc lets it go).
 
-To hear every sound on its own, open http://localhost:8100/sounds.html (linked from nowhere in the game).
-The sounds are made in the browser (`src/client/synth.js`). To check them without listening (Playwright
-through `npx`): `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/sound_check.cjs "http://localhost:8100/sounds.html"`
-prints each sound's level and length and `OK` when all are audible, unclipped and short (loops steady).
-
-The one sound from a file is the announcer's "Sun kill!" (`assets/sun-kill.wav`): spoken by the Norman voice
-by Bryce Beattie (public domain, trained on LibriVox recordings, https://brycebeattie.com/files/tts/) with
-[Piper](https://github.com/OHF-Voice/piper1-gpl) 1.8.0, used only to make the file, then trimmed. The game
-plays it deeper and adds its own echo.
-
 ## Play online
 
 Open the game from the hosted page (GitHub Pages) and type a name; you join the shared match. To use another
@@ -91,6 +81,8 @@ is a server change too: deploy it with `fly deploy --ha=false`.
 | Shift | Zoom, with the sniper rifle |
 | O | Show or hide the orbit lines (the browser remembers) |
 | P | Show or hide the pad cues; hidden, pads look neutral (the browser remembers) |
+| M | Sound on or off (the browser remembers) |
+| H | The hit sound (the ding when you hit someone) on or off (the browser remembers) |
 
 - Bottom left: your health (your own rockets hurt you too), the weapons you hold, the one in hand with its
   ammo, and the booster's fuel, which refills while you stand on anything. A full booster burn adds 18 m/s,
@@ -104,6 +96,25 @@ is a server change too: deploy it with `fly deploy --ha=false`.
 - Jump pads are the discs with an arrow. Green means a launch right now lands on another body; red means
   it won't. Stand near one to see the predicted path.
 - The dummy (orange, with a face; drawn as a head and body sphere) lives on the tiny green planet and comes back 3 s after it dies.
+
+## Sounds
+
+There are 23 sounds. All but one are made in the browser with Web Audio (recipes in `src/client/synth.js`,
+no sound files), so there is nothing to download and the page stays small. `src/client/sounds.js` decides what
+plays from the game's events and changes, and `src/client/audio.js` plays it: other players are heard from
+where they are (panned in 3D from your camera, quieter with distance), a limit on voices keeps bursts from
+becoming a roar, and a cap on loops keeps a swarm of rockets quiet. Click the page once before anything
+sounds (browsers insist). If Web Audio fails, sound turns off and the game carries on.
+
+To hear every sound on its own, open http://localhost:8100/sounds.html (linked from nowhere in the game).
+To check them without listening (Playwright through `npx`, static server running):
+`NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/sound_check.cjs "http://localhost:8100/sounds.html"`
+prints each sound's level and length and `OK` when all are audible, unclipped and short (loops steady).
+
+The one sound from a file is the announcer's "Sun kill!" (`assets/sun-kill.wav`): spoken by the Norman voice
+by Bryce Beattie (public domain, trained on LibriVox recordings, https://brycebeattie.com/files/tts/) with
+[Piper](https://github.com/OHF-Voice/piper1-gpl) 1.8.0, used only to make the file, then trimmed. The game
+plays it deeper and adds its own echo.
 
 ## Tuning
 

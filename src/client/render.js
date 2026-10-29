@@ -2,6 +2,7 @@
 // players, shots and blasts, and the weapon in view. It only reads the world; drawing happens between the
 // last two ticks (alpha) so motion stays smooth on screens faster than the 60 Hz simulation.
 import * as THREE from "three";
+import { tumble } from "./rocklook.js";
 import { PLAYER, DUMMY, ROCKET, PAD_CUE, BELT, TICK, PICKUPS, WEAPONS, FEEDBACK, ASTEROID, ROCK_LOOK } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
 import { pickupReady } from "../sim/pickups.js";
@@ -515,7 +516,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         const k = rockTrail(a.id);
         k.seen = frameNo;
         k.mesh.position.copy(v3(a.pos));
-        k.mesh.rotation.set(a.age, a.age * 0.7, 0); // tumbling, from its age so it needs no state
+        k.mesh.rotation.set(...tumble(a.id, world.t), 0);
         // One trail point per frame, but not while paused or drawn twice at the same spot.
         const [x, y, z] = a.pos, last = k.pts;
         if (!last.length || last[0] !== x || last[1] !== y || last[2] !== z) last.unshift(x, y, z);

@@ -8,6 +8,7 @@ import { createWorld } from "../src/sim/world.js";
 import { explode, detonate, stepProjectiles } from "../src/sim/weapons.js";
 import { createGame } from "../server/game.js";
 import { createOnlineGame, clockNudge } from "../src/client/online.js";
+import { tumble } from "../src/client/rocklook.js";
 
 const { TICK, NET } = tuning;
 const json = (x) => JSON.parse(JSON.stringify(x));
@@ -280,4 +281,17 @@ test("a rock stops being drawn once its blast or burn is heard, even if an older
     a.g.frame(TICK, () => NO_INPUT);
     assert.ok(!w.asteroids.some((x) => x.id === "rock.99"), `${type}: no longer drawn`);
   }
+});
+
+test("a rock as the view has it online (no age) still gets a finite tumble", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  const a = join("Ana", () => NO_INPUT);
+  for (let f = 0; f < 10; f++) frame();
+  r.game.world.asteroids.push({ id: "rock.99", pos: [0, 80, 0], vel: [3, 0, 0], age: 0, owner: null });
+  for (let f = 0; f < 20 && !a.g.world.asteroids.length; f++) frame();
+  const seen = a.g.world.asteroids[0];
+  assert.ok(seen && seen.age === undefined, "snapshots carry no age");
+  for (const x of tumble(seen.id, a.g.world.t)) assert.ok(Number.isFinite(x));
+  assert.notDeepEqual(tumble("rock.1", 5), tumble("rock.2", 5), "each rock starts at its own angle");
 });

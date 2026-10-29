@@ -244,3 +244,196 @@ test("a blob shadow sits on the ground under a figure and fades as it rises", as
   const m = blobUnder([94, 0.5, 0], 0.5, bodies);
   assert.ok(Math.abs(Math.hypot(m.at[0] - 100, m.at[1], m.at[2]) - 5) < 1e-9);
 });
+
+// The alien. Its model is read straight from the .glb: the JSON chunk for nodes and accessors, the binary
+// chunk for vertex positions, so a resized helmet or a body that grows out of its hit sphere fails here.
+import { readFileSync } from "node:fs";
+import { PLAYER, TICK } from "../src/tuning.js";
+
+function readGlb(file) {
+  const buf = readFileSync(new URL(file, import.meta.url));
+  assert.equal(buf.readUInt32LE(0), 0x46546c67, "glTF magic");
+  const jsonLen = buf.readUInt32LE(12);
+  const json = JSON.parse(buf.subarray(20, 20 + jsonLen).toString("utf8"));
+  const binAt = 20 + jsonLen;
+  const bin = buf.subarray(binAt + 8, binAt + 8 + buf.readUInt32LE(binAt));
+  return { json, bin };
+}
+
+// A node's matrix as a function on points, through its parents (translation, rotation, scale).
+function nodePlacer(json, index) {
+  const parent = json.nodes.findIndex((n) => n.children?.includes(index));
+  const { translation: t = [0, 0, 0], rotation: q = [0, 0, 0, 1], scale: s = [1, 1, 1] } = json.nodes[index];
+  const local = (p) => {
+    const v = [p[0] * s[0], p[1] * s[1], p[2] * s[2]];
+    const [x, y, z, w] = q;
+    const u = [y * v[2] - z * v[1], z * v[0] - x * v[2], x * v[1] - y * v[0]];
+    const uu = [y * u[2] - z * u[1], z * u[0] - x * u[2], x * u[1] - y * u[0]];
+    return [0, 1, 2].map((i) => v[i] + 2 * (w * u[i] + uu[i]) + t[i]);
+  };
+  const up = parent >= 0 ? nodePlacer(json, parent) : (p) => p;
+  return (p) => up(local(p));
+}
+
+// Every vertex of a named node, where the rest pose puts it, and the accessor bounds as given.
+function nodeVertices({ json, bin }, name) {
+  const index = json.nodes.findIndex((n) => n.name === name);
+  assert.ok(index >= 0, `a node named ${name}`);
+  const node = json.nodes[index], place = nodePlacer(json, index);
+  if (node.mesh === undefined) return { at: place([0, 0, 0]), points: [], bounds: [] };
+  const points = [], bounds = [];
+  for (const prim of json.meshes[node.mesh].primitives) {
+    const acc = json.accessors[prim.attributes.POSITION], view = json.bufferViews[acc.bufferView];
+    const stride = view.byteStride || 12, start = (view.byteOffset || 0) + (acc.byteOffset || 0);
+    bounds.push({ min: acc.min, max: acc.max });
+    for (let i = 0; i < acc.count; i++) {
+      const o = start + i * stride;
+      points.push(place([bin.readFloatLE(o), bin.readFloatLE(o + 4), bin.readFloatLE(o + 8)]));
+    }
+  }
+  return { at: place([0, 0, 0]), points, bounds, place };
+}
+
+const ALIEN = "../assets/models/alien.glb";
+const PARTS = ["head", "eyes", "helmet", "body", "armL", "armR", "legL", "legR", "hand"];
+const distTo = (p, c) => Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]);
+
+test("the exported helmet fits PLAYER.hit.head within 3 %, the body within PLAYER.hit.body", () => {
+  const glb = readGlb(ALIEN), { head, body } = PLAYER.hit;
+  const hc = [0, head.at, 0], bc = [0, body.at, 0];
+  for (const name of PARTS) nodeVertices(glb, name);
+  const mats = glb.json.materials.map((m) => m.name);
+  for (const m of ["skin", "suit", "trim", "eye", "glass"]) assert.ok(mats.includes(m), `a material named ${m}`);
+
+  // The helmet: its bounds are the head sphere's box, and every vertex lies on that sphere.
+  const helmet = nodeVertices(glb, "helmet");
+  const lo = [0, 1, 2].map((i) => Math.min(...helmet.points.map((p) => p[i])));
+  const hi = [0, 1, 2].map((i) => Math.max(...helmet.points.map((p) => p[i])));
+  for (let i = 0; i < 3; i++) {
+    assert.ok(Math.abs(hi[i] - hc[i] - head.r) <= 0.03 * head.r, `helmet max ${i}: ${hi[i]}`);
+    assert.ok(Math.abs(hc[i] - lo[i] - head.r) <= 0.03 * head.r, `helmet min ${i}: ${lo[i]}`);
+  }
+  // The accessor's own min and max agree (the loader trusts them for culling).
+  for (const { min, max } of helmet.bounds) for (let i = 0; i < 3; i++) assert.ok(Math.abs(max[i] - min[i] - 2 * head.r) <= 0.06 * head.r);
+  for (const p of helmet.points) assert.ok(Math.abs(distTo(p, hc) - head.r) <= 0.03 * head.r, `helmet vertex off the sphere ${p}`);
+
+  // The head turns in place: its pivot is the helmet's centre, and the face and eyes are inside the glass.
+  const skull = nodeVertices(glb, "head");
+  assert.ok(distTo(skull.at, hc) < 1e-4, `head pivot ${skull.at}`);
+  for (const name of ["head", "eyes"]) {
+    for (const p of nodeVertices(glb, name).points) assert.ok(distTo(p, hc) < head.r, `${name} vertex outside the helmet ${p}`);
+  }
+  // Torso, legs and arms (at rest) inside the body sphere; the feet on the ground, none below it.
+  let lowest = Infinity;
+  for (const name of ["body", "legL", "legR", "armL", "armR"]) {
+    for (const p of nodeVertices(glb, name).points) {
+      assert.ok(distTo(p, bc) <= 1.03 * body.r, `${name} vertex outside the body sphere ${p}`);
+      lowest = Math.min(lowest, p[1]);
+    }
+  }
+  assert.ok(Math.abs(lowest) < 0.02, `feet at the origin (${lowest})`);
+  // The gun goes in the right hand, which moves with the right arm.
+  const armR = glb.json.nodes.findIndex((n) => n.name === "armR");
+  assert.ok(glb.json.nodes[armR].children?.includes(glb.json.nodes.findIndex((n) => n.name === "hand")), "hand is a child of armR");
+});
+
+// The joints the model was built with, read from the file, as placeAlien needs them.
+const restOf = (glb) => Object.fromEntries(["body", "head", "armL", "armR", "legL", "legR"].map((n) => [n, nodeVertices(glb, n).at]));
+
+// A grounded or flying entity in the frame of its own figure: up +y, forward -z.
+const figureState = (o) => ({
+  id: "a", up: [0, 1, 0], forward: [0, 0, -1], vel: [0, 0, 0], pitch: 0, groundId: "mid", airTime: 0, hook: null,
+  fuel: 1.5, alive: true, ...o,
+});
+
+test("alienPose keeps the head centre on its sphere in every pose", async () => {
+  const { alienPose, placeAlien, POSE_KEYS } = await import("../src/client/look/alienpose.js");
+  const rest = restOf(readGlb(ALIEN)), hc = [0, PLAYER.hit.head.at, 0];
+  const states = [];
+  for (const speed of [0, 2, PLAYER.run, 2 * PLAYER.run]) {
+    for (const pitch of [-1.55, -0.6, 0, 0.6, 1.55]) {
+      for (const hook of [null, { body: "mid", offset: [0, 0, 0] }]) {
+        states.push([figureState({ vel: [0, 0, -speed], pitch, hook }), false]);
+        for (const airTime of [0, 0.2, 0.5, 1, 3]) {
+          for (const boosting of [false, true]) {
+            states.push([figureState({ groundId: null, airTime, vel: [speed, -speed, 0], pitch, hook }), boosting]);
+          }
+        }
+      }
+    }
+  }
+  let leaned = 0, swung = 0;
+  for (const [e, boosting] of states) {
+    for (let t = 0; t < 1; t += 0.05) {
+      const pose = alienPose(e, t, boosting);
+      for (const k of POSE_KEYS) assert.ok(Number.isFinite(pose[k]), `${k} finite`);
+      const placed = placeAlien(pose, rest);
+      assert.ok(distTo(placed.head.pos, hc) < 1e-9, `head moved to ${placed.head.pos}`);
+      // The body hangs under the head whatever the lean: its pivot never leaves the body's reach of it.
+      assert.ok(Math.abs(distTo(placed.body.pos, hc) - distTo(rest.body, hc)) < 1e-9);
+      if (Math.abs(pose.lean) > 0.2) leaned++;
+      if (Math.abs(pose.legL - pose.legR) > 0.5) swung++;
+    }
+  }
+  assert.ok(leaned > 0 && swung > 0, "the sweep includes leaning and striding poses");
+});
+
+test("poses over a run of interpolated states change smoothly (no jump above a set angle per frame)", async () => {
+  const { createPoser, POSE_KEYS } = await import("../src/client/look/alienpose.js");
+  const tuning = await import("../src/tuning.js");
+  const { createWorld, stepWorld } = await import("../src/sim/world.js");
+  const { NO_INPUT, createEntity } = await import("../src/sim/entity.js");
+  const { entityState, applyEntity } = await import("../src/net/protocol.js");
+  const { createInterp } = await import("../src/net/interp.js");
+  const MAX_STEP = 0.25; // rad per 60 Hz frame for any angle: more reads as a snap
+
+  // The server: a player walks, sweeps its aim up and down, jumps, boosts and falls back, for 8 s.
+  const world = createWorld(tuning);
+  const p = world.entities.player;
+  const script = (tick) => {
+    const s = tick * TICK;
+    return {
+      ...NO_INPUT,
+      move: s % 4 < 2.5 ? [0, 1] : [1, 0],
+      pitchDelta: 3 * TICK * Math.sign(Math.sin(s * 1.3)), // 3 rad/s of mouse, turning round every 2.4 s
+      jump: tick % 240 === 60,
+      boost: tick % 240 > 75 && tick % 240 < 120,
+    };
+  };
+  const snaps = [];
+  for (let tick = 1; tick <= 8 / TICK; tick++) {
+    stepWorld(world, { player: script(tick) }, TICK);
+    if (tick % tuning.NET.snapEvery === 0) {
+      snaps.push({ tick, t: world.t, entities: Object.values(world.entities).map(entityState), shots: [], rocks: [] });
+    }
+  }
+
+  // The browser: snapshots arrive with jitter (sometimes two at once), frames run at 60 Hz.
+  const interp = createInterp(world.system);
+  const poser = createPoser();
+  const e = createEntity("player", "player", [0, 0, 0], [0, 1, 0]);
+  let next = 0, last = null, frames = 0, air = 0, ground = 0, boosted = 0;
+  const worst = Object.fromEntries(POSE_KEYS.map((k) => [k, 0]));
+  for (let f = 0; f < 7.5 * 60; f++) {
+    const now = (f + 1) / 60;
+    while (next < snaps.length && snaps[next].t <= now - (next % 5 === 0 ? 0 : 0.012)) interp.push(snaps[next++]);
+    const seen = interp.sample(interp.advance(1 / 60)).entities.player;
+    if (!seen) continue;
+    applyEntity(e, seen);
+    if (!e.alive) {
+      last = null;
+      continue;
+    }
+    const pose = poser.frame(e, now, 1 / 60);
+    if (last) {
+      for (const k of POSE_KEYS) worst[k] = Math.max(worst[k], Math.abs(pose[k] - last[k]));
+      frames++;
+    }
+    if (e.groundId) ground++;
+    else air++;
+    if (poser.boosting(e)) boosted++;
+    last = { ...pose };
+  }
+  assert.ok(frames > 400 && ground > 60 && air > 60 && boosted > 10, `the run walks, flies and boosts (${frames}, ${ground}, ${air}, ${boosted})`);
+  for (const k of POSE_KEYS) assert.ok(worst[k] <= MAX_STEP, `${k} jumped ${worst[k].toFixed(3)} rad in one frame`);
+});

@@ -5,10 +5,12 @@
 // planet hides the whole sun so no glow brightens the screen). In the last two the dummy must stand out from
 // the ground behind it, its name tag hidden: the mean brightness of its pixels and of the same pixels without
 // it (the ground) differ by at least NIGHT_CONTRAST of full scale, over at least SEEN_SHARE of its outline
-// (its two hit spheres projected), so a few stray pixels can't pass. Also measures the average frame time over 5 s in one view and sums the
+// (its two hit spheres projected), so a few stray pixels can't pass. The alien close up by day and night (grey,
+// and as a blue player) and in third person walking, boosting and on the hook, to look at. Also measures the average frame time over 5 s in one view and sums the
 // bytes of every file under assets/ the page fetched. Prints one line per view, then OK when there were no
 // page errors, the dummy was seen, the frame time was measured and the assets fit in LOOK.budget.
-// Usage: NODE_PATH=... node tools/look_check.cjs <base url, e.g. http://localhost:8100/> <out dir>
+// Usage: NODE_PATH=... node tools/look_check.cjs <base url, e.g. http://localhost:8100/> <out dir> [views]
+// views: a pattern for the view names to take (while working on one look); the checks then cover only those.
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
@@ -77,6 +79,32 @@ function views({ bodies, poses, eye: eyeHeight }) {
       dummy: { pos: bpos, up: bup, forward: v.norm(v.cross(bacross, bup)) },
     });
   }
+  // Close up, the alien by day and by night on the ocean planet, from the front and a little to one side; then
+  // in third person, walking and aiming up, boosting, and swinging on the hook by day, seen from the side the sun
+  // lights. `state` is set on the dummy as well as where it stands; `boost` burns its fuel
+  // every frame, as a boost does. The figure stands `deg` degrees from the pole towards the sun (day) or away
+  // (night), so the camera's up (world y) is near the figure's.
+  const mid = bodies.find((b) => b.id === "mid"), mc = poses.mid, ms = v.norm(v.sub(sun, mc));
+  const mHoriz = v.norm([ms[0], 0, ms[2]]);
+  const close = (name, k, deg, { side = false, dist = 4.2, state = {}, boost = false, as = null } = {}) => {
+    const el = (deg * Math.PI) / 180;
+    const up = v.norm(v.add(v.scale(Y, Math.cos(el)), v.scale(mHoriz, k * Math.sin(el))));
+    const pos = v.add(mc, v.scale(up, mid.radius));
+    const across = v.norm(v.cross(mHoriz, up)), sunward = v.cross(up, across);
+    // Front: facing the sun, seen from in front and a little to one side. Side: walking across the sun's
+    // direction (its gun side to the sun), seen from that side, a little ahead and above.
+    const forward = side ? v.scale(across, -1) : sunward;
+    const look = side ? v.norm(v.add(v.add(sunward, v.scale(forward, 0.6)), v.scale(up, 0.2))) : v.norm(v.add(sunward, v.scale(across, 0.5)));
+    const eye = v.add(v.add(pos, v.scale(up, 1.3)), v.scale(look, dist));
+    const { walk = 0, ...rest } = state;
+    return { name, eye, target: v.add(pos, v.scale(up, 1.0)), dummy: { pos, up, forward, state: { groundId: "mid", vel: v.scale(forward, walk), ...rest }, boost, as } };
+  };
+  list.push(close("alien-day", 1, 35));
+  list.push(close("alien-night", -1, 35));
+  list.push(close("alien-night-blue", -1, 35, { as: 0x4fb0e8 }));
+  list.push(close("alien-walk", 1, 40, { side: true, dist: 3.6, state: { walk: 7, pitch: 0.45 }, as: 0xe8505b }));
+  list.push(close("alien-boost", 1, 40, { side: true, dist: 3.6, state: { groundId: null, airTime: 0.8, pitch: 0.1 }, boost: true }));
+  list.push(close("alien-hook", 1, 40, { side: true, dist: 3.6, state: { groundId: null, airTime: 1.5, pitch: 0.3, hook: { body: "mid", offset: [0, 0, 0] } } }));
   return list;
 }
 
@@ -171,12 +199,19 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
 
   let frameMs = null;
   const seen = {};
-  for (const view of views(world)) {
+  const only = process.argv[4] ? new RegExp(process.argv[4]) : null;
+  for (const view of views(world).filter((x) => !only || only.test(x.name))) {
     await open(view);
     if (view.dummy) {
       await p.evaluate((d) => {
         const e = window.game.world.entities.dummy;
-        Object.assign(e, { pos: d.pos, up: d.up, forward: d.forward, prev: null, alive: true });
+        Object.assign(e, { pos: d.pos, up: d.up, forward: d.forward, prev: null, alive: true }, d.state || {});
+        // Drawn as a player of that colour (the colour is all the figure takes from it).
+        if (d.as) window.game.world.players.dummy = { name: "Alien", colour: d.as };
+        if (d.boost) {
+          const burn = () => ((e.fuel = e.fuel > 0.1 ? e.fuel - 0.01 : 1.5), requestAnimationFrame(burn));
+          burn();
+        }
       }, view.dummy);
     }
     // Measured: the figure alone, its name tag hidden.
@@ -204,9 +239,10 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
   }
   await b.close();
 
-  if (frameMs == null) (bad = true), console.log("frame time not measured");
+  if (frameMs == null && !only) (bad = true), console.log("frame time not measured");
+  else if (frameMs == null) console.log("frame time not measured (views filtered)");
   else console.log(`frame time ${frameMs.toFixed(2)} ms average over 5 s in ${TIMED} (${(1000 / frameMs).toFixed(0)} fps)`);
-  for (const name of SEEN) {
+  for (const name of SEEN.filter((n) => !only || only.test(n))) {
     const m = seen[name];
     if (!m || !m.inside) {
       (bad = true), console.log(`${name}: the dummy is not on screen`);

@@ -149,9 +149,28 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // back, not a slow frame, but a run of them is a very slow machine. Each time a level fails, the wait to
 // climb back into it doubles, up to `maxUp` s, so a machine fast one level down settles there; holding the
 // level for `maxUp` s trusts it again. ratio: the most screen pixels per CSS pixel at each level, lowest first.
+// sky (look/sky.js), painted once at load into a cube map of `size` px a face: intensity scales it all (dim,
+// so players and asteroids stand out); stars: the share of texels holding a faint distant star behind the
+// drawn ones. Each nebula: the direction it lies in, its size (radians), the two colours it shades between
+// and a seed for its shape. galaxy: its direction, size (radians to the disc's edge), tilt (degrees from
+// face on) and turn (degrees round the line of sight).
+// sun (look/sun.js): octaves of churn on the surface at each quality level; churn: how fast it moves;
+// corona: how far it reaches, in sun radii; flare: the screen glow's strength looking straight at the sun,
+// drawn from level `flareFrom` up; fade: 1/s, how fast the glow follows the sun going behind a planet.
 export const LOOK = {
   budget: 4_000_000,
   quality: { down: 1 / 50, up: 10, window: 2, pause: 0.25, maxUp: 240, ratio: [1, 1.5, 2] },
+  sky: {
+    size: 1024, intensity: 1, stars: 0.004,
+    nebulas: [
+      { dir: [-0.55, 0.12, -0.83], size: 0.95, colors: [0x5b2c9e, 0x2b63c4], seed: 1 },
+      { dir: [0.85, -0.2, 0.45], size: 0.8, colors: [0x13807e, 0x2d4fa8], seed: 2 },
+      { dir: [0.15, 0.5, 0.85], size: 0.7, colors: [0xd0601c, 0x962a5c], seed: 3 },
+      { dir: [-0.2, -0.85, -0.2], size: 0.75, colors: [0x24308c, 0x8c2f7a], seed: 4 },
+    ],
+    galaxy: { dir: [0.5, 0.82, 0.05], size: 0.2, tilt: 60, turn: 25 },
+  },
+  sun: { octaves: [2, 3, 5], churn: 0.06, corona: 3.2, flare: 0.5, flareFrom: 1, fade: 8 },
 };
 
 // Online play. Ticks unless noted: maxLag, history, rejoin, unreachable and smooth are seconds, snap is metres.

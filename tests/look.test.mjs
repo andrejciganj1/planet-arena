@@ -178,3 +178,18 @@ test("a level that holds for maxUp s is trusted again: its next retry waits only
   assert.equal(q.level, 2);
   assert.ok(t <= 2 * up + 2 * window, `climbed back after ${t.toFixed(1)} s`);
 });
+
+test("the sun is in sight unless a body covers it, and half covered reads as partly in sight", async () => {
+  const { sunInSight } = await import("../src/client/look/sunsight.js");
+  const sun = [0, 0, 0], R = 25, eye = [100, 0, 0];
+  assert.equal(sunInSight(eye, sun, R, []), 1);
+  assert.equal(sunInSight(eye, sun, R, [{ pos: [0, 200, 0], radius: 10 }]), 1); // off to the side
+  assert.equal(sunInSight(eye, sun, R, [{ pos: [300, 0, 0], radius: 50 }]), 1); // behind the eye
+  assert.equal(sunInSight(eye, sun, R, [{ pos: [60, 0, 0], radius: 20 }]), 0); // a planet in front
+  assert.equal(sunInSight(eye, sun, R, [{ pos: [-100, 0, 0], radius: 20 }]), 1); // behind the sun
+  const half = sunInSight(eye, sun, R, [{ pos: [60, 0, -50], radius: 50 }]);
+  assert.ok(half > 0.2 && half < 0.8, `half covered: ${half}`);
+  // Standing on a planet's night side: the ground hides the sun.
+  assert.equal(sunInSight([88, 0, 0], sun, R, [{ pos: [80, 0, 0], radius: 7 }]), 0);
+  assert.equal(sunInSight([72.5, 0, 0], sun, R, [{ pos: [80, 0, 0], radius: 7 }]), 1);
+});

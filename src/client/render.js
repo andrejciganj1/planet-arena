@@ -12,8 +12,8 @@ import { posesAt } from "../sim/system.js";
 import { surfaceInfo } from "../sim/collide.js";
 import { add, sub, scale, lerp, norm, cross, dist, rotateAxis, rotateFromTo } from "../sim/vec.js";
 import { rng, v3, Y } from "./look/common.js";
-import { starfield } from "./look/sky.js";
-import { glowSprite } from "./look/sun.js";
+import { starfield, nebulaSky } from "./look/sky.js";
+import { glowSprite, sunLook } from "./look/sun.js";
 import { sphereMesh, planetRing, orbitLines } from "./look/planets.js";
 import { DUMMY_COLOUR, dummyMesh } from "./look/aliens.js";
 import { weaponModels, shotLooks } from "./look/weapons.js";
@@ -31,12 +31,13 @@ const OVERVIEW = [0, 260, 380, 0, 0, 0];
 export function createRenderer(world, canvas, fixedView = null, selfId = "player") {
   const self = typeof selfId === "function" ? selfId : () => selfId;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  // The quality step's level sets the pixel ratio (and later which effects run); it starts at the top.
+  // The quality step's level sets the pixel ratio and which effects run; it starts at the top.
   const quality = createQuality({ levels: LOOK.quality.ratio.length, ...LOOK.quality });
   let level = quality.level, lastNow = null;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOOK.quality.ratio[level]));
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x05060d);
+  scene.background = nebulaSky(renderer);
+  scene.backgroundIntensity = LOOK.sky.intensity;
   const camera = new THREE.PerspectiveCamera(80, 1, 0.05, 5000);
   scene.add(camera);
   const rand = rng(7);
@@ -54,9 +55,10 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   for (const r of rings) scene.add(r.ring);
 
   const bodies = {}, tails = [];
+  let sun = null;
   for (const b of world.system.bodies) {
-    const m = sphereMesh(b, rand);
-    if (b.kind === "sun") m.add(glowSprite(0xffb43d, b.radius * 6));
+    if (b.kind === "sun") sun = sunLook(b, rand);
+    const m = b.kind === "sun" ? sun.mesh : sphereMesh(b, rand);
     if (b.kind === "comet") {
       m.add(glowSprite(0xbfe8ff, b.radius * 5));
       tails.push({ id: b.id, mesh: cometTail() });
@@ -66,6 +68,10 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
     scene.add(m);
   }
   for (const t of tails) scene.add(t.mesh);
+  scene.add(sun.flare);
+  sun.setLevel(level);
+  // Everything that can hide the sun.
+  const blockers = world.system.bodies.filter((b) => b.kind !== "sun").map((b) => ({ id: b.id, pos: null, radius: b.radius }));
   const belt = asteroidBelt(rand);
   scene.add(belt.group);
 
@@ -154,7 +160,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       if (lastNow !== null && quality.frame(now - lastNow) !== level) {
         level = quality.level;
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOOK.quality.ratio[level]));
+        sun.setLevel(level);
       }
+      const dt = lastNow === null ? 0 : now - lastNow;
       lastNow = now;
       resize();
       if (camera.fov !== 80 / zoom) {
@@ -322,6 +330,8 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         ropeGeo.setFromPoints([v3(hand), v3(anchor)]);
       }
 
+      for (const k of blockers) k.pos = poses[k.id];
+      sun.update(t, dt, camera, poses.sun, blockers);
       renderer.render(scene, camera);
     },
   };

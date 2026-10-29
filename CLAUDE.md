@@ -14,7 +14,7 @@ A physics arena shooter across a small solar system, in the browser. Spec:
   prints `OK` when two players see each other and both clocks keep real time.
 - Controls: click to capture the mouse; mouse look, WASD move, space jump (held in the air: booster),
   left mouse fire, right mouse hook (held), 1 to 6 weapons (pistol, shotgun, rocket launcher, minigun, sniper
-  rifle, railgun), wheel cycles held weapons, Shift zooms the sniper rifle.
+  rifle, railgun), wheel cycles held weapons, Shift zooms the sniper rifle, O shows or hides orbit lines, P pad cues.
 
 ## Constraints
 

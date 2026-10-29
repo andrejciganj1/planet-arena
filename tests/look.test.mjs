@@ -595,3 +595,79 @@ test("another's muzzle flashes once per shot fired on the server, seen through s
   assert.ok(shown <= flashes * Math.ceil(LOOK.weapons.flash.time * 60), `each flash brief (${shown} frames for ${flashes})`);
   assert.ok(shown >= flashes, "each flash seen for a frame at least");
 });
+
+// Pickups, pads, rocks and comets (look/proppose.js, assets/models/props.glb from tools/blender/props.py).
+const PROPS_GLB = "../assets/models/props.glb";
+
+test("each pickup shows its model: weapons their gun, ammo a crate in the weapon's colour, health and fuel their own", async () => {
+  const { pickupModel } = await import("../src/client/look/proppose.js");
+  const { PICKUPS, WEAPON_ORDER } = await import("../src/tuning.js");
+  const kinds = new Set();
+  for (const pk of PICKUPS) {
+    const m = pickupModel(pk);
+    kinds.add(pk.kind);
+    if (pk.kind === "weapon") {
+      assert.deepEqual(m, { file: "weapons", node: pk.weapon, tint: null }, pk.id);
+      assert.ok(WEAPON_ORDER.includes(m.node), `${pk.id} shows a gun the weapons file has`);
+    } else if (pk.kind === "ammo") assert.deepEqual(m, { file: "props", node: "ammo", tint: LOOK.weapons.colors[pk.weapon] }, pk.id);
+    else assert.deepEqual(m, { file: "props", node: pk.kind, tint: null }, pk.id);
+  }
+  assert.deepEqual([...kinds].sort(), ["ammo", "fuel", "health", "weapon"]);
+});
+
+test("the props file has each pickup, the pad and four rocks, and each fits where it is drawn", async () => {
+  const { ASTEROID } = await import("../src/tuning.js");
+  const glb = readGlb(PROPS_GLB), mats = glb.json.materials.map((m) => m.name);
+  for (const m of ["ammo_accent", "pad_light"]) assert.ok(mats.includes(m), `a material named ${m}`);
+  // Pickups float 1 m up and bob 0.15: within 0.6 m of their centre they never touch the ground.
+  for (const name of ["health", "fuel", "ammo"]) {
+    for (const p of nodeVertices(glb, name).points) assert.ok(Math.hypot(...p) <= 0.6, `${name} vertex ${p} beyond 0.6 m`);
+  }
+  // The pad lies almost flat, its plate no wider than the old disc.
+  for (const name of ["pad", "pad_arrow"]) nodeVertices(glb, name);
+  for (const p of nodeVertices(glb, "pad").points) {
+    assert.ok(Math.hypot(p[0], p[2]) <= 1.3 && p[1] >= -0.05 && p[1] <= 0.35, `pad vertex ${p}`);
+  }
+  // Rocks are unit sized: scaled by ASTEROID.radius a flying one stays inside its hit sphere and fills most of it.
+  for (let i = 0; i < 4; i++) {
+    const r = nodeVertices(glb, `rock_${i}`).points.map((p) => Math.hypot(...p));
+    assert.ok(Math.max(...r) <= 1 && Math.max(...r) >= 0.9, `rock_${i} reaches ${Math.max(...r)}`);
+    assert.ok(Math.min(...r) >= 0.6, `rock_${i} dips to ${Math.min(...r)}`);
+    assert.ok(Math.max(...r) * ASTEROID.radius <= ASTEROID.radius);
+  }
+});
+
+test("comet tails point away from the sun: the ion tail straight, the dust tail curving back along the path, both longer near the sun", async () => {
+  const { cometTails, tailAt } = await import("../src/client/look/proppose.js");
+  const tuning = await import("../src/tuning.js");
+  const { createWorld } = await import("../src/sim/world.js");
+  const { posesAt } = await import("../src/sim/system.js");
+  const { sub, dot, norm, dist, cross, len } = await import("../src/sim/vec.js");
+  const system = createWorld(tuning).system;
+  const comets = system.bodies.filter((b) => b.kind === "comet");
+  assert.ok(comets.length >= 1);
+  for (const c of comets) {
+    let near = null, far = null;
+    for (let t = 0; t < 300; t += 0.5) {
+      const poses = posesAt(system, t), { pos, vel } = poses[c.id], sun = poses.sun.pos;
+      const tails = cometTails(pos, vel, sun), away = norm(sub(pos, sun)), d = dist(pos, sun);
+      const angle = (s, tail) => Math.acos(Math.min(1, dot(norm(sub(tailAt(tail, s), pos)), away)));
+      for (const s of [0.25, 0.5, 1]) {
+        const ion = tailAt(tails.ion, s), dust = tailAt(tails.dust, s);
+        assert.ok(angle(s, tails.ion) < 1e-6, `${c.id} ion tail straight away from the sun at t ${t}`);
+        assert.ok(dist(ion, sun) > d && dist(dust, sun) > d, `${c.id} tails reach away from the sun at t ${t}`);
+        assert.ok(dot(sub(dust, pos), away) > 0, `${c.id} dust tail ahead of the sun line`);
+        // The dust trails behind the comet's motion (across the sun line).
+        const sideways = sub(vel, away.map((a) => a * dot(vel, away)));
+        if (len(sideways) > 1e-3) assert.ok(dot(sub(dust, ion), sideways) < 0, `${c.id} dust tail lags behind at t ${t}`);
+      }
+      // Curved: bends further from the sun line along its length; the ion tail doesn't.
+      if (len(cross(norm(vel), away)) > 0.05) assert.ok(angle(1, tails.dust) > angle(0.5, tails.dust) + 0.02, `${c.id} dust tail curves at t ${t}`);
+      if (!near || d < near.d) near = { d, tails };
+      if (!far || d > far.d) far = { d, tails };
+    }
+    for (const k of ["ion", "dust"]) assert.ok(near.tails[k].length > far.tails[k].length * 1.5, `${c.id} ${k} tail grows near the sun`);
+    assert.ok(near.tails.ion.length > near.tails.dust.length, "the ion tail is the long one");
+    assert.ok(near.tails.ion.width[1] < near.tails.dust.width[1], "the ion tail is the thin one");
+  }
+});

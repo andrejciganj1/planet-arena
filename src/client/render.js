@@ -20,7 +20,8 @@ import { DUMMY_COLOUR, ALIEN_ASSETS, figureMesh, dressFigure, armFigure, styleFi
 import { createPoser } from "./look/alienpose.js";
 import { WEAPON_ASSETS, weaponModels, weaponSet, swapMaterials, muzzleFlash, showFlash, spinGun, shotLooks } from "./look/weapons.js";
 import { createGunWatch, viewGun, flashShown } from "./look/gunpose.js";
-import { pickupMesh, padMesh, cuePath, ropeLine, cometTail, asteroidBelt, flyingRocks } from "./look/props.js";
+import { PROP_ASSETS, pickupLook, padLook, cuePath, ropeLine, cometTailLook, asteroidBelt, flyingRocks } from "./look/props.js";
+import { cometTails } from "./look/proppose.js";
 import { loadAssets } from "./look/assets.js";
 import { threeLoaders } from "./look/loaders.js";
 import { createQuality } from "./look/quality.js";
@@ -53,7 +54,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const rand = rng(7);
   // Models and images: each look module lists its files here and swaps them in when they arrive; until then
   // (or if one never does) it draws its simple shape.
-  const assets = loadAssets([...ALIEN_ASSETS, ...WEAPON_ASSETS], { loaders: threeLoaders() });
+  const assets = loadAssets([...ALIEN_ASSETS, ...WEAPON_ASSETS, ...PROP_ASSETS], { loaders: threeLoaders() });
 
   // three.js r160 lights are physically based (diffuse divided by pi), hence the large numbers. The night
   // side of a planet must stay readable.
@@ -74,13 +75,13 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       m = sphereMesh(b, rand);
       if (b.kind === "comet") {
         m.add(glowSprite(0xbfe8ff, b.radius * 5));
-        tails.push({ id: b.id, mesh: cometTail() });
+        tails.push({ id: b.id, look: cometTailLook() });
       }
     }
     bodies[b.id] = m;
     scene.add(m);
   }
-  for (const t of tails) scene.add(t.mesh);
+  for (const t of tails) scene.add(t.look.group);
   scene.add(sun.flare);
   sun.setLevel(level);
   planets.setLevel(level);
@@ -96,9 +97,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
     const at = padPos(world, pad, world.poses);
     const offset = sub(at, world.poses[pad.body].pos);
     const n = surfaceInfo(body, world.poses[pad.body], at).normal;
-    const { g, mat } = padMesh(n, pad.dir);
-    scene.add(g);
-    return { pad, offset, g, mat };
+    const look = padLook(n, pad.dir);
+    scene.add(look.group);
+    return { pad, offset, look };
   });
   const { path, pathGeo, pathMat } = cuePath();
   scene.add(path);
@@ -114,9 +115,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
 
   // Pickups float over their spots; each has a solid look and a faint one for while it is gone.
   const pickups = PICKUPS.map((pk) => {
-    const solid = pickupMesh(pk, false), ghost = pickupMesh(pk, true);
-    scene.add(solid, ghost);
-    return { pk, solid, ghost };
+    const look = pickupLook(pk);
+    scene.add(look.group);
+    return { pk, look };
   });
   const { rope, ropeGeo } = ropeLine();
   scene.add(rope);
@@ -130,7 +131,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const rockTrail = (id) => {
     let k = rockTrails.get(id);
     if (!k) {
-      const { mesh, line } = rockLook();
+      const { mesh, line } = rockLook.make();
       scene.add(mesh, line);
       rockTrails.set(id, (k = { mesh, line, pts: [], seen: 0 }));
     }
@@ -226,13 +227,10 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       }
       sunLight.position.copy(v3(poses.sun));
       for (const r of rings) r.ring.position.copy(v3(poses[r.around]));
-      // Tails point away from the sun and grow as the comet nears it.
-      for (const t of tails) {
-        const away = sub(poses[t.id], poses.sun), d = Math.hypot(...away);
-        t.mesh.position.copy(v3(poses[t.id]));
-        t.mesh.quaternion.setFromUnitVectors(Y, v3(scale(away, 1 / d)));
-        t.mesh.scale.set(2.2, Math.min(60, 12 + 1600 / d), 2.2);
-      }
+      // Tails point away from the sun and grow as the comet nears it; the dust tail trails the path.
+      for (const t of tails) t.look.update(cometTails(poses[t.id], world.poses[t.id].vel, poses.sun));
+      const props = assets.get("props");
+      if (props) belt.dress(props), rockLook.dress(props);
       belt.update(world.t + (alpha - 1) * TICK);
 
       const p = world.entities[self()];
@@ -284,13 +282,20 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       showFlash(viewFlash, held, !!held && flashShown(mineShot.since), mineShot, p?.shots);
       camera.updateMatrixWorld(true); // the gun's muzzle is where your own beam starts
 
+      // How much of the sun a body hides from a point (pads, pickups).
+      const sunAt = (at) => {
+        let seen = 1;
+        for (const k of blockers) seen *= sphereShadow(at, poses.sun, sunRadius, k.pos, k.radius);
+        return seen;
+      };
       let nearest = null;
       for (const pd of pads) {
         const at = add(poses[pd.pad.body], pd.offset);
-        pd.g.position.copy(v3(at));
+        pd.look.group.position.copy(v3(at));
+        if (props) pd.look.dress(props);
         const on = !!world.cues[pd.pad.id]?.landsOn;
         // Cues hidden: neutral grey, since a pad that is always red would read as "never lands".
-        pd.mat.color.setHex(!shown.cues ? 0x8a8f9c : on ? 0x3ee05a : 0xe0443e);
+        pd.look.cue(!shown.cues ? LOOK.props.pads.hidden : on ? LOOK.props.pads.lands : LOOK.props.pads.misses, sunAt(add(at, scale(norm(pd.offset), 0.5))));
         const d = dist(at, viewer);
         if (d < PAD_CUE.showPathWithin && (!nearest || d < nearest.d)) nearest = { pd, d };
       }
@@ -307,7 +312,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         pathGeo.attributes.position.needsUpdate = true;
         pathGeo.setDrawRange(0, n);
         path.computeLineDistances(); // dashes follow the new path
-        pathMat.color.setHex(cue.landsOn ? 0x3ee05a : 0xe0443e);
+        pathMat.color.setHex(cue.landsOn ? LOOK.props.pads.lands : LOOK.props.pads.misses);
       }
 
       const alien = assets.get("alien");
@@ -352,6 +357,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         const k = rockTrail(a.id);
         k.seen = frameNo;
         k.mesh.position.copy(v3(a.pos));
+        rockLook.fit(k.mesh, a.id);
         k.mesh.rotation.set(...tumble(a.id, world.t), 0);
         // One trail point per game tick (not per frame), so the trail lasts the same on any screen.
         trailPush(k, a.pos, world.t, ROCK_LOOK.trail);
@@ -392,18 +398,16 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       for (; i < beams.length; i++) beams[i].visible = false;
 
       // Pickups bob and turn above their spots.
-      const t = world.t + (alpha - 1) * TICK;
-      for (const { pk, solid, ghost } of pickups) {
+      const t = world.t + (alpha - 1) * TICK, { float, bob, bobRate, spin } = LOOK.props.pickups;
+      const files = { props, weapons: guns };
+      for (const { pk, look } of pickups) {
         const b = world.system.byId[pk.body];
-        const at = add(poses[pk.body], scale(pk.dir, b.radius + 1 + 0.15 * Math.sin(2 * t + b.radius)));
-        const ready = pickupReady(world, pk);
-        for (const m of [solid, ghost]) {
-          m.position.copy(v3(at));
-          m.quaternion.setFromUnitVectors(Y, v3(pk.dir));
-          m.rotateY(t);
-        }
-        solid.visible = ready;
-        ghost.visible = !ready;
+        const at = add(poses[pk.body], scale(pk.dir, b.radius + float + bob * Math.sin(bobRate * t + b.radius)));
+        look.dress(files);
+        look.group.position.copy(v3(at));
+        look.group.quaternion.setFromUnitVectors(Y, v3(pk.dir));
+        look.group.rotateY(spin * t);
+        look.show(pickupReady(world, pk), sunAt(at));
       }
 
       // The rope from just below the eye to the caught point (interpolated with its body).

@@ -121,8 +121,8 @@ export const COLOURS = [0xffd23f, 0xe8505b, 0x4fb0e8, 0x6fd36b, 0xb06fe8, 0xff8a
 
 // What being hit and kills look like (seconds unless noted). Looks only. Vignette: full strength at `full`
 // damage, never above `max`; the bar over a hit player flashes white for `flash`.
-// Looks of a flying asteroid: `trail` drawn positions kept behind it, `glow` the hot shell's size as a
-// multiple of the rock's radius and `glowOpacity` how solid it is, `trailSize` the m across of each trail
+// Looks of a flying asteroid: `trail` drawn positions kept behind it, `glow` the hot haze's radius as a
+// multiple of the rock's and `glowOpacity` how solid it is, `trailSize` the m across of each trail
 // dot, colours as hex.
 export const ROCK_LOOK = { trail: 60, trailSize: 1.6, glow: 1.3, glowOpacity: 0.25, rock: 0x3a3330, hot: 0xff7a1f, trailColor: 0xffa040 };
 
@@ -189,6 +189,16 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // straight ahead, so its barrel runs to the crosshair); kick: the recoil after each of your shots, back (m) and up (rad) at its start,
 // gone after `time` s, scaled per weapon by `by`; flash: s a muzzle flash shows, its size per weapon (m, in the
 // model's own size) and its colour; spin: the minigun's barrels, rad per s while firing and for `for` s after.
+// props (look/props.js, the models from tools/blender/props.py; look/proppose.js): pickups float `float` m over
+// their spot, bobbing `bob` m at `bobRate` rad/s, turning `spin` rad/s; glow: how bright their coloured parts
+// glow in their own colour; night: how much the rest glows in its own colour where the sun doesn't reach (so a
+// pickup on a night side keeps a soft glow); halo: the soft light round one, m across and opacity; sun:
+// as alien.sun; weapon: a gun pickup's size against the gun in view. pads: the plate's lights, by cue (lands,
+// misses, cues hidden), how bright they glow, and the halo over the plate. rocks: the belt's colour and how much
+// one rock's shade differs from the next; cracks: how bright a flying rock's hollows glow in ROCK_LOOK.hot;
+// rim: the hot edge round it. comets: each tail's colour, length [base, reach, most] (m: base + reach / the
+// distance to the sun, at most `most`), width at the comet and at the tip (m) and opacity; the dust tail's bend
+// (m sideways per m along, at its tip), trailing the comet's path.
 export const LOOK = {
   budget: 4_000_000,
   weapons: {
@@ -209,6 +219,15 @@ export const LOOK = {
       steps: 2.6, swing: 0.6, armSwing: 0.35, head: 0.5, aim: [-1.3, 0.7], support: -0.35, reach: 0.4,
       lean: { walk: 0.08, jump: -0.08, fall: 0.1, boost: 0.11 },
       tuck: [0.75, -0.2], dangle: [0.35, -0.35], trail: [-0.5, -0.35], fly: 2.0, flail: 2.4, fall: 0.6, ease: 0.08, boostHold: 0.15,
+    },
+  },
+  props: {
+    pickups: { float: 1, bob: 0.15, bobRate: 2, spin: 1, glow: 0.6, night: 0.3, halo: [1.8, 0.5], sun: 0.55, weapon: 2.2 },
+    pads: { lands: 0x3ee05a, misses: 0xe0443e, hidden: 0x8a8f9c, glow: 1.2, halo: [2.6, 0.3] },
+    rocks: { belt: 0x5e5650, variety: 0.12, cracks: 1.6, rim: 0.4 },
+    comets: {
+      ion: { color: 0x5fa8ff, length: [12, 2400, 80], width: [0.7, 1.4], opacity: 0.55 },
+      dust: { color: 0xffe6a8, length: [8, 1500, 50], width: [2.2, 10], opacity: 0.55, bend: 0.5 },
     },
   },
   quality: { down: 1 / 50, up: 10, window: 2, pause: 0.25, maxUp: 240, ratio: [1, 1.5, 2] },

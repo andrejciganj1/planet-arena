@@ -9,7 +9,8 @@
 // the dummy drawn in every player colour (COLOURS). The alien close up by day and night (grey, and as a blue
 // player) and in third person walking, boosting and on the hook, to look at. Each weapon in first person, at
 // rest and firing (a shot every frame, so the kick and the flash show), one firing on a night side, and in an
-// alien's hand firing, seen from the side. Also measures the average frame
+// alien's hand firing, seen from the side. The props (propViews): pickups, pads, the belt, a flying rock and a
+// comet's tails. Also measures the average frame
 // time over 5 s in one view and sums the bytes of every file under assets/ the page fetched. Prints one line per view, then OK when there were no
 // page errors, the dummy was seen, the frame time was measured and the assets fit in LOOK.budget.
 // Usage: NODE_PATH=... node tools/look_check.cjs <base url, e.g. http://localhost:8100/> <out dir> [views]
@@ -36,7 +37,8 @@ v.norm = (a) => v.scale(a, 1 / Math.hypot(...a));
 const Y = [0, 1, 0];
 
 // Every view as { name, eye, target, dummy? } from the bodies at the still moment.
-function views({ bodies, poses, eye: eyeHeight, weapons }) {
+function views(world) {
+  const { bodies, poses, eye: eyeHeight, weapons } = world;
   const sun = poses.sun, list = [];
   for (const b of bodies.filter((b) => b.kind === "planet" || b.id === "moon" || b.id === "comet-a")) {
     const c = poses[b.id], s = v.norm(v.sub(sun, c));
@@ -123,6 +125,38 @@ function views({ bodies, poses, eye: eyeHeight, weapons }) {
   }
   list.push(firstPerson("fp-night-railgun", -1, "railgun", true));
   for (const w of weapons) list.push(close(`hold-${w}`, 1, 40, { side: true, dist: 3, state: { weapon: w, pitch: 0.15 }, as: 0x4fb0e8, fire: true }));
+  list.push(...propViews(world));
+  return list;
+}
+
+// The props: each kind of pickup on the day side and the night side of its body (the spot facing the sun most
+// and least), a pad by day with its cue shown and hidden and one by night, the belt from inside it, a flying
+// rock with its trail (`rock`: moved along `vel` two ticks a frame, so the trail grows) and a comet near the
+// sun from above its orbit (`at`: the clock then, so both tails are long).
+function propViews({ poses, pickups, pads, comet }) {
+  const sun = poses.sun, list = [];
+  const sunward = (body, dir) => v.dot(dir, v.norm(v.sub(sun, poses[body])));
+  const across = (n) => v.norm(v.cross(n, Math.abs(n[1]) > 0.9 ? [1, 0, 0] : Y));
+  const extreme = (items, k) => items.reduce((a, b) => (k * sunward(b.body, b.n) > k * sunward(a.body, a.n) ? b : a));
+  for (const kind of ["health", "fuel", "ammo", "weapon"]) {
+    for (const [name, k] of [["day", 1], ["night", -1]]) {
+      const pk = extreme(pickups.filter((x) => x.kind === kind), k);
+      const t = across(pk.n);
+      list.push({ name: `pickup-${kind}-${name}`, eye: v.add(pk.at, v.add(v.scale(pk.n, 0.7), v.scale(t, 2.2))), target: v.add(pk.at, v.scale(pk.n, -0.2)) });
+    }
+  }
+  for (const [name, k, shown] of [["pad-cue", 1, null], ["pad-nocue", 1, { cues: false }], ["pad-night", -1, null]]) {
+    const pd = extreme(pads, k), t = across(pd.n);
+    list.push({ name, eye: v.add(pd.at, v.add(v.scale(pd.n, 3), v.scale(t, 4.5))), target: v.add(pd.at, v.scale(pd.n, 0.5)), shown });
+  }
+  const a = 0.3, ring = (r, y, da = 0) => [r * Math.cos(a + da), y, r * Math.sin(a + da)];
+  list.push({ name: "belt-close", eye: ring(146, 2.5), target: ring(155, 0, 0.12) });
+  // The rock flies for about a second before the shot (two ticks a frame), so it starts a second back.
+  const rock = v.add(poses.mid, [0, 30, 0]), vel = [12, 0, -3];
+  list.push({ name: "asteroid", eye: v.add(rock, [2, 2, 10]), target: v.add(rock, [-1.5, 0, 0]), rock: { pos: v.sub(rock, vel), vel } });
+  const away = v.norm(v.sub(comet.pos, comet.sun)), up = v.norm(v.cross(away, comet.vel));
+  const mid = v.add(comet.pos, v.scale(away, 30));
+  list.push({ name: "comet-tails", at: comet.t, eye: v.add(mid, v.add(v.scale(up, 55), v.scale(away, -10))), target: mid });
   return list;
 }
 
@@ -168,7 +202,7 @@ const contrastIn = (p, a, b, discs) => p.evaluate(async ({ a, b, discs }) => {
 function pageUrl(base, view) {
   const u = new URL(base);
   u.searchParams.set("debug", "");
-  u.searchParams.set("at", String(AT));
+  u.searchParams.set("at", String(view?.at ?? AT));
   if (view?.eye) u.searchParams.set("view", [...view.eye, ...view.target].map((x) => x.toFixed(3)).join(","));
   return u.toString();
 }
@@ -204,8 +238,18 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
 
   await open(null);
   const world = await p.evaluate(async () => {
-    const { PLAYER, LOOK, COLOURS, WEAPON_ORDER } = await import(new URL("src/tuning.js", location.href));
+    const { PLAYER, LOOK, COLOURS, WEAPON_ORDER, PICKUPS } = await import(new URL("src/tuning.js", location.href));
+    const { padPos } = await import(new URL("src/sim/pads.js", location.href));
+    const { posesAt } = await import(new URL("src/sim/system.js", location.href));
     const w = window.game.world;
+    const unit = (a) => a.map((x) => x / Math.hypot(...a)), minus = (a, b) => a.map((x, i) => x - b[i]);
+    // The first comet's nearest pass by the sun in one lap.
+    let comet = null;
+    const cid = w.system.bodies.find((b) => b.kind === "comet").id;
+    for (let t = 0; t < 80; t += 0.25) {
+      const q = posesAt(w.system, t), d = Math.hypot(...minus(q[cid].pos, q.sun.pos));
+      if (!comet || d < comet.d) comet = { t, d, pos: q[cid].pos, vel: q[cid].vel, sun: q.sun.pos };
+    }
     return {
       bodies: w.system.bodies.map(({ id, kind, radius }) => ({ id, kind, radius })),
       poses: Object.fromEntries(Object.entries(w.poses).map(([id, q]) => [id, q.pos])),
@@ -214,6 +258,15 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
       budget: LOOK.budget,
       colours: COLOURS,
       weapons: WEAPON_ORDER,
+      pickups: PICKUPS.map((pk) => ({
+        kind: pk.kind, body: pk.body, n: pk.dir,
+        at: w.poses[pk.body].pos.map((x, i) => x + pk.dir[i] * (w.system.byId[pk.body].radius + LOOK.props.pickups.float)),
+      })),
+      pads: w.pads.map((pad) => {
+        const at = padPos(w, pad, w.poses);
+        return { body: pad.body, at, n: unit(minus(at, w.poses[pad.body].pos)) };
+      }),
+      comet,
     };
   });
 
@@ -248,6 +301,19 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
           shoot();
         }
       }, view.fp);
+    }
+    if (view.shown) await p.evaluate((s) => window.game.renderer.setShown(s), view.shown);
+    if (view.rock) {
+      await p.evaluate(async ({ pos, vel }) => {
+        const { TICK } = await import(new URL("src/tuning.js", location.href));
+        const w = window.game.world, a = { id: "look-rock", pos: [...pos], vel, owner: null };
+        w.asteroids.push(a);
+        const fly = () => {
+          for (let k = 0; k < 2; k++) (a.pos = a.pos.map((x, i) => x + vel[i] * TICK)), (w.t += TICK);
+          requestAnimationFrame(fly);
+        };
+        fly();
+      }, view.rock);
     }
     // Measured: the figure alone, its name tag hidden.
     if (SEEN.includes(view.name)) await p.evaluate(() => window.game.renderer.setShown({ tags: false }));

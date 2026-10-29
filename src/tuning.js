@@ -143,6 +143,12 @@ export const SOUND = {
 
 export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade: 1, feedFor: 5, flash: 0.15, feedMax: 6 };
 
+// The look, looks only. budget: bytes the page may download for all look assets (tools/look_check.cjs).
+// quality, the automatic step (look/quality.js): a level down when frames average over `down` s across a
+// `window` s, a level up after `up` s of windows that weren't; a frame over `pause` s is a hidden tab coming
+// back, not a slow frame. ratio: the most screen pixels per CSS pixel at each level, lowest first.
+export const LOOK = { budget: 4_000_000, quality: { down: 1 / 50, up: 10, window: 2, pause: 0.25, ratio: [1, 1.5, 2] } };
+
 // Online play. Ticks unless noted: maxLag, history, rejoin, unreachable and smooth are seconds, snap is metres.
 export const NET = {
   maxPlayers: 8, snapEvery: 2, interp: 6, slack: [2, 5], hold: 15, maxAhead: 60, maxLag: 0.5, history: 0.6,

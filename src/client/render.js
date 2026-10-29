@@ -5,7 +5,7 @@
 // camera, lights and the frame, and moves the pieces to where the world says they are.
 import * as THREE from "three";
 import { tumble, trailPush } from "./rocklook.js";
-import { PLAYER, DUMMY, ROCKET, PAD_CUE, TICK, PICKUPS, WEAPONS, FEEDBACK, ROCK_LOOK } from "../tuning.js";
+import { PLAYER, DUMMY, ROCKET, PAD_CUE, TICK, PICKUPS, WEAPONS, FEEDBACK, ROCK_LOOK, LOOK } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
 import { pickupReady } from "../sim/pickups.js";
 import { posesAt } from "../sim/system.js";
@@ -18,6 +18,9 @@ import { sphereMesh, planetRing, orbitLines } from "./look/planets.js";
 import { DUMMY_COLOUR, dummyMesh } from "./look/aliens.js";
 import { weaponModels, shotLooks } from "./look/weapons.js";
 import { pickupMesh, padMesh, cuePath, ropeLine, cometTail, asteroidBelt, flyingRocks } from "./look/props.js";
+import { loadAssets } from "./look/assets.js";
+import { threeLoaders } from "./look/loaders.js";
+import { createQuality } from "./look/quality.js";
 
 const MAX_PITCH = (89 * Math.PI) / 180;
 // Where the camera looks from while you have no body yet (online, before the first snapshot).
@@ -28,12 +31,18 @@ const OVERVIEW = [0, 260, 380, 0, 0, 0];
 export function createRenderer(world, canvas, fixedView = null, selfId = "player") {
   const self = typeof selfId === "function" ? selfId : () => selfId;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // The quality step's level sets the pixel ratio (and later which effects run); it starts at the top.
+  const quality = createQuality({ levels: LOOK.quality.ratio.length, ...LOOK.quality });
+  let level = quality.level, lastNow = null;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOOK.quality.ratio[level]));
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x05060d);
   const camera = new THREE.PerspectiveCamera(80, 1, 0.05, 5000);
   scene.add(camera);
   const rand = rng(7);
+  // Models and images: each look module will list its files here and swap them in when they arrive; until
+  // then (or if one never does) it draws its simple shape.
+  const assets = loadAssets([], { loaders: threeLoaders() });
 
   // three.js r160 lights are physically based (diffuse divided by pi), hence the large numbers. The night
   // side of a planet must stay readable.
@@ -142,6 +151,11 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
     // zoom: the sniper's magnification while zoomed, else 1; shift: added to where you are drawn (online,
     // a prediction's correction eased in); now: real seconds, for the bars' hit flash.
     draw(alpha, look, zoom = 1, shift = null, now = 0) {
+      if (lastNow !== null && quality.frame(now - lastNow) !== level) {
+        level = quality.level;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOOK.quality.ratio[level]));
+      }
+      lastNow = now;
       resize();
       if (camera.fov !== 80 / zoom) {
         camera.fov = 80 / zoom;

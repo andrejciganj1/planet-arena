@@ -5,9 +5,13 @@
 //   ?solo                plays solo whatever the address
 //   ?debug               exposes window.game = { world, audio } (online: the view world)
 //   ?view=x,y,z,tx,ty,tz fixes a free camera at x,y,z looking at tx,ty,tz (for screenshots)
+//   ?debug&at=T          solo: the match clock stands still at T s, so screenshots (tools/look_check.cjs) are
+//                        the same every time; whoever stands on a body is carried there with it
 import * as tuning from "../tuning.js";
 import { createWorld, advance } from "../sim/world.js";
 import { NO_INPUT } from "../sim/entity.js";
+import { posesAt } from "../sim/system.js";
+import { add, sub } from "../sim/vec.js";
 import { createInput } from "./input.js";
 import { createRenderer } from "./render.js";
 import { createSettings, TOGGLES, toggleText } from "./settings.js";
@@ -24,6 +28,17 @@ const world = game ? game.world : createWorld(tuning);
 const selfId = () => (game ? game.id : "player");
 const audio = createAudio();
 if (params.has("debug")) window.game = { world, audio };
+// ?at: no tick runs, so the world stays exactly as set here.
+const at = params.has("debug") && !game && params.get("at") ? Number(params.get("at")) : NaN;
+const still = Number.isFinite(at);
+if (still) {
+  const poses = posesAt(world.system, at);
+  for (const e of Object.values(world.entities)) {
+    if (e.groundId) e.pos = add(e.pos, sub(poses[e.groundId].pos, world.poses[e.groundId].pos));
+  }
+  world.t = at;
+  world.poses = world.prevPoses = poses;
+}
 const view = params.get("view")?.split(",").map(Number);
 const canvas = document.getElementById("game");
 const renderer = createRenderer(world, canvas, view && view.length === 6 && !view.some(Number.isNaN) ? view : null, selfId);
@@ -110,6 +125,8 @@ function frame(now) {
     alpha = game.alpha;
     shift = game.offset();
     hud.screen(statusText());
+  } else if (still) {
+    alpha = 1;
   } else {
     // Only take input on frames that run a tick, so presses and mouse movement are never dropped.
     const ticks = (acc + elapsed) / tuning.TICK + 1e-9 >= 1;

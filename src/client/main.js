@@ -59,7 +59,7 @@ document.addEventListener("keydown", (e) => {
     hud.scores(true);
   }
   // O and P work on the start screen too; only your own screen changes.
-  if (!e.repeat && (e.code === "KeyO" || e.code === "KeyP")) {
+  if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.code === "KeyO" || e.code === "KeyP")) {
     settings.toggle(e.code === "KeyO" ? "orbits" : "cues");
     applyShown();
   }

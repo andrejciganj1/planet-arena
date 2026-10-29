@@ -472,7 +472,8 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         const at = add(poses[pd.pad.body], pd.offset);
         pd.g.position.copy(v3(at));
         const on = !!world.cues[pd.pad.id]?.landsOn;
-        pd.mat.color.setHex(on && shown.cues ? 0x3ee05a : 0xe0443e);
+        // Cues hidden: neutral grey, since a pad that is always red would read as "never lands".
+        pd.mat.color.setHex(!shown.cues ? 0x8a8f9c : on ? 0x3ee05a : 0xe0443e);
         const d = dist(at, viewer);
         if (d < PAD_CUE.showPathWithin && (!nearest || d < nearest.d)) nearest = { pd, d };
       }

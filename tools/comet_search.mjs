@@ -1,4 +1,4 @@
-// Run: node tools/comet_search.mjs [seed] [pool]  (a few minutes; prints comet orbits to paste into BODIES in tuning.js)
+// Run: node tools/comet_search.mjs [seed] [pool]  (defaults take about 50 minutes; prints comet orbits to paste into BODIES in tuning.js)
 // Searches each comet's peri, apo, period (a divisor of CYCLE), phase, inc, node, arg and kepler against the
 // full-cycle properties in tests/system.test.mjs and tests/world.test.mjs, with margins, so the tests then pass.
 import * as tuning from "../src/tuning.js";

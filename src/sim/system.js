@@ -10,7 +10,7 @@ const DEG = Math.PI / 180;
 // closest point), turned by arg within that plane, tilted by inc, then turned about y by node.
 // Timing: M = E - kepler * e * sin E. kepler 1 is Kepler's law (very fast at peri, a crawl at apo); 0 moves
 // evenly in E. In between keeps a rush past the sun without the long slow stretch far out.
-function ellipse({ peri, apo, period, phase, inc, node, arg, kepler }, t) {
+function ellipse({ peri, apo, period, phase, inc, node, arg, kepler = 1 }, t) {
   const a = (peri + apo) / 2, e = (apo - peri) / (apo + peri), b = a * Math.sqrt(1 - e * e), n = (2 * Math.PI) / period;
   // Mean anomaly wrapped first, so hours into a match it stays exact.
   const M = (((phase + n * t) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);

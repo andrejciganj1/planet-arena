@@ -13,7 +13,7 @@ export const VOID_RADIUS = 460; // from the sun; beyond it you are lost in space
 // mid planet's moon stays inside the belt. The giant's ring-moon orbits inside the ring band (looks only);
 // its outer-moon crosses the heavy planet's band and misses it, and the heavy planet's moon, only by
 // timing: its 140 s period has it facing away from the sun at every heavy-giant line-up (every 1050 s).
-// Moon phases were searched so no moon comes within 7 m of another body over the full CYCLE.
+// Moon phases were searched so over the full CYCLE no moon comes within 3 m of another body (tests/system.test.mjs).
 export const BODIES = [
   { id: "sun", kind: "sun", radius: 25, g: 24, reach: 25, hold: 0, orbit: null, pos: [0, 0, 0], color: 0xffc23d },
   { id: "hot", kind: "planet", radius: 7, g: 11, reach: 12.25, hold: 8, orbit: { around: "sun", radius: 46, period: 80, phase: 1.0 }, color: 0xe0525e },

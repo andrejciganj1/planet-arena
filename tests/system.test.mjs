@@ -132,3 +132,15 @@ test("the asteroid belt stays clear of every planet's and moon's path", () => {
   });
   for (const [id, lo, hi] of [...planets, ...others]) assert.ok(BELT.inner - hi >= 3 || lo - BELT.outer >= 3, id);
 });
+
+test("an ellipse orbit without kepler times like kepler 1, not NaN", () => {
+  const comet = BODIES.find((b) => b.id === "comet-a");
+  const make = (orbit) => createSystem(BODIES.map((b) => (b === comet ? { ...b, orbit } : b)));
+  const { kepler, ...bare } = comet.orbit;
+  const a = make(bare), b = make({ ...bare, kepler: 1 });
+  for (const t of [0, 7.5, 123.4]) {
+    const p = posesAt(a, t)["comet-a"].pos;
+    for (const x of p) assert.ok(Number.isFinite(x), `finite at ${t}`);
+    assert.ok(dist(p, posesAt(b, t)["comet-a"].pos) < 1e-9, `equals kepler 1 at ${t}`);
+  }
+});

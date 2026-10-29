@@ -7,7 +7,7 @@ into the sun.
 From the sun outwards: the hot red planet (close to the sun, so watch your footing), the tiny green
 planet, the mid blue planet where you start (with a small moon), the asteroid belt, the big heavy orange planet
 with its moon, the light purple giant with its ring and two moons (one circles through the ring, the outer
-one has two jump pads), and the small teal far planet, where the sniper rifle is.
+one has the only moon pads, two), and the small teal far planet, where the sniper rifle is.
 
 Four comets loop round the sun on tilted, stretched paths, quickest near the sun but never crawling far
 out. Fly into one (or let it sweep into you) and you land on it; ride it, and jump off when it passes near a

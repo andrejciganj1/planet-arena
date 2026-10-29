@@ -90,9 +90,10 @@ test("quality drops after slow frames, climbs back only after a steady fast stre
   assert.equal(q.level, 0, "keeps dropping while slow, down to the bottom");
   for (let i = 1; i < drops.length; i++) assert.ok(drops[i].t - drops[i - 1].t >= window - 1e-9, "never twice within the window");
 
-  // Fast again: nothing until a steady fast stretch of `up` s, then one level at a time.
-  const climbs = run(fast, up * 0.9);
-  assert.deepEqual(climbs, [], "no climb before `up` s of fast frames");
+  // Fast again: nothing until a steady fast stretch, then one level at a time. Level 1 just failed, so it
+  // waits twice `up`.
+  const climbs = run(fast, up * 1.9);
+  assert.deepEqual(climbs, [], "no climb before 2 `up` s of fast frames");
   // The first window after the slow spell was partly slow, so allow two windows more.
   const later = run(fast, up * 0.1 + 2 * window + 0.1);
   assert.equal(later.length, 1, "one level at a time");
@@ -118,8 +119,62 @@ test("quality drops after slow frames, climbs back only after a steady fast stre
     }
   }
 
-  // A long pause (a hidden tab coming back) is not a slow frame.
+  // A long pause (a hidden tab coming back) between ordinary frames is not a slow frame.
   const q3 = createQuality({ levels: 3, down, up, window });
-  for (let i = 0; i < 10; i++) q3.frame(5);
+  for (let i = 0; i < 10; i++) {
+    q3.frame(5);
+    for (let k = 0; k < 120; k++) q3.frame(fast);
+  }
   assert.equal(q3.level, 2);
+});
+
+test("a machine below 4 fps still drops: a run of long frames counts as slow", () => {
+  const { down, up, window, pause } = LOOK.quality;
+  const q = createQuality({ levels: 3, ...LOOK.quality });
+  let t = 0;
+  const dt = pause * 1.3; // about 3 fps
+  while (q.level > 0 && t < 10 * window) (q.frame(dt), (t += dt));
+  assert.equal(q.level, 0, `at the bottom after ${t.toFixed(1)} s`);
+  assert.ok(t <= 3 * window + 2 * dt, `within a few windows (${t.toFixed(1)} s)`);
+  assert.ok(down < pause && up > 0);
+});
+
+test("a borderline machine (fast one level down, slow at the top) settles on the lower level", () => {
+  const { down, up, window, maxUp } = LOOK.quality;
+  const q = createQuality({ levels: 3, ...LOOK.quality });
+  const fast = 1 / 60, slow = down * 1.5, climbs = [];
+  let t = 0, low = 0, prev = q.level;
+  for (const total = 20 * 60; t < total; ) {
+    const dt = q.level === 2 ? slow : fast;
+    const now = q.frame(dt);
+    t += dt;
+    if (now === 1) low += dt;
+    if (now > prev) climbs.push(t);
+    prev = now;
+  }
+  assert.equal(q.level === 1 || q.level === 2, true, "never below the level it is fast at");
+  const gaps = climbs.slice(1).map((c, i) => c - climbs[i]);
+  for (let i = 1; i < gaps.length; i++) assert.ok(gaps[i] >= gaps[i - 1] - window, `each retry waits at least as long (${gaps.map((g) => g.toFixed(0))})`);
+  assert.ok(gaps.at(-1) >= maxUp, `retries end up a maxUp apart (${gaps.map((g) => g.toFixed(0))})`);
+  assert.ok(climbs.length <= 10, `${climbs.length} climbs in 20 min`);
+  assert.ok(low / t >= 0.97, `at the lower level ${(100 * low / t).toFixed(1)} % of the time`);
+});
+
+test("a level that holds for maxUp s is trusted again: its next retry waits only twice `up`", () => {
+  const { down, up, window, maxUp } = LOOK.quality;
+  const q = createQuality({ levels: 3, ...LOOK.quality });
+  const fast = 1 / 60, slow = down * 1.5;
+  const run = (dtAt, secs) => {
+    for (let t = 0; t < secs; t += dtAt(q.level)) q.frame(dtAt(q.level));
+  };
+  run((l) => (l === 2 ? slow : fast), 6 * 60); // the top fails a few times, its wait grows
+  run(() => fast, maxUp + 2 * window); // then the machine is fast everywhere: it climbs back
+  assert.equal(q.level, 2);
+  run(() => fast, maxUp + 2 * window); // and holds the top for maxUp s
+  while (q.level === 2) q.frame(slow); // one slow spell drops it
+  assert.equal(q.level, 1);
+  let t = 0;
+  while (q.level === 1 && t < maxUp) (q.frame(fast), (t += fast));
+  assert.equal(q.level, 2);
+  assert.ok(t <= 2 * up + 2 * window, `climbed back after ${t.toFixed(1)} s`);
 });

@@ -146,8 +146,13 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // The look, looks only. budget: bytes the page may download for all look assets (tools/look_check.cjs).
 // quality, the automatic step (look/quality.js): a level down when frames average over `down` s across a
 // `window` s, a level up after `up` s of windows that weren't; a frame over `pause` s is a hidden tab coming
-// back, not a slow frame. ratio: the most screen pixels per CSS pixel at each level, lowest first.
-export const LOOK = { budget: 4_000_000, quality: { down: 1 / 50, up: 10, window: 2, pause: 0.25, ratio: [1, 1.5, 2] } };
+// back, not a slow frame, but a run of them is a very slow machine. Each time a level fails, the wait to
+// climb back into it doubles, up to `maxUp` s, so a machine fast one level down settles there; holding the
+// level for `maxUp` s trusts it again. ratio: the most screen pixels per CSS pixel at each level, lowest first.
+export const LOOK = {
+  budget: 4_000_000,
+  quality: { down: 1 / 50, up: 10, window: 2, pause: 0.25, maxUp: 240, ratio: [1, 1.5, 2] },
+};
 
 // Online play. Ticks unless noted: maxLag, history, rejoin, unreachable and smooth are seconds, snap is metres.
 export const NET = {

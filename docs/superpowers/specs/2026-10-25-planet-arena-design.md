@@ -105,6 +105,8 @@ fighting over them.
 - Deathmatch, everyone against everyone. The first to 20 kills wins.
 - A death in the sun counts as a kill for whoever hit you last, if they hit you within the last few
   seconds. Falling into the sun on your own costs you a point.
+- Note (gameplay round): drifting in space no longer kills; only leaving the system does. See
+  `2026-10-28-gameplay-round-design.md`.
 - You respawn on a random planet, away from other players, with only the pistol.
 - Health only, no armour, to start. Health pickups are on the planets too.
 - Pickups come back a while after someone takes them.

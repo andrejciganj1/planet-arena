@@ -2,7 +2,8 @@
 // players, shots and blasts, and the weapon in view. It only reads the world; drawing happens between the
 // last two ticks (alpha) so motion stays smooth on screens faster than the 60 Hz simulation.
 import * as THREE from "three";
-import { PLAYER, DUMMY, ROCKET, PAD_CUE, BELT, TICK, PICKUPS, WEAPONS, FEEDBACK } from "../tuning.js";
+import { tumble, trailPush } from "./rocklook.js";
+import { PLAYER, DUMMY, ROCKET, PAD_CUE, BELT, TICK, PICKUPS, WEAPONS, FEEDBACK, ASTEROID, ROCK_LOOK } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
 import { pickupReady } from "../sim/pickups.js";
 import { posesAt } from "../sim/system.js";
@@ -163,25 +164,29 @@ function tagSprite() {
   return sprite;
 }
 
-// A cartoon capsule with a face on its forward side, and its tag overhead.
+// A body sphere and a head sphere, exactly the shapes shots test (PLAYER.hit), the face on the head's
+// forward side, and the tag overhead.
 function dummyMesh() {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(PLAYER.radius, PLAYER.height - 2 * PLAYER.radius, 6, 16), new THREE.MeshLambertMaterial({ color: DUMMY_COLOUR }));
-  body.position.y = PLAYER.height / 2;
-  g.add(body);
-  g.userData.body = body;
+  const mat = new THREE.MeshLambertMaterial({ color: DUMMY_COLOUR });
+  for (const { at, r } of [PLAYER.hit.body, PLAYER.hit.head]) {
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), mat);
+    ball.position.y = at;
+    g.add(ball);
+  }
+  g.userData.body = { material: mat }; // one material for both, so the colour is set once
   g.userData.tag = tagSprite();
   g.add(g.userData.tag);
   const white = new THREE.MeshBasicMaterial({ color: 0xffffff }), black = new THREE.MeshBasicMaterial({ color: 0x111111 });
   for (const sx of [-1, 1]) {
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), white);
-    eye.position.set(sx * 0.17, 1.42, -0.43);
+    eye.position.set(sx * 0.17, 1.32, -0.5);
     const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 6), black);
-    pupil.position.set(sx * 0.17, 1.42, -0.54);
+    pupil.position.set(sx * 0.17, 1.32, -0.6);
     g.add(eye, pupil);
   }
   const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.03, 6, 12, Math.PI), black);
-  mouth.position.set(0, 1.18, -0.47);
+  mouth.position.set(0, 1.08, -0.5);
   mouth.rotation.z = Math.PI;
   g.add(mouth);
   return g;
@@ -346,6 +351,31 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const blastGeo = new THREE.SphereGeometry(1, 16, 12);
   const shots = [], blasts = [], beams = [];
   const pooled = (list, make) => (i) => list[i] || (list[i] = (() => { const m = make(); scene.add(m); return m; })());
+  // Flying asteroids: a dark rough rock in a faint orange shell, and a fading streak of where it has been.
+  // The trail is kept per rock id and dropped with the rock.
+  const rockGeo = new THREE.DodecahedronGeometry(ASTEROID.radius, 0);
+  const rockMat = new THREE.MeshLambertMaterial({ color: ROCK_LOOK.rock, emissive: ROCK_LOOK.hot, emissiveIntensity: 0.35, flatShading: true });
+  const glowGeo = new THREE.SphereGeometry(ASTEROID.radius * ROCK_LOOK.glow, 12, 8);
+  const glowMat = new THREE.MeshBasicMaterial({ color: ROCK_LOOK.hot, transparent: true, opacity: ROCK_LOOK.glowOpacity, depthWrite: false });
+  const rockTrails = new Map(); // rock id -> { mesh, line, pts: [x, y, z, ...] newest first, seen }
+  const rockTrail = (id) => {
+    let k = rockTrails.get(id);
+    if (!k) {
+      const mesh = new THREE.Mesh(rockGeo, rockMat);
+      mesh.add(new THREE.Mesh(glowGeo, glowMat));
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * ROCK_LOOK.trail), 3));
+      geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(3 * ROCK_LOOK.trail), 3));
+      // Points, not a line: a line is one pixel wide and vanishes at distance. Close together they read as a streak.
+      const line = new THREE.Points(geo, new THREE.PointsMaterial({ size: ROCK_LOOK.trailSize, vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      line.frustumCulled = false;
+      scene.add(mesh, line);
+      rockTrails.set(id, (k = { mesh, line, pts: [], seen: 0 }));
+    }
+    return k;
+  };
+  const hot = new THREE.Color(ROCK_LOOK.trailColor);
+  let rockFrame = 0;
   const figures = [];
   const figure = pooled(figures, dummyMesh); // everyone but you
   const flashAt = {}; // entity id -> when its bar began to flash (real seconds: the match clock can go back)
@@ -369,7 +399,13 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   // An entity's interpolated feet and up.
   const between = (e, alpha) => (e.prev ? { pos: lerp(e.prev.pos, e.pos, alpha), up: norm(lerp(e.prev.up, e.up, alpha)) } : { pos: e.pos, up: e.up });
 
+  let shown = { orbits: true, cues: true };
   return {
+    // Your own choices (O and P): { orbits, cues }. Cues cover the dashed path and the pad's light.
+    setShown(s) {
+      shown = { ...shown, ...s };
+      for (const r of rings) r.ring.visible = shown.orbits;
+    },
     // A hit event for someone: their bar flashes white for a moment (it reacts to the server's confirmation).
     // now: real seconds.
     event(ev, now) {
@@ -436,11 +472,12 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         const at = add(poses[pd.pad.body], pd.offset);
         pd.g.position.copy(v3(at));
         const on = !!world.cues[pd.pad.id]?.landsOn;
-        pd.mat.color.setHex(on ? 0x3ee05a : 0xe0443e);
+        // Cues hidden: neutral grey, since a pad that is always red would read as "never lands".
+        pd.mat.color.setHex(!shown.cues ? 0x8a8f9c : on ? 0x3ee05a : 0xe0443e);
         const d = dist(at, viewer);
         if (d < PAD_CUE.showPathWithin && (!nearest || d < nearest.d)) nearest = { pd, d };
       }
-      const cue = nearest && world.cues[nearest.pd.pad.id];
+      const cue = shown.cues && nearest && world.cues[nearest.pd.pad.id];
       path.visible = !!cue;
       if (cue) {
         // The cue was computed up to a quarter second ago, and the pad's planet has moved on since. Carry
@@ -481,12 +518,36 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         m.quaternion.setFromUnitVectors(Y, v3(norm(s.vel)));
       }
       for (; i < shots.length; i++) shots[i].visible = false;
+      const frameNo = ++rockFrame;
+      for (const a of world.asteroids) {
+        const k = rockTrail(a.id);
+        k.seen = frameNo;
+        k.mesh.position.copy(v3(a.pos));
+        k.mesh.rotation.set(...tumble(a.id, world.t), 0);
+        // One trail point per game tick (not per frame), so the trail lasts the same on any screen.
+        trailPush(k, a.pos, world.t, ROCK_LOOK.trail);
+        const last = k.pts, n = last.length / 3, pos = k.line.geometry.attributes.position, col = k.line.geometry.attributes.color;
+        pos.array.set(last);
+        for (let j = 0; j < n; j++) {
+          const f = 0.5 * (1 - j / n) ** 1.5; // additive dots pile up, so start dim or the near end whites out
+          col.array.set([hot.r * f, hot.g * f, hot.b * f], 3 * j);
+        }
+        pos.needsUpdate = col.needsUpdate = true;
+        k.line.geometry.setDrawRange(0, n);
+      }
+      for (const [id, k] of rockTrails) {
+        if (k.seen === frameNo) continue;
+        scene.remove(k.mesh, k.line);
+        k.line.geometry.dispose();
+        k.line.material.dispose();
+        rockTrails.delete(id);
+      }
       i = 0;
       for (const x of world.explosions) {
         const m = blast(i++), k = x.age / ROCKET.showFor;
         m.visible = true;
         m.position.copy(v3(x.pos));
-        m.scale.setScalar(0.5 + (ROCKET.splash - 0.5) * Math.sqrt(k));
+        m.scale.setScalar(0.5 + (x.splash - 0.5) * Math.sqrt(k));
         m.material.opacity = 0.85 * (1 - k);
       }
       for (; i < blasts.length; i++) blasts[i].visible = false;

@@ -3,8 +3,8 @@
 import { add, sub, scale, dist, norm, len, cross, anyPerpendicular } from "./vec.js";
 import { gravityAt } from "./gravity.js";
 import { segmentHit, segmentHitsSphere } from "./collide.js";
-import { viewDir, worldVel, hitCentre, unground } from "./entity.js";
-import { seenCentre } from "./lag.js";
+import { viewDir, worldVel, unground, segmentHitsPlayer, nearestSphere } from "./entity.js";
+import { seenPose, seenRock } from "./lag.js";
 
 const specOf = (world, kind) => world.tuning.WEAPONS[kind];
 
@@ -36,12 +36,17 @@ export function fire(world, e, lag = 0) {
   return true;
 }
 
-// Two numbers in [0, 1) from a pure hash of shooter, shot and pellet (FNV-1a into the same LCG as
-// `seeded`), so spread never depends on how many other random draws the world has made.
-function shotRand(id, shots, k) {
+// Numbers in [0, 1) from a pure hash of `key` (FNV-1a into the same LCG as `seeded`), for dice that must
+// never depend on how many other random draws the world has made.
+export function hashRand(key) {
   let h = 0x811c9dc5;
-  for (const c of `${id}|${shots}|${k}`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;
-  const next = () => (h = (Math.imul(h, 1664525) + 1013904223) >>> 0) / 4294967296;
+  for (const c of key) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;
+  return () => (h = (Math.imul(h, 1664525) + 1013904223) >>> 0) / 4294967296;
+}
+
+// Two for a pellet's spread, from shooter, shot and pellet.
+function shotRand(id, shots, k) {
+  const next = hashRand(`${id}|${shots}|${k}`);
   return [next(), next()];
 }
 
@@ -53,19 +58,24 @@ function spread(dir, deg, [r1, r2]) {
   return norm(add(scale(dir, Math.cos(theta)), scale(add(scale(u, Math.cos(phi)), scale(v, Math.sin(phi))), Math.sin(theta))));
 }
 
-// The railgun: instant and dead straight, ignoring gravity. The first body or entity on the line takes it,
-// each entity where the shooter saw it (`lag`).
+// The railgun: instant and dead straight, ignoring gravity. The first body, entity or rock on the line takes
+// it, each entity and rock where the shooter saw it (`lag`).
 function rail(world, e, eye, dir, spec, id, lag) {
-  const { system, poses, tuning } = world;
+  const { system, poses } = world;
   const end = add(eye, scale(dir, spec.range));
   let hit = segmentHit(system, poses, eye, end);
   for (const o of Object.values(world.entities)) {
     if (!o.alive || o === e) continue;
-    const f = segmentHitsSphere(eye, end, seenCentre(world, o, lag), tuning.PLAYER.radius);
+    const s = seenPose(world, o, lag), f = segmentHitsPlayer(eye, end, s.pos, s.up);
     if (f !== null && (!hit || f < hit.f)) hit = { entity: o, f };
+  }
+  for (const rock of world.asteroids || []) {
+    const f = segmentHitsSphere(eye, end, seenRock(world, rock, lag), world.tuning.ASTEROID.radius);
+    if (f !== null && (!hit || f < hit.f)) hit = { rock, f };
   }
   const to = hit ? add(eye, scale(sub(end, eye), hit.f)) : end;
   if (hit?.entity) hurt(world, hit.entity, spec.damage, e.id, eye);
+  else if (hit?.rock) detonate(world, hit.rock, e.id, lag);
   world.beams.push({ id, from: eye, to, age: 0, owner: e.id });
   world.events.push({ type: "beam", from: eye, to });
 }
@@ -86,29 +96,46 @@ function hurt(world, e, damage, byId, from) {
 // takes reduced damage but full knockback, which is what makes rocket jumps work. Everyone but the owner is
 // measured where the shooter saw them (`lag`); the push is added to their current velocity. A cosmetic world
 // pushes only you, so your own rocket jump feels right at once, and says how hard through onSelfPush.
-// `id` is the rocket's, so the browser can tell the server's blast from the one it drew already.
-export function explode(world, pos, ownerId, lag = 0, id = null) {
-  const { ROCKET } = world.tuning;
+// `id` is the rocket's, so the browser can tell the server's blast from the one it drew already. `spec` is
+// the blast's size (a rocket's or an asteroid's). Rocks it reaches go off too, as the blast owner's, except
+// in a cosmetic world: there only the server sets rocks off, and its explode events draw their blasts.
+export function explode(world, pos, ownerId, lag = 0, id = null, spec = world.tuning.ROCKET) {
   world.events.push({ type: "explode", pos: [...pos], id });
-  world.explosions.push({ pos: [...pos], age: 0 });
+  world.explosions.push({ pos: [...pos], age: 0, splash: spec.splash }); // splash: drawn at its real reach
   for (const e of Object.values(world.entities)) {
     if (!e.alive) continue;
     if (world.cosmetic && e.id !== world.selfId) continue;
-    const c = e.id === ownerId ? hitCentre(e) : seenCentre(world, e, lag);
-    const d = dist(c, pos);
-    if (d >= ROCKET.splash) continue;
-    const f = 1 - d / ROCKET.splash;
+    const s = e.id === ownerId ? e : seenPose(world, e, lag);
+    const { centre: c, d } = nearestSphere(pos, s.pos, s.up);
+    if (d >= spec.splash) continue;
+    const f = 1 - d / spec.splash;
     const away = d > 1e-6 ? norm(sub(c, pos)) : e.up;
     unground(world, e);
-    const dv = scale(away, ROCKET.knockback * f);
+    const dv = scale(away, spec.knockback * f);
     e.vel = add(e.vel, dv);
     if (world.cosmetic) world.onSelfPush?.(dv);
-    hurt(world, e, ROCKET.damage * f * (e.id === ownerId ? ROCKET.self : 1), ownerId, pos);
+    hurt(world, e, spec.damage * f * (e.id === ownerId ? spec.self : 1), ownerId, pos);
   }
+  if (world.cosmetic) return;
+  const reach = spec.splash + world.tuning.ASTEROID.radius;
+  const reached = (world.asteroids || []).filter((r) => dist(seenRock(world, r, lag), pos) < reach);
+  // A rock is gone before its own blast, so a chain never comes back to it, and always ends.
+  for (const rock of reached) if (world.asteroids.includes(rock)) detonate(world, rock, ownerId, lag);
+}
+
+// Sets a rock off where the shooter saw it (`lag`). Its blast is ownerId's, or nobody's (null) for one that
+// hit something on its own: then `hurt` leaves the last hitter in place, as a fall into the sun does. A
+// cosmetic world leaves the rock for the server: the shot that met it just stops there, with no blast.
+export function detonate(world, rock, ownerId, lag = 0) {
+  if (world.cosmetic) return;
+  const at = seenRock(world, rock, lag);
+  world.asteroids = world.asteroids.filter((r) => r !== rock);
+  rock.owner = ownerId;
+  explode(world, at, ownerId, lag, rock.id, world.tuning.ASTEROID.blast);
 }
 
 export function stepProjectiles(world, dt) {
-  const { PLAYER, SHOT, VOID_RADIUS } = world.tuning;
+  const { SHOT, VOID_RADIUS, ASTEROID } = world.tuning;
   const { system, poses } = world;
   const sun = system.bodies.find((b) => b.kind === "sun");
   const keep = [];
@@ -120,8 +147,13 @@ export function stepProjectiles(world, dt) {
     let hit = segmentHit(system, poses, p.pos, next);
     for (const e of Object.values(world.entities)) {
       if (!e.alive || (e.id === p.owner && p.age < SHOT.ownerGrace)) continue;
-      const f = segmentHitsSphere(p.pos, next, e.id === p.owner ? hitCentre(e) : seenCentre(world, e, p.lag), PLAYER.radius);
+      const s = e.id === p.owner ? e : seenPose(world, e, p.lag), f = segmentHitsPlayer(p.pos, next, s.pos, s.up);
       if (f !== null && (!hit || f < hit.f)) hit = { entity: e, f, point: add(p.pos, scale(sub(next, p.pos), f)) };
+    }
+    // Any shot stops at a rock, where the shooter saw it.
+    for (const rock of world.asteroids || []) {
+      const f = segmentHitsSphere(p.pos, next, seenRock(world, rock, p.lag), ASTEROID.radius);
+      if (f !== null && (!hit || f < hit.f)) hit = { rock, f, point: add(p.pos, scale(sub(next, p.pos), f)) };
     }
     p.age += dt;
     if (!hit) {
@@ -130,7 +162,8 @@ export function stepProjectiles(world, dt) {
       continue;
     }
     if (hit.id === sun.id) continue; // the sun swallows everything
-    if (p.kind === "rocket") explode(world, hit.point, p.owner, p.lag, p.id);
+    if (p.kind === "rocket") explode(world, hit.point, p.owner, p.lag, p.id); // a rock it hit goes off in the blast
+    else if (hit.rock) detonate(world, hit.rock, p.owner, p.lag);
     else if (hit.entity) {
       hurt(world, hit.entity, specOf(world, p.kind).damage, p.owner, p.from || p.pos);
       // A pellet's push goes to whoever it hits, never back to the shooter.

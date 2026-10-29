@@ -26,7 +26,7 @@ function onto(w, e, pk) {
 }
 const took = (w, pk) => w.events.some((ev) => ev.type === "pickup" && ev.pickupId === pk.id);
 
-test("layout: every planet and the moon have at least two pickups; each weapon but the pistol can be found; the sniper rifle only on the far planet, the railgun only on the hot planet", () => {
+test("layout: every planet and moon has at least two pickups; each weapon but the pistol can be found; the sniper rifle only on the far planet, the railgun only on the hot planet", () => {
   for (const b of BODIES.filter((b) => b.kind === "planet" || b.kind === "moon")) {
     assert.ok(PICKUPS.filter((p) => p.body === b.id).length >= 2, b.id);
   }
@@ -36,6 +36,12 @@ test("layout: every planet and the moon have at least two pickups; each weapon b
   for (const p of PICKUPS.filter((p) => p.kind === "weapon" && (p.weapon === "sniper" || p.weapon === "railgun"))) {
     assert.equal(p.body, p.weapon === "sniper" ? "far" : "hot", p.id);
   }
+});
+
+test("no new weapon spots: moons hold health, fuel or ammo only", () => {
+  const moons = BODIES.filter((b) => b.kind === "moon").map((b) => b.id);
+  assert.equal(moons.length, 4);
+  for (const p of PICKUPS.filter((p) => moons.includes(p.body))) assert.ok(["health", "fuel", "ammo"].includes(p.kind), p.id);
 });
 
 test("layout: pickups sit on the surface, at least 4 m from every pad and 3 m from each other", () => {

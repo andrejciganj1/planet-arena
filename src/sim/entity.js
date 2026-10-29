@@ -4,9 +4,9 @@
 // displacement, so standing still on an orbiting planet is exact. In the air `vel` is a world velocity.
 // Anything that leaves the ground (jump, pad, blast, running off an edge) adds the body's velocity.
 import { PLAYER, BOOST, DUMMY } from "../tuning.js";
-import { add, sub, scale, dot, cross, len, norm, projectOnPlane, rotateAxis, rotateFromTo, clampLen, anyPerpendicular } from "./vec.js";
+import { add, sub, scale, dot, dist, cross, len, norm, projectOnPlane, rotateAxis, rotateFromTo, clampLen, anyPerpendicular } from "./vec.js";
 import { bodyPull, shapedGravity } from "./gravity.js";
-import { surfaceInfo, sphereContacts } from "./collide.js";
+import { surfaceInfo, sphereContacts, segmentHitsSphere } from "./collide.js";
 
 export const NO_INPUT = Object.freeze({ move: [0, 0], jump: false, boost: false, fire: false, weapon: null, hook: false, zoom: false, yawDelta: 0, pitchDelta: 0, lag: 0 });
 
@@ -32,6 +32,30 @@ export function standOn(e, bodyId) {
 }
 
 export const hitCentre = (e) => add(e.pos, scale(e.up, PLAYER.radius));
+
+// The two spheres shots test, body first: [centre, radius] each, built from the feet and up.
+export const hitSpheres = (pos, up) => [PLAYER.hit.body, PLAYER.hit.head].map((s) => [add(pos, scale(up, s.at)), s.r]);
+
+// First f along a to b where the segment meets either sphere, or null.
+export function segmentHitsPlayer(a, b, pos, up) {
+  let best = null;
+  for (const [c, r] of hitSpheres(pos, up)) {
+    const f = segmentHitsSphere(a, b, c, r);
+    if (f !== null && (best === null || f < best)) best = f;
+  }
+  return best;
+}
+
+// The sphere centre nearest p, and the distance to it, for blasts.
+export function nearestSphere(p, pos, up) {
+  let best = null;
+  for (const [centre] of hitSpheres(pos, up)) {
+    const d = dist(p, centre);
+    if (!best || d < best.d) best = { centre, d };
+  }
+  return best;
+}
+
 export const right = (e) => cross(e.forward, e.up);
 export const viewDir = (e) => add(scale(e.forward, Math.cos(e.pitch)), scale(e.up, Math.sin(e.pitch)));
 export const worldVel = (world, e) => (e.groundId ? add(e.vel, world.poses[e.groundId].vel) : [...e.vel]);

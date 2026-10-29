@@ -1,10 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as tuning from "../src/tuning.js";
-import { NO_INPUT } from "../src/sim/entity.js";
-import { dist } from "../src/sim/vec.js";
+import { NO_INPUT, viewDir, worldVel } from "../src/sim/entity.js";
+import { add, scale, dist } from "../src/sim/vec.js";
+import { launchOf } from "../src/sim/asteroids.js";
+import { createWorld } from "../src/sim/world.js";
+import { explode, detonate, stepProjectiles } from "../src/sim/weapons.js";
 import { createGame } from "../server/game.js";
 import { createOnlineGame, clockNudge } from "../src/client/online.js";
+import { tumble, trailPush } from "../src/client/rocklook.js";
 
 const { TICK, NET } = tuning;
 const json = (x) => JSON.parse(JSON.stringify(x));
@@ -171,4 +175,158 @@ test("a page says hello with one nonce on every open; another page has its own",
   assert.ok(a.length >= 8);
   assert.equal(a2, a);
   assert.notEqual(b, a);
+});
+
+test("rocks from snapshots are in the view; the view never launches its own", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  const a = join("Ana", () => NO_INPUT);
+  const w = a.g.world;
+  for (let f = 0; f < 10; f++) frame();
+  const rock = { id: "rock.99", pos: [0, 80, 0], vel: [3, 0, 0], age: 0, owner: null };
+  r.game.world.asteroids.push(rock);
+  for (let f = 0; f < 20; f++) frame();
+  const seen = w.asteroids.find((x) => x.id === "rock.99");
+  assert.ok(seen, "the room's rock is drawn");
+  assert.ok(dist(seen.pos, rock.pos) < 1, `drawn a little in the past: ${seen.pos} vs ${rock.pos}`);
+  // 30 s of snapshots with no rocks, past the first two launch times: the view draws none.
+  assert.ok(launchOf(tuning, w.system, 1) && launchOf(tuning, w.system, 2), "launches due in this time");
+  const last = r.sent.at(-1);
+  let tick = last.tick, t = last.t;
+  for (let f = 0; f < 30 / TICK; f++) {
+    if (f % NET.snapEvery === 0) {
+      for (let i = 0; i < NET.snapEvery; i++) (tick++, (t += TICK));
+      r.deliver({ ...last, tick, t, slack: 3, events: [], beams: [], rocks: [] });
+    }
+    a.g.frame(TICK, () => NO_INPUT);
+    if (f >= 30) assert.equal(w.asteroids.length, 0, `frame ${f}`);
+  }
+  assert.ok(w.t > 2 * tuning.ASTEROID.every);
+  assert.equal(w.rocksLaunched, 0);
+});
+
+test("your bullet stops at a rock on your screen and the rock waits for the server", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  let fireAt = Infinity;
+  const a = join("Ana", (i) => ({ ...NO_INPUT, pitchDelta: i === 5 ? 0.4 : 0, fire: i === fireAt }));
+  const w = a.g.world;
+  for (let f = 0; f < 20; f++) frame();
+  // A rock 12 m along your view, keeping pace with the ground you stand on.
+  const sw = r.game.world, me = sw.entities[a.g.id];
+  const eye = add(me.pos, scale(me.up, tuning.PLAYER.eye));
+  const rock = { id: "rock.99", pos: add(eye, scale(viewDir(me), 12)), vel: worldVel(sw, me), age: 0, owner: null };
+  sw.asteroids.push(rock);
+  for (let f = 0; f < 30 && !w.asteroids.some((x) => x.id === rock.id); f++) frame();
+  assert.ok(w.asteroids.some((x) => x.id === rock.id), "the rock is on your screen");
+  fireAt = a.n;
+  const blastSent = () => r.sent.some((m) => m.events.some((e) => e.type === "explode" && e.id === rock.id));
+  let flew = false, stopped = null, known = null, drawn = 0;
+  for (let f = 0; f < 90; f++) {
+    const heard = blastSent(); // delivered before this frame, which may draw it
+    const before = w.asteroids.find((x) => x.id === rock.id);
+    frame();
+    const mine = w.projectiles.filter((p) => p.owner === a.g.id);
+    if (mine.length) {
+      flew = true;
+      // Never into or through the rock as drawn (the ticks of a frame meet the rocks drawn before it).
+      if (before) for (const p of mine) assert.ok(dist(p.pos, before.pos) >= tuning.ASTEROID.radius - 1e-6, `frame ${f}: inside the rock`);
+    } else if (flew && stopped === null) {
+      stopped = f;
+      assert.ok(before && w.asteroids.some((x) => x.id === rock.id), "the rock is still drawn when your bullet stops");
+    }
+    // The server's event is in the view as its snapshot arrives; its blast is drawn from the next frame.
+    if (!heard) assert.equal(w.explosions.length, 0, `frame ${f}: no blast before the server's`);
+    if (!blastSent()) assert.equal(w.events.filter((e) => e.type === "explode").length, 0, `frame ${f}: no blast event before the server's`);
+    else known ??= f;
+    drawn = Math.max(drawn, w.explosions.length);
+  }
+  assert.ok(flew && stopped !== null, "your bullet flew and stopped");
+  assert.ok(known !== null && stopped < known, `stopped at frame ${stopped}, before the server's blast (${known})`);
+  assert.equal(drawn, 1, "the server's blast is drawn");
+  assert.equal(w.events.filter((e) => e.type === "explode" && e.id === rock.id).length, 1);
+  assert.ok(!sw.asteroids.includes(rock) && rock.owner === a.g.id, "the room set it off, with your shot");
+  assert.ok(!w.asteroids.some((x) => x.id === rock.id), "and the view lets it go");
+});
+
+test("a cosmetic world never sets a rock off: your rocket's blast beside one leaves it for the server", () => {
+  const w = { ...createWorld(tuning, { solo: false }), cosmetic: true, selfId: "me" };
+  const rock = { id: "rock.5", pos: [0, 80, 0], vel: [0, 0, 0], age: 0, owner: null };
+  w.asteroids.push(rock);
+  detonate(w, rock, "me");
+  explode(w, [2, 80, 0], "me", 0, "me.1.0");
+  // A rocket flown into it bursts there (your own blast, as the server's will be) and the rock stays.
+  w.projectiles.push({ id: "me.2.0", kind: "rocket", owner: "me", age: 1, pos: [0, 80, 10], vel: [0, 0, -600], lag: 0, from: [0, 80, 10] });
+  stepProjectiles(w, TICK);
+  assert.deepEqual(w.asteroids, [rock]);
+  assert.equal(rock.owner, null);
+  assert.deepEqual(w.events.map((e) => e.id), ["me.1.0", "me.2.0"], "only your rockets' blasts");
+  assert.equal(w.projectiles.length, 0);
+});
+
+test("a rock stops being drawn once its blast or burn is heard, even if an older snapshot still lists it", () => {
+  for (const type of ["explode", "burn"]) {
+    const r = room();
+    const { join, frame } = play(r);
+    const a = join("Ana", () => NO_INPUT);
+    const w = a.g.world;
+    for (let f = 0; f < 10; f++) frame();
+    r.game.world.asteroids.push({ id: "rock.99", pos: [0, 80, 0], vel: [3, 0, 0], age: 0, owner: null });
+    for (let f = 0; f < 20 && !w.asteroids.some((x) => x.id === "rock.99"); f++) frame();
+    assert.ok(w.asteroids.some((x) => x.id === "rock.99"), `${type}: the rock is drawn`);
+    // The event arrives in a snapshot that still lists the rock, as the server's blast does.
+    const last = r.sent.at(-1);
+    assert.ok(last.rocks.some((k) => k.id === "rock.99"), "the snapshot lists the rock");
+    r.deliver({ ...last, tick: last.tick + 1, t: last.t + TICK, events: [{ type, id: "rock.99", pos: [0, 80, 0] }] });
+    a.g.frame(TICK, () => NO_INPUT);
+    assert.ok(!w.asteroids.some((x) => x.id === "rock.99"), `${type}: no longer drawn`);
+  }
+});
+
+test("a rock as the view has it online (no age) still gets a finite tumble", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  const a = join("Ana", () => NO_INPUT);
+  for (let f = 0; f < 10; f++) frame();
+  r.game.world.asteroids.push({ id: "rock.99", pos: [0, 80, 0], vel: [3, 0, 0], age: 0, owner: null });
+  for (let f = 0; f < 20 && !a.g.world.asteroids.length; f++) frame();
+  const seen = a.g.world.asteroids[0];
+  assert.ok(seen && seen.age === undefined, "snapshots carry no age");
+  for (const x of tumble(seen.id, a.g.world.t)) assert.ok(Number.isFinite(x));
+  assert.notDeepEqual(tumble("rock.1", 5), tumble("rock.2", 5), "each rock starts at its own angle");
+});
+
+test("a rock's trail covers the same game time at 60 and at 144 frames per second", () => {
+  const points = (fps) => {
+    const trail = { pts: [], t: -1 };
+    // One second and a half of game time; the clock moves in whole ticks, as the view's does.
+    for (let f = 0; f < 1.5 * fps; f++) {
+      const t = Math.floor((f / fps) / TICK) * TICK;
+      trailPush(trail, [f, 0, 0], t, tuning.ROCK_LOOK.trail);
+    }
+    return trail.pts.length / 3;
+  };
+  assert.equal(points(144), points(60));
+  assert.equal(points(60), tuning.ROCK_LOOK.trail, "a full trail is 60 ticks");
+});
+
+test("a blast is drawn at its real reach: a rock's 5 m, a rocket's 4 m", () => {
+  const w = createWorld(tuning, { solo: false });
+  explode(w, [0, 80, 0], "me", 0, "me.1.0");
+  explode(w, [0, 90, 0], "me", 0, "rock.1", tuning.ASTEROID.blast);
+  assert.deepEqual(w.explosions.map((x) => x.splash), [tuning.ROCKET.splash, tuning.ASTEROID.blast.splash]);
+});
+
+test("online, a rock's blast is heard at the rock's reach, a rocket's at the rocket's", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  const a = join("Ana", () => NO_INPUT);
+  for (let f = 0; f < 10; f++) frame();
+  const last = r.sent.at(-1);
+  const events = [{ type: "explode", id: "rock.99", pos: [0, 80, 0] }, { type: "explode", id: "x.1.0", pos: [0, 90, 0] }];
+  r.deliver({ ...last, tick: last.tick + 1, t: last.t + TICK, events });
+  a.g.frame(TICK, () => NO_INPUT);
+  const by = (y) => a.g.world.explosions.find((x) => x.pos[1] === y);
+  assert.equal(by(80).splash, tuning.ASTEROID.blast.splash);
+  assert.equal(by(90).splash, tuning.ROCKET.splash);
 });

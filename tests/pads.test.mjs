@@ -17,7 +17,7 @@ const STEP = 0.5, SPAN = 600;
 const world = createWorld(tuning);
 const timeline = Object.fromEntries(PADS.map((pad) => [pad.id, Array.from({ length: SPAN / STEP + 1 }, (_, i) => predictLaunch(world, pad, i * STEP).landsOn)]));
 
-test("pads sit on their bodies' surfaces; two to three per planet, none on the moon", () => {
+test("pads sit on their bodies' surfaces; two to three per planet, two on outer-moon, none on other moons", () => {
   for (const pad of PADS) {
     const b = world.system.byId[pad.body];
     assert.ok(Math.abs(surfaceInfo(b, world.poses[b.id], padPos(world, pad, world.poses)).dist) < 1e-9, pad.id);
@@ -26,7 +26,9 @@ test("pads sit on their bodies' surfaces; two to three per planet, none on the m
     const n = PADS.filter((p) => p.body === id).length;
     assert.ok(n >= 2 && n <= 3, `${id} has ${n}`);
   }
-  assert.equal(PADS.filter((p) => world.system.byId[p.body].kind === "moon").length, 0);
+  assert.equal(PADS.filter((p) => p.body === "outer-moon").length, 2);
+  const others = PADS.filter((p) => world.system.byId[p.body].kind === "moon" && p.body !== "outer-moon");
+  assert.deepEqual(others.map((p) => p.id), []);
 });
 
 test("a cue never promises a comet: comets are too small and quick for a cue to hold", () => {
@@ -90,9 +92,10 @@ test("launching while the cue is on lands on the predicted body", () => {
   }
 });
 
-test("a jump from the moon, anywhere on it, at any time, ends on the moon or its planet", () => {
-  const moon = world.system.byId.moon;
-  for (let k = 0; k < 6; k++) {
+test("a jump from any moon without pads, anywhere on it, at any time, ends on that moon or its planet", () => {
+  const moons = tuning.BODIES.filter((b) => b.kind === "moon" && !PADS.some((p) => p.body === b.id));
+  assert.ok(moons.length >= 3);
+  for (const moon of moons) for (let k = 0; k < 6; k++) {
     for (const u of directions(8)) {
       const w = createWorld(tuning);
       skipTo(w, (k * moon.orbit.period) / 6);
@@ -100,8 +103,8 @@ test("a jump from the moon, anywhere on it, at any time, ends on the moon or its
       w.entities.dummy.alive = false;
       w.entities.dummy.respawnAt = Infinity;
       const p = w.entities.player;
-      Object.assign(p, createEntity("player", "player", add(w.poses.moon.pos, scale(u, moon.radius)), u));
-      standOn(p, "moon");
+      Object.assign(p, createEntity("player", "player", add(w.poses[moon.id].pos, scale(u, moon.radius)), u));
+      standOn(p, moon.id);
       stepWorld(w, { player: { ...NO_INPUT, jump: true } }, TICK);
       let end = null;
       for (let i = 0; i < 60 / TICK && !end; i++) {
@@ -109,7 +112,7 @@ test("a jump from the moon, anywhere on it, at any time, ends on the moon or its
         if (!p.alive) end = "dead";
         else if (p.groundId) end = p.groundId;
       }
-      assert.ok(end === "moon" || end === moon.orbit.around, `k=${k} u=${u}: ${end}`);
+      assert.ok(end === moon.id || end === moon.orbit.around, `${moon.id} k=${k} u=${u}: ${end}`);
     }
   }
 });

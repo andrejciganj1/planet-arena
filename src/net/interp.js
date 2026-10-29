@@ -1,5 +1,5 @@
-// Other players and shots are drawn slightly in the past, between two server snapshots, so their motion is
-// smooth whatever the packet timing. Nothing is guessed ahead of the newest snapshot.
+// Other players, shots and asteroids are drawn slightly in the past, between two server snapshots, so their
+// motion is smooth whatever the packet timing. Nothing is guessed ahead of the newest snapshot.
 import { TICK, NET } from "../tuning.js";
 import { posesAt } from "../sim/system.js";
 import { sub, lerp, norm, len, scale } from "../sim/vec.js";
@@ -24,7 +24,7 @@ export function createInterp(system) {
       const body = r.groundId && poses[r.groundId];
       entities[r.id] = { ...r, rel: body ? sub(r.pos, body.pos) : null };
     }
-    snaps.push({ tick: snap.tick, entities, shots: snap.shots || [] });
+    snaps.push({ tick: snap.tick, entities, shots: snap.shots || [], rocks: snap.rocks || [] });
     while (snaps[0].tick < snap.tick - KEEP) snaps.shift();
     if (viewTick === null) viewTick = snap.tick - NET.interp;
   }
@@ -47,7 +47,7 @@ export function createInterp(system) {
   }
 
   function sample(tick) {
-    if (!snaps.length) return { entities: {}, shots: [] };
+    if (!snaps.length) return { entities: {}, shots: [], rocks: [] };
     if (tick <= snaps[0].tick) return snaps[0];
     if (tick >= newest()) return snaps[snaps.length - 1];
     let i = snaps.length - 1;
@@ -58,12 +58,15 @@ export function createInterp(system) {
     for (const [id, rb] of Object.entries(b.entities)) {
       entities[id] = a.entities[id] ? mix(a.entities[id], rb, k) : rb;
     }
-    const before = new Map(a.shots.map((s) => [s.id, s]));
-    const shots = b.shots.map((s) => {
-      const p = before.get(s.id);
-      return p ? { ...s, pos: lerp(p.pos, s.pos, k) } : s;
-    });
-    return { entities, shots };
+    // Shots and rocks by id; one new in the later snapshot is drawn where it is, one gone from it is not.
+    const byId = (from, to) => {
+      const before = new Map(from.map((s) => [s.id, s]));
+      return to.map((s) => {
+        const p = before.get(s.id);
+        return p ? { ...s, pos: lerp(p.pos, s.pos, k) } : s;
+      });
+    };
+    return { entities, shots: byId(a.shots, b.shots), rocks: byId(a.rocks, b.rocks) };
   }
 
   const target = () => newest() - NET.interp;

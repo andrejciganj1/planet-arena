@@ -5,7 +5,7 @@
 import { WEAPON_ORDER, NET } from "../tuning.js";
 import { NO_INPUT } from "../sim/entity.js";
 
-export const PROTOCOL = 2;
+export const PROTOCOL = 3;
 
 const num = (x) => typeof x === "number" && Number.isFinite(x);
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
@@ -82,6 +82,7 @@ export function snapshot(world, { ack, slack, events, away = [] }) {
     type: "snap", tick: world.tick, t: world.t, ack, slack,
     entities: Object.values(world.entities).map(entityState),
     shots: world.projectiles.map(({ id, kind, owner, pos, vel }) => ({ id, kind, owner, pos: [...pos], vel: [...vel] })),
+    rocks: world.asteroids.map(({ id, pos, vel, owner }) => ({ id, pos: [...pos], vel: [...vel], owner })),
     pickups, players,
     beams: world.beams.map((b) => ({ ...b, from: [...b.from], to: [...b.to] })),
     events,

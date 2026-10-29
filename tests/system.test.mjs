@@ -14,12 +14,21 @@ test("a planet returns to its start after one period", () => {
   }
 });
 
-test("the moon keeps its distance from its planet", () => {
-  const moon = BODIES.find((b) => b.kind === "moon");
-  for (let t = 0; t <= 600; t += 1) {
-    const p = posesAt(system, t);
-    assert.ok(Math.abs(dist(p.moon.pos, p[moon.orbit.around].pos) - moon.orbit.radius) < 1e-6);
+const moons = BODIES.filter((b) => b.kind === "moon");
+
+test("every moon keeps its distance from its planet", () => {
+  for (const moon of moons) {
+    for (let t = 0; t <= 600; t += 1) {
+      const p = posesAt(system, t);
+      assert.ok(Math.abs(dist(p[moon.id].pos, p[moon.orbit.around].pos) - moon.orbit.radius) < 1e-6, moon.id);
+    }
   }
+});
+
+test("there are four moons: one round heavy, two round giant, one round mid", () => {
+  const round = (id) => moons.filter((m) => m.orbit.around === id).length;
+  assert.equal(moons.length, 4);
+  assert.deepEqual([round("heavy"), round("giant"), round("mid")], [1, 2, 1]);
 });
 
 test("vel matches the change of pos", () => {
@@ -34,7 +43,8 @@ test("vel matches the change of pos", () => {
 });
 
 test("no two bodies ever touch", () => {
-  for (let t = 0; t <= 600; t += 0.5) {
+  // The whole cycle: the giant's moons cross the heavy planet's band and miss it only by timing.
+  for (let t = 0; t < CYCLE; t += 0.5) {
     const p = posesAt(system, t);
     for (let i = 0; i < spheres.length; i++) {
       for (let j = i + 1; j < spheres.length; j++) {
@@ -69,15 +79,18 @@ test("a comet's distance from the sun runs from peri to apo", () => {
   }
 });
 
-test("a comet is fast near the sun and slow far out", () => {
+// Each comet's fastest speed (m/s) under the old Kepler timing, measured before the change to a more even speed.
+const keplerTop = { "comet-a": 10.14, "comet-b": 9.16, "comet-c": 3.39, "comet-d": 5.07 };
+
+test("comets keep a more even speed: fastest at most 2.5x slowest, and near the sun about as fast as before", () => {
   for (const c of comets) {
-    let near = null, far = null;
+    let lo = Infinity, hi = 0;
     for (let t = 0; t < c.orbit.period; t += 0.05) {
-      const p = posesAt(system, t)[c.id], d = len(p.pos);
-      if (!near || d < near.d) near = { d, v: len(p.vel) };
-      if (!far || d > far.d) far = { d, v: len(p.vel) };
+      const v = len(posesAt(system, t)[c.id].vel);
+      (lo = Math.min(lo, v)), (hi = Math.max(hi, v));
     }
-    assert.ok(near.v > 3 * far.v, `${c.id}: ${near.v} near, ${far.v} far`);
+    assert.ok(hi <= 2.5 * lo, `${c.id}: ${hi} fastest, ${lo} slowest`);
+    assert.ok(hi >= 0.75 * keplerTop[c.id], `${c.id}: fastest ${hi}, was ${keplerTop[c.id]}`);
   }
 });
 
@@ -108,9 +121,26 @@ test("over the full cycle, some comet passes close to some planet at least every
   assert.ok(longest <= 120, `longest wait ${longest} s`);
 });
 
-test("the asteroid belt stays clear of every planet's path", () => {
-  // Bands of the orbital plane each planet sweeps, from the sun's centre. (The moon's path dips into the
-  // belt's outer edge, where the owner placed it; the belt is scenery, so it just passes through.)
-  const bands = BODIES.filter((b) => b.kind === "planet").map((b) => [b.id, b.orbit.radius - b.radius, b.orbit.radius + b.radius]);
-  for (const [id, lo, hi] of bands) assert.ok(BELT.inner - hi >= 3 || lo - BELT.outer >= 3, id);
+test("the asteroid belt stays clear of every planet's and moon's path", () => {
+  // Bands of the orbital plane each body sweeps, from the sun's centre. (The heavy planet's moon dips into
+  // the belt's outer edge, where the owner placed it; the belt is scenery, so it just passes through.)
+  const byId = system.byId;
+  const planets = BODIES.filter((b) => b.kind === "planet").map((b) => [b.id, b.orbit.radius - b.radius, b.orbit.radius + b.radius]);
+  const others = moons.filter((m) => m.id !== "moon").map((m) => {
+    const r = byId[m.orbit.around].orbit.radius, d = m.orbit.radius + m.radius;
+    return [m.id, r - d, r + d];
+  });
+  for (const [id, lo, hi] of [...planets, ...others]) assert.ok(BELT.inner - hi >= 3 || lo - BELT.outer >= 3, id);
+});
+
+test("an ellipse orbit without kepler times like kepler 1, not NaN", () => {
+  const comet = BODIES.find((b) => b.id === "comet-a");
+  const make = (orbit) => createSystem(BODIES.map((b) => (b === comet ? { ...b, orbit } : b)));
+  const { kepler, ...bare } = comet.orbit;
+  const a = make(bare), b = make({ ...bare, kepler: 1 });
+  for (const t of [0, 7.5, 123.4]) {
+    const p = posesAt(a, t)["comet-a"].pos;
+    for (const x of p) assert.ok(Number.isFinite(x), `finite at ${t}`);
+    assert.ok(dist(p, posesAt(b, t)["comet-a"].pos) < 1e-9, `equals kepler 1 at ${t}`);
+  }
 });

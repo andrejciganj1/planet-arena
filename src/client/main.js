@@ -10,6 +10,7 @@ import { createWorld, advance } from "../sim/world.js";
 import { NO_INPUT } from "../sim/entity.js";
 import { createInput } from "./input.js";
 import { createRenderer } from "./render.js";
+import { createSettings } from "./settings.js";
 import { createHud, askName } from "./hud.js";
 import { createOnlineGame, storedName } from "./online.js";
 import { SERVER } from "./config.js";
@@ -23,6 +24,13 @@ if (params.has("debug")) window.game = { world };
 const view = params.get("view")?.split(",").map(Number);
 const canvas = document.getElementById("game");
 const renderer = createRenderer(world, canvas, view && view.length === 6 && !view.some(Number.isNaN) ? view : null, selfId);
+let store = null;
+try {
+  store = localStorage; // even reading the property throws when storage is blocked
+} catch {}
+const settings = createSettings(store);
+const applyShown = () => renderer.setShown({ orbits: settings.get("orbits"), cues: settings.get("cues") });
+applyShown();
 const hud = createHud(document.body, !!game);
 const input = createInput();
 
@@ -49,6 +57,11 @@ document.addEventListener("keydown", (e) => {
   if (e.code === "Tab") {
     e.preventDefault(); // focus stays on the game
     hud.scores(true);
+  }
+  // O and P work on the start screen too; only your own screen changes.
+  if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.code === "KeyO" || e.code === "KeyP")) {
+    settings.toggle(e.code === "KeyO" ? "orbits" : "cues");
+    applyShown();
   }
   if (!locked) return;
   if (e.code === "Space") e.preventDefault();

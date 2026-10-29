@@ -99,8 +99,8 @@ is a server change too: deploy it with `fly deploy --ha=false`.
 
 ## Sounds
 
-There are 23 sounds. All but one are made in the browser with Web Audio (recipes in `src/client/synth.js`,
-no sound files), so there is nothing to download and the page stays small. `src/client/sounds.js` decides what
+There are 24 sounds. All but two are made in the browser with Web Audio (recipes in `src/client/synth.js`,
+no sound files), so there is little to download and the page stays small. `src/client/sounds.js` decides what
 plays from the game's events and changes, and `src/client/audio.js` plays it: other players are heard from
 where they are (panned in 3D from your camera, quieter with distance), a limit on voices keeps bursts from
 becoming a roar, and a cap on loops keeps a swarm of rockets quiet. Click the page once before anything
@@ -111,10 +111,12 @@ To check them without listening (Playwright through `npx`, static server running
 `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/sound_check.cjs "http://localhost:8100/sounds.html"`
 prints each sound's level and length and `OK` when all are audible, unclipped and short (loops steady).
 
-The one sound from a file is the announcer's "Sun kill!" (`assets/sun-kill.wav`): spoken by the Norman voice
-by Bryce Beattie (public domain, trained on LibriVox recordings, https://brycebeattie.com/files/tts/) with
-[Piper](https://github.com/OHF-Voice/piper1-gpl) 1.8.0, used only to make the file, then trimmed. The game
-plays it deeper and adds its own echo.
+The two sounds from files are the announcer's "Sun kill!" (`assets/sun-kill.wav`) and the scream of an alien
+lost in space, "Noooo!" (`assets/scream.wav`): both spoken by the Norman voice by Bryce Beattie (public domain,
+trained on LibriVox recordings, https://brycebeattie.com/files/tts/) with
+[Piper](https://github.com/OHF-Voice/piper1-gpl) 1.8.0, used only to make the files, then trimmed. The game
+plays the announcer deeper with its own echo, and the scream higher, wobbling and sagging away like a small
+creature's.
 
 ## Tuning
 

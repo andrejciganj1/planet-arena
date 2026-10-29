@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadVoice } from "../src/client/synth.js";
+import { voiceClip } from "../src/client/synth.js";
 import { createAudio } from "../src/client/audio.js";
 
 test("a failed decode is tried again on the next load, not remembered for the session", async () => {
@@ -16,16 +16,18 @@ test("a failed decode is tried again on the next load, not remembered for the se
       return { duration: 1 };
     },
   };
-  const bytes = new ArrayBuffer(8); // the page fetches the file once
+  const clip = voiceClip("test", new ArrayBuffer(8)); // the page fetches the file once
   try {
-    await loadVoice(ctx, bytes);
-    await loadVoice(ctx, bytes);
+    await clip.load(ctx);
+    assert.equal(clip.buffer(), null, "nothing to play yet");
+    await clip.load(ctx);
   } finally {
     console.warn = warn;
   }
   assert.equal(calls, 2, "the second load decoded again");
-  await loadVoice(ctx, new ArrayBuffer(8));
-  assert.equal(calls, 2, "a decoded line is kept");
+  assert.ok(clip.buffer(), "decoded");
+  await clip.load(ctx);
+  assert.equal(calls, 2, "a decoded clip is kept");
 });
 
 test("the engine loads the announcer's voice when the context is made and when it wakes", () => {

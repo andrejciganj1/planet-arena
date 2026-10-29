@@ -96,8 +96,8 @@ export function createAudio({ AudioContextImpl = globalThis.AudioContext, preloa
   }
 
   return {
-    // On every click that should start sound: makes the context the first time, wakes it after. The announcer's
-    // voice is decoded here too (it needs a context), so the first sun kill isn't silent.
+    // On every click that should start sound: makes the context the first time, wakes it after. The voice
+    // files are decoded here too (they need a context), so the first sun kill or scream isn't silent.
     unlock: guard(() => {
       if (!ctx) {
         ctx = new AudioContextImpl();

@@ -1,9 +1,9 @@
 // How each sound is made: Web Audio oscillators, noise, filters and envelopes, our own recipes in the spirit
-// of Quake 3 (short and punchy), copied from no game; only the announcer's voice is a file. A recipe builds its
+// of Quake 3 (short and punchy), copied from no game; only the two voices are files. A recipe builds its
 // sound now into `out` and returns { end } (the context time it falls silent) or, for a loop, { stop }.
 // Nothing touches Web Audio until a recipe is called, so node tests can load this.
 
-// The loops: they sound until stopped, the rest are one-shots of at most 1.5 s.
+// The loops: they sound until stopped, the rest are one-shots of at most 1.5 s (the scream 2.5 s).
 export const LOOPS = new Set(["rocketFlight", "rockIncoming", "hookPull", "boost"]);
 
 const SILENT = 0.0003; // -70 dB: where an envelope ends, well below what anyone hears in a game
@@ -86,32 +86,52 @@ function tone(ctx, out, t0, o) {
   return end;
 }
 
-// The announcer's line, the one sound from a file (assets/sun-kill.wav, made with Piper, see README). The
-// bytes are fetched as the page loads, so the first sun kill needn't wait for the network; only in a browser,
-// since node tests load this file too. Decoding needs a context, so it waits for the first one; the decoded
-// buffer then serves every context.
-const voiceBytes = typeof document === "undefined" ? null
-  : fetch(new URL("../../assets/sun-kill.wav", import.meta.url))
+// The two voices, the only sounds from files (assets/sun-kill.wav and assets/scream.wav, made with Piper, see
+// README). The bytes are fetched as the page loads, so the first call needn't wait for the network; only in a
+// browser, since node tests load this file too. Decoding needs a context, so it waits for the first one; the
+// decoded buffer then serves every context.
+const fetched = (file) => (typeof document === "undefined" ? null
+  : fetch(new URL(`../../assets/${file}`, import.meta.url))
     .then((r) => (r.ok ? r.arrayBuffer() : null))
-    .catch(() => null);
-let line = null, decoding = null;
+    .catch(() => null));
 
-// Resolves once the line can play, or once it is clear it can't (then the announcer stays silent). A failure
+// load(ctx) resolves once the clip can play, or once it is clear it can't (then it stays silent). A failure
 // isn't remembered: the next call (the engine asks on every unlock) tries again, so one bad moment doesn't
-// silence the announcer for the session. `bytes` is for tests.
-export function loadVoice(ctx, bytes = voiceBytes) {
-  if (line) return Promise.resolve();
-  decoding ??= Promise.resolve(bytes)
-    .then((b) => b && ctx.decodeAudioData(b.slice(0))) // decoding detaches what it is given; keep ours for a retry
-    .then((buf) => {
-      line = buf || null;
-      if (!line) decoding = null;
-    })
-    .catch((e) => {
-      decoding = null;
-      console.warn("the announcer is silent:", e?.message);
-    });
-  return decoding;
+// silence it for the session. `bytes` is for tests.
+export function voiceClip(what, bytes) {
+  let buf = null, decoding = null;
+  return {
+    buffer: () => buf,
+    load(ctx) {
+      if (buf) return Promise.resolve();
+      decoding ??= Promise.resolve(bytes)
+        .then((b) => b && ctx.decodeAudioData(b.slice(0))) // decoding detaches what it is given; keep ours for a retry
+        .then((decoded) => {
+          buf = decoded || null;
+          if (!buf) decoding = null;
+        })
+        .catch((e) => {
+          decoding = null;
+          console.warn(`the ${what} is silent:`, e?.message);
+        });
+      return decoding;
+    },
+  };
+}
+
+const sunKill = voiceClip("announcer", fetched("sun-kill.wav"));
+const nooo = voiceClip("scream", fetched("scream.wav"));
+export const loadVoice = (ctx) => Promise.all([sunKill.load(ctx), nooo.load(ctx)]);
+
+// Plays a clip now if decoded; else as soon as it is, unless that is too late to still belong to the moment.
+// Returns when it ends, or a guess while it waits.
+function voiced(ctx, out, clip, play, guess) {
+  const t = ctx.currentTime;
+  if (clip.buffer()) return play(ctx, out, t, clip.buffer());
+  clip.load(ctx)
+    .then(() => clip.buffer() && ctx.currentTime < t + 0.25 && play(ctx, out, ctx.currentTime, clip.buffer()))
+    .catch(() => {}); // the context closed meanwhile: nothing to play into
+  return { end: t + guess };
 }
 
 // Lower than recorded (a bigger, more cartoonish announcer), then a few late, darker copies: a big hall
@@ -119,7 +139,7 @@ export function loadVoice(ctx, bytes = voiceBytes) {
 const SAY = { rate: 0.85, dry: 0.7 };
 const ECHO = [[0.12, 0.32, 2400], [0.25, 0.18, 1600], [0.38, 0.09, 1100]]; // [delay s, gain, lowpass Hz]
 
-function say(ctx, out, t) {
+function say(ctx, out, t, line) {
   const src = ctx.createBufferSource();
   src.buffer = line;
   src.playbackRate.value = SAY.rate;
@@ -143,6 +163,58 @@ function say(ctx, out, t) {
   }
   src.start(t);
   return { end: t + len + ECHO[ECHO.length - 1][0] };
+}
+
+// The scream: a small creature, not a sped-up man. Played higher than recorded, which raises the voice's
+// formants with its pitch (what makes it small); a wobble that grows as it goes; and at the end the pitch,
+// level and brightness sag together as the alien drifts away. One late, dark echo. rate: the playback rate
+// held, from: where it starts (a quick rise into the scream), to: where the sag ends, up and sag: their s.
+const CRY = { from: 1.65, rate: 1.8, to: 1.05, up: 0.12, sag: 0.5, vib: [6.5, 30, 90], dry: 0.55, far: 0.35, echo: [0.16, 0.18, 2000] };
+
+function cry(ctx, out, t, clip) {
+  const { from, rate, to, up, sag, vib: [hz, cents, centsEnd], dry, far, echo: [delay, gain, cutoff] } = CRY;
+  // The time held at full rate is what the rise and the sag leave of the file (the sag is exponential: its
+  // mean rate is (rate - to) / ln(rate / to)), so the sag lands on the file's last syllable.
+  const used = up * (from + rate) / 2 + sag * (rate - to) / Math.log(rate / to);
+  const t1 = t + up, t2 = t1 + Math.max(0, (clip.duration - used) / rate), end = t2 + sag;
+  const src = ctx.createBufferSource();
+  src.buffer = clip;
+  src.playbackRate.setValueAtTime(from, t);
+  src.playbackRate.linearRampToValueAtTime(rate, t1);
+  src.playbackRate.setValueAtTime(rate, t2);
+  src.playbackRate.exponentialRampToValueAtTime(to, end);
+  const lfo = ctx.createOscillator(), depth = ctx.createGain();
+  lfo.frequency.value = hz;
+  depth.gain.setValueAtTime(cents, t);
+  depth.gain.linearRampToValueAtTime(centsEnd, end);
+  lfo.connect(depth);
+  depth.connect(src.detune);
+  const tone = ctx.createBiquadFilter();
+  tone.type = "lowpass";
+  // A param holds its default until its first event, so each is set from t too, not only from the sag.
+  tone.frequency.setValueAtTime(9000, t);
+  tone.frequency.setValueAtTime(9000, t2);
+  tone.frequency.exponentialRampToValueAtTime(1500, end);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(dry, t);
+  g.gain.setValueAtTime(dry, t2);
+  g.gain.exponentialRampToValueAtTime(dry * far, end);
+  src.connect(tone);
+  tone.connect(g);
+  g.connect(out);
+  const d = ctx.createDelay(1), f = ctx.createBiquadFilter(), e = ctx.createGain();
+  d.delayTime.value = delay;
+  f.type = "lowpass";
+  f.frequency.value = cutoff;
+  e.gain.value = gain;
+  g.connect(d);
+  d.connect(f);
+  f.connect(e);
+  e.connect(out);
+  src.start(t);
+  lfo.start(t);
+  lfo.stop(end + 0.3);
+  return { end: end + delay };
 }
 
 // A one-shot from layers: [hiss or tone, options] each. Returns { end }.
@@ -311,16 +383,11 @@ export const RECIPES = {
     [tone, { wave: "sawtooth", f: 380, f1: 55, vib: [7, 60], filter: ["lowpass", 1400], peak: 0.4, a: 0.01, d: 0.9 }],
     [tone, { f: 90, f1: 35, peak: 0.5, a: 0.003, d: 0.3 }],
   ]),
+  // "Nooo!": lost in space, the alien screams as it drifts away (see cry).
+  scream: (ctx, out) => voiced(ctx, out, nooo, cry, 1.7),
   // "Sun kill!": the recorded line, deeper and with an arena echo. The first call may come before the file
   // is decoded; it then plays as soon as it is, unless that is too late to still belong to the kill.
-  announcer: (ctx, out) => {
-    const t = ctx.currentTime;
-    if (line) return say(ctx, out, t);
-    loadVoice(ctx)
-      .then(() => line && ctx.currentTime < t + 0.25 && say(ctx, out, ctx.currentTime))
-      .catch(() => {}); // the context closed meanwhile: nothing to play into
-    return { end: t + 1.5 };
-  },
+  announcer: (ctx, out) => voiced(ctx, out, sunKill, say, 1.5),
   // A spring: the pitch leaps up and wobbles fast, the wobble dying away.
   boink: (ctx, out) => shot(ctx, out, [
     [tone, { wave: "triangle", f: 220, f1: 560, glide: 0.12, vib: [16, 300, 1], peak: 0.55, a: 0.005, d: 0.4 }],

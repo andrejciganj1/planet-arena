@@ -38,7 +38,7 @@ test("the list of sounds is the one Task 3 makes recipes for", () => {
   assert.deepEqual([...SOUNDS].sort(), [
     "pistol", "shotgun", "rocket", "minigun", "sniper", "railgun", "rocketFlight", "explode", "rockIncoming", "rockBurn",
     "ding", "hurt", "death", "announcer", "boink", "pickup", "pickupBack", "step", "hookFire", "hookPull", "boost",
-    "switch", "empty",
+    "switch", "empty", "scream",
   ].sort());
   for (const w of tuning.WEAPON_ORDER) assert.ok(SOUNDS.includes(w), `${w} fires a sound of its own name`);
 });
@@ -105,9 +105,23 @@ test("your death is in your head, another's where it fell", () => {
   const mine = play(d, w, [{ type: "death", id: "me", cause: "damage", by: "you", pos: [1, 2, 3] }]);
   assert.deepEqual(names(mine), ["death"]);
   assert.equal(mine.once[0].pos, null);
-  const theirs = play(d, w, [{ type: "death", id: "you", cause: "void", by: null, pos: [4, 5, 6] }]);
+  const theirs = play(d, w, [{ type: "death", id: "you", cause: "damage", by: null, pos: [4, 5, 6] }]);
   assert.deepEqual(names(theirs), ["death"]);
   near(theirs.once[0].pos, [4, 5, 6]);
+});
+
+test("drifting out of the system screams: yours in your head, another's where it was lost", () => {
+  const w = scene(["me", "you"]), d = createDirector({ selfId: "me", online: false });
+  play(d, w);
+  const lost = (id) => ({ type: "death", id, cause: "void", by: null, pos: [700, 0, 0] });
+  const mine = play(d, w, [lost("me")]).once.find((s) => s.name === "scream");
+  assert.ok(mine && mine.pos === null && mine.own && mine.src === "me", JSON.stringify(mine));
+  const theirs = play(d, w, [lost("you")]).once.find((s) => s.name === "scream");
+  assert.ok(theirs && !theirs.own && theirs.src === "you", JSON.stringify(theirs));
+  near(theirs.pos, [700, 0, 0]);
+  for (const cause of ["sun", "damage"]) {
+    assert.ok(!names(play(d, w, [{ ...lost("you"), cause }])).includes("scream"), `no scream for ${cause}`);
+  }
 });
 
 test("a sun kill by you plays the announcer; by someone else, quieter", () => {

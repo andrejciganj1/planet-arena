@@ -11,7 +11,7 @@ import { pickupPos } from "../sim/pickups.js";
 export const SOUNDS = [
   "pistol", "shotgun", "rocket", "minigun", "sniper", "railgun", "rocketFlight", "explode", "rockIncoming", "rockBurn",
   "ding", "hurt", "death", "announcer", "boink", "pickup", "pickupBack", "step", "hookFire", "hookPull", "boost",
-  "switch", "empty",
+  "switch", "empty", "scream",
 ];
 
 // While a status screen covers the game (online: connecting, unreachable, full, version, no player yet) the
@@ -44,6 +44,9 @@ export function createDirector({ selfId, online }) {
         case "death":
           if (ev.id === selfId) once.push({ name: "death", pos: null, own: true, src: selfId });
           else once.push({ name: "death", pos: ev.pos, own: false, src: ev.id });
+          // Lost in space: an alien's "Nooo!" as it drifts away. Another's is out at the edge, so usually beyond
+          // SOUND.range; it is placed there anyway rather than faked nearer.
+          if (ev.cause === "void") once.push({ name: "scream", ...placed(ev.id, ev.pos) });
           // A sun kill is an event for the whole game: the killer hears it full, everyone else quieter.
           if (ev.cause === "sun" && ev.by) {
             if (ev.by === selfId) once.push({ name: "announcer", pos: null, own: true });

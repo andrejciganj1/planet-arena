@@ -1,11 +1,13 @@
-// Sound check: opens the sound test page, renders every recipe in an OfflineAudioContext (2 s, 44.1 kHz,
-// mono) and prints per sound the peak, the RMS and when it falls below -50 dB. OK when every one-shot is
-// audible (peak above -30 dB), never clips (peak at most 0 dB) and ends within 1.5 s, and every loop is
+// Sound check: opens the sound test page, renders every recipe in an OfflineAudioContext (one-shots 3 s,
+// loops 2 s, 44.1 kHz, mono) and prints per sound the peak, the RMS and when it falls below -50 dB. OK when
+// every one-shot is audible (peak above -30 dB), never clips (peak at most 0 dB) and ends within 1.5 s (the
+// scream, a drawn-out "Nooo!", within 2.5 s), and every loop is
 // audible, never clips, is steady (RMS of its second second within 6 dB of its first) and, stopped at 1 s,
-// is silent by 1.5 s. We can't hear; this says each sound is there, whole and short. The announcer's file is
-// loaded before rendering, so a missing file fails it as too quiet.
+// is silent by 1.5 s. We can't hear; this says each sound is there, whole and short. The voice files are
+// loaded before rendering, so a missing file fails its sound as too quiet.
 // Usage: NODE_PATH=... node tools/sound_check.cjs <url of sounds.html>
 const { chromium } = require("playwright");
+const LONGEST = { scream: 2.5 }; // s; every other one-shot 1.5
 (async () => {
   const b = await chromium.launch({ channel: "chrome" });
   const p = await b.newPage();
@@ -17,11 +19,11 @@ const { chromium } = require("playwright");
   const rows = await p.evaluate(async () => {
     const { SOUNDS, RECIPES, LOOPS } = window.soundtest;
     const rate = 44100, len = 2 * rate, quiet = 10 ** (-50 / 20);
-    // The announcer's file must be decoded first, or its render would be silent.
+    // The voice files must be decoded first, or their renders would be silent.
     const { loadVoice } = await import(new URL("src/client/synth.js", location.href).href);
     await loadVoice(new OfflineAudioContext(1, 1, rate));
     const render = async (name, stopAt) => {
-      const ctx = new OfflineAudioContext(1, len, rate);
+      const ctx = new OfflineAudioContext(1, LOOPS.has(name) ? len : 1.5 * len, rate);
       const h = RECIPES[name](ctx, ctx.destination, {});
       if (stopAt) ctx.suspend(stopAt).then(() => (h.stop(), ctx.resume()));
       return (await ctx.startRendering()).getChannelData(0);
@@ -53,7 +55,7 @@ const { chromium } = require("playwright");
     const why = [];
     if (db(r.peak) <= -30) why.push("too quiet");
     if (r.peak > 1) why.push("clips");
-    if (!r.loop && r.ends > 1.5) why.push("too long");
+    if (!r.loop && r.ends > (LONGEST[r.name] ?? 1.5)) why.push("too long");
     if (r.loop && Math.abs(db(r.first) - db(r.second)) > 6) why.push("unsteady");
     if (r.loop && r.stopped > 1.5) why.push("doesn't stop");
     if (why.length) bad = true;

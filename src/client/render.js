@@ -399,7 +399,13 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   // An entity's interpolated feet and up.
   const between = (e, alpha) => (e.prev ? { pos: lerp(e.prev.pos, e.pos, alpha), up: norm(lerp(e.prev.up, e.up, alpha)) } : { pos: e.pos, up: e.up });
 
+  let shown = { orbits: true, cues: true };
   return {
+    // Your own choices (O and P): { orbits, cues }. Cues cover the dashed path and the pad's light.
+    setShown(s) {
+      shown = { ...shown, ...s };
+      for (const r of rings) r.ring.visible = shown.orbits;
+    },
     // A hit event for someone: their bar flashes white for a moment (it reacts to the server's confirmation).
     // now: real seconds.
     event(ev, now) {
@@ -466,11 +472,11 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         const at = add(poses[pd.pad.body], pd.offset);
         pd.g.position.copy(v3(at));
         const on = !!world.cues[pd.pad.id]?.landsOn;
-        pd.mat.color.setHex(on ? 0x3ee05a : 0xe0443e);
+        pd.mat.color.setHex(on && shown.cues ? 0x3ee05a : 0xe0443e);
         const d = dist(at, viewer);
         if (d < PAD_CUE.showPathWithin && (!nearest || d < nearest.d)) nearest = { pd, d };
       }
-      const cue = nearest && world.cues[nearest.pd.pad.id];
+      const cue = shown.cues && nearest && world.cues[nearest.pd.pad.id];
       path.visible = !!cue;
       if (cue) {
         // The cue was computed up to a quarter second ago, and the pad's planet has moved on since. Carry

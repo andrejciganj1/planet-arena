@@ -248,6 +248,14 @@ test("the railgun hits instantly along a straight line", () => {
   assert.equal(w.projectiles.length, 0);
 });
 
+test("the beam event carries its owner and the burn event its position", () => {
+  // The burn half is in asteroids.test.mjs. Sounds tell your own beam (sounded from your shot count) from
+  // another's by its owner.
+  const { w } = range(60, "railgun");
+  stepWorld(w, { player: { ...NO_INPUT, fire: true } }, TICK);
+  assert.deepEqual(w.events.filter((e) => e.type === "beam").map((e) => e.owner), ["player"]);
+});
+
 test("shotgun pellets push the target, not the shooter, and vanish beyond 35 m", () => {
   const shot = range(3, "shotgun"), twin = range(3, "shotgun");
   stepWorld(shot.w, { player: { ...NO_INPUT, fire: true } }, TICK);

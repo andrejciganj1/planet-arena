@@ -330,3 +330,18 @@ test("online, a rock's blast is heard at the rock's reach, a rocket's at the roc
   assert.equal(by(80).splash, tuning.ASTEROID.blast.splash);
   assert.equal(by(90).splash, tuning.ROCKET.splash);
 });
+
+test("the server's events reach the view marked remote, so sounds can skip echoes of your own", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  const a = join("Ana", () => NO_INPUT);
+  for (let f = 0; f < 10; f++) frame();
+  a.g.world.events.length = 0;
+  const last = r.sent.at(-1);
+  const sent = { type: "explode", id: "rock.99", pos: [0, 80, 0] };
+  r.deliver({ ...last, tick: last.tick + 1, t: last.t + TICK, events: [sent] });
+  assert.deepEqual(a.g.world.events, [{ ...sent, remote: true }]);
+  // Your own predicted steps add events unmarked (here none: Ana stands still).
+  a.g.frame(TICK, () => NO_INPUT);
+  assert.ok(a.g.world.events.every((e) => e.remote), JSON.stringify(a.g.world.events));
+});

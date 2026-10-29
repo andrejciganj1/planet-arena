@@ -176,17 +176,19 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // how far legs and the free arm swing at full run; head: the most the head tips with the aim; aim: the range
 // the gun arm follows the aim in (beyond it the arm would pass through the bubble); support: the free arm
 // against the gun arm; reach: the hook arm above the aim; lean when walking (at full run), just jumped, falling
-// and boosting; tuck and dangle: the legs (left, right) just after a jump and after `fall` s in the air;
-// trail: the legs while boosting; flail: the free arm while falling; ease: s, how fast a pose follows its
-// state; boostHold: s a boost pose outlasts the last fuel drop seen.
+// and boosting (the body leans about the head, so a lean over about 0.12 takes the drawn torso off its hit
+// sphere: boosting reads from the trailing legs instead); tuck and dangle: the legs (left, right) just after a
+// jump and after `fall` s in the air; trail: the legs while boosting; fly: the free arm while boosting; flail:
+// the free arm while falling; ease: s, how fast a pose follows its state; boostHold: s a boost pose outlasts
+// the last fuel drop seen.
 export const LOOK = {
   budget: 4_000_000,
   alien: {
     suit: 0xe8ebf0, dummy: 0x8a8e94, trim: 0.9, rim: 0.8, sun: 0.45, hold: 1.6,
     pose: {
       steps: 2.6, swing: 0.6, armSwing: 0.35, head: 0.5, aim: [-1.3, 0.7], support: -0.35, reach: 0.4,
-      lean: { walk: 0.1, jump: -0.12, fall: 0.12, boost: 0.55 },
-      tuck: [0.75, -0.2], dangle: [0.35, -0.35], trail: [-0.3, -0.15], flail: 2.4, fall: 0.6, ease: 0.08, boostHold: 0.15,
+      lean: { walk: 0.08, jump: -0.08, fall: 0.1, boost: 0.11 },
+      tuck: [0.75, -0.2], dangle: [0.35, -0.35], trail: [-0.5, -0.35], fly: 2.0, flail: 2.4, fall: 0.6, ease: 0.08, boostHold: 0.15,
     },
   },
   quality: { down: 1 / 50, up: 10, window: 2, pause: 0.25, maxUp: 240, ratio: [1, 1.5, 2] },

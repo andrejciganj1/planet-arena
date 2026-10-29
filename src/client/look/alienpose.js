@@ -31,9 +31,10 @@ export function poseParts(e, boosting = false, cfg = LOOK.alien.pose) {
     lean = cfg.lean.walk * walk;
     armL = Math.PI / 2 + aim + cfg.support;
   } else if (boosting) {
+    // Flying: the free arm out ahead, near where a fall raises it, as boosts start and stop all the time.
     [legL, legR] = cfg.trail;
     lean = cfg.lean.boost;
-    armL = Math.PI / 2 + aim + cfg.support;
+    armL = cfg.fly;
   } else {
     // Just jumped: knees up, leaning back a little; a while in the air: legs apart, a hand up, tipping forward.
     const k = smooth(clamp((e.airTime || 0) / cfg.fall, 0, 1));

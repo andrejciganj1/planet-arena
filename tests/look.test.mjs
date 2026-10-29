@@ -369,9 +369,12 @@ test("alienPose keeps the head centre on its sphere in every pose", async () => 
       for (const k of POSE_KEYS) assert.ok(Number.isFinite(pose[k]), `${k} finite`);
       const placed = placeAlien(pose, rest);
       assert.ok(distTo(placed.head.pos, hc) < 1e-9, `head moved to ${placed.head.pos}`);
-      // The body hangs under the head whatever the lean: its pivot never leaves the body's reach of it.
+      // The body hangs under the head whatever the lean, and stays where shots test it: the drawn torso (its
+      // pivot is the body sphere's centre at rest) within a quarter of the body radius of that centre.
       assert.ok(Math.abs(distTo(placed.body.pos, hc) - distTo(rest.body, hc)) < 1e-9);
-      if (Math.abs(pose.lean) > 0.2) leaned++;
+      const off = distTo(placed.body.pos, [0, PLAYER.hit.body.at, 0]);
+      assert.ok(off <= 0.25 * PLAYER.hit.body.r, `the body leans ${off.toFixed(3)} m off its hit sphere (lean ${pose.lean.toFixed(2)})`);
+      if (Math.abs(pose.lean) > 0.05) leaned++;
       if (Math.abs(pose.legL - pose.legR) > 0.5) swung++;
     }
   }
@@ -385,7 +388,9 @@ test("poses over a run of interpolated states change smoothly (no jump above a s
   const { NO_INPUT, createEntity } = await import("../src/sim/entity.js");
   const { entityState, applyEntity } = await import("../src/net/protocol.js");
   const { createInterp } = await import("../src/net/interp.js");
-  const MAX_STEP = 0.25; // rad per 60 Hz frame for any angle: more reads as a snap
+  // Rad per 60 Hz frame, more reads as a snap: the stride's limbs swing fast by design; the gun arm follows
+  // the aim; the lean and the head move slowly, so a step in either shows at once.
+  const MAX_STEP = { legL: 0.25, legR: 0.25, armL: 0.25, armR: 0.2, lean: 0.04, headPitch: 0.08 };
 
   // The server: a player walks, sweeps its aim up and down, jumps, boosts and falls back, for 8 s.
   const world = createWorld(tuning);
@@ -435,5 +440,5 @@ test("poses over a run of interpolated states change smoothly (no jump above a s
     last = { ...pose };
   }
   assert.ok(frames > 400 && ground > 60 && air > 60 && boosted > 10, `the run walks, flies and boosts (${frames}, ${ground}, ${air}, ${boosted})`);
-  for (const k of POSE_KEYS) assert.ok(worst[k] <= MAX_STEP, `${k} jumped ${worst[k].toFixed(3)} rad in one frame`);
+  for (const k of POSE_KEYS) assert.ok(worst[k] <= MAX_STEP[k], `${k} jumped ${worst[k].toFixed(3)} rad in one frame`);
 });

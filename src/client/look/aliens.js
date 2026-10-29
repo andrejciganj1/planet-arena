@@ -127,8 +127,14 @@ export function dressFigure(g, gltf) {
   const rest = {};
   for (const name of ["body", "armL", "armR", "legL", "legR"]) rest[name] = nodes[name].position.toArray();
   // The gun in the hand (the hand's -z runs along the arm); the first-person models, bigger, until Task 5's.
-  const guns = weaponModels();
+  // Its materials are patched too, so a planet hides the sun from the gun as from the figure holding it.
+  const guns = weaponModels(), lit = [...mats.values()], gunMats = new Map();
   for (const gun of Object.values(guns)) {
+    gun.traverse((o) => {
+      if (!o.isMesh) return;
+      if (!gunMats.has(o.material)) gunMats.set(o.material, alienMaterial(o.material));
+      o.material = gunMats.get(o.material);
+    });
     gun.position.set(0, 0, 0);
     gun.scale.setScalar(LOOK.alien.hold);
     gun.visible = false;
@@ -136,7 +142,8 @@ export function dressFigure(g, gltf) {
   }
   g.remove(g.userData.simple);
   g.add(model);
-  g.userData.alien = { model, nodes, rest, mats, guns, colour: null };
+  lit.push(...gunMats.values());
+  g.userData.alien = { model, nodes, rest, mats, lit, guns, colour: null };
 }
 
 // This frame's look: colour (skin, trim and rim; hex), pose (look/alienpose.js), weapon (the held one's
@@ -155,7 +162,7 @@ export function styleFigure(g, colour, pose, weapon, sun) {
     if (trim) trim.emissive.copy(c).multiplyScalar(LOOK.alien.trim);
     a.mats.get("glass")?.userData.rim.value.copy(c).multiplyScalar(LOOK.alien.rim);
   }
-  for (const m of a.mats.values()) m.userData.sun.value = sun * LOOK.alien.sun;
+  for (const m of a.lit) m.userData.sun.value = sun * LOOK.alien.sun;
   const placed = placeAlien(pose, a.rest);
   for (const name in placed) {
     const n = a.nodes[name], { pos, rx } = placed[name];

@@ -5,9 +5,10 @@
 // planet hides the whole sun so no glow brightens the screen). In the last two the dummy must stand out from
 // the ground behind it, its name tag hidden: the mean brightness of its pixels and of the same pixels without
 // it (the ground) differ by at least NIGHT_CONTRAST of full scale, over at least SEEN_SHARE of its outline
-// (its two hit spheres projected), so a few stray pixels can't pass. The alien close up by day and night (grey,
-// and as a blue player) and in third person walking, boosting and on the hook, to look at. Also measures the average frame time over 5 s in one view and sums the
-// bytes of every file under assets/ the page fetched. Prints one line per view, then OK when there were no
+// (its two hit spheres projected), so a few stray pixels can't pass. That holds for the grey dummy and for
+// the dummy drawn in every player colour (COLOURS). The alien close up by day and night (grey, and as a blue
+// player) and in third person walking, boosting and on the hook, to look at. Also measures the average frame
+// time over 5 s in one view and sums the bytes of every file under assets/ the page fetched. Prints one line per view, then OK when there were no
 // page errors, the dummy was seen, the frame time was measured and the assets fit in LOOK.budget.
 // Usage: NODE_PATH=... node tools/look_check.cjs <base url, e.g. http://localhost:8100/> <out dir> [views]
 // views: a pattern for the view names to take (while working on one look); the checks then cover only those.
@@ -186,7 +187,7 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
 
   await open(null);
   const world = await p.evaluate(async () => {
-    const { PLAYER, LOOK } = await import(new URL("src/tuning.js", location.href));
+    const { PLAYER, LOOK, COLOURS } = await import(new URL("src/tuning.js", location.href));
     const w = window.game.world;
     return {
       bodies: w.system.bodies.map(({ id, kind, radius }) => ({ id, kind, radius })),
@@ -194,6 +195,7 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
       eye: PLAYER.eye,
       hit: PLAYER.hit,
       budget: LOOK.budget,
+      colours: COLOURS,
     };
   });
 
@@ -220,11 +222,22 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
     const file = path.join(out, `${view.name}.png`);
     const shot = await p.screenshot({ path: file });
     if (SEEN.includes(view.name)) {
+      // The dummy again in each player colour (it is drawn as a player of that colour).
+      const coloured = [];
+      for (const colour of world.colours) {
+        await p.evaluate((c) => (window.game.world.players.dummy = { name: "Alien", colour: c }), colour);
+        await frames(p, 5);
+        const hex = colour.toString(16).padStart(6, "0");
+        coloured.push({ hex, png: await p.screenshot({ path: path.join(out, `${view.name}-${hex}.png`) }) });
+      }
+      await p.evaluate(() => delete window.game.world.players.dummy);
       // The same view without the dummy: what is left in its place is the ground behind it.
       await p.evaluate(() => (window.game.world.entities.dummy.alive = false));
       await frames(p, 5);
       const without = await p.screenshot({ path: path.join(out, `${view.name}-empty.png`) });
-      seen[view.name] = await contrastIn(p, shot, without, dummyDiscs(view, world.hit));
+      const discs = dummyDiscs(view, world.hit);
+      seen[view.name] = await contrastIn(p, shot, without, discs);
+      for (const c of coloured) seen[`${view.name} ${c.hex}`] = await contrastIn(p, c.png, without, discs);
     }
     const fmt = (a) => a.map((x) => x.toFixed(1)).join(",");
     console.log(`${view.name.padEnd(14)} ${file}  eye ${fmt(view.eye)} -> ${fmt(view.target)}`);
@@ -242,7 +255,8 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
   if (frameMs == null && !only) (bad = true), console.log("frame time not measured");
   else if (frameMs == null) console.log("frame time not measured (views filtered)");
   else console.log(`frame time ${frameMs.toFixed(2)} ms average over 5 s in ${TIMED} (${(1000 / frameMs).toFixed(0)} fps)`);
-  for (const name of SEEN.filter((n) => !only || only.test(n))) {
+  const measured = SEEN.filter((n) => !only || only.test(n));
+  for (const name of measured.flatMap((n) => [n, ...world.colours.map((c) => `${n} ${c.toString(16).padStart(6, "0")}`)])) {
     const m = seen[name];
     if (!m || !m.inside) {
       (bad = true), console.log(`${name}: the dummy is not on screen`);

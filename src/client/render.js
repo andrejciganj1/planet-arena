@@ -2,7 +2,7 @@
 // players, shots and blasts, and the weapon in view. It only reads the world; drawing happens between the
 // last two ticks (alpha) so motion stays smooth on screens faster than the 60 Hz simulation.
 import * as THREE from "three";
-import { tumble } from "./rocklook.js";
+import { tumble, trailPush } from "./rocklook.js";
 import { PLAYER, DUMMY, ROCKET, PAD_CUE, BELT, TICK, PICKUPS, WEAPONS, FEEDBACK, ASTEROID, ROCK_LOOK } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
 import { pickupReady } from "../sim/pickups.js";
@@ -524,11 +524,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         k.seen = frameNo;
         k.mesh.position.copy(v3(a.pos));
         k.mesh.rotation.set(...tumble(a.id, world.t), 0);
-        // One trail point per frame, but not while paused or drawn twice at the same spot.
-        const [x, y, z] = a.pos, last = k.pts;
-        if (!last.length || last[0] !== x || last[1] !== y || last[2] !== z) last.unshift(x, y, z);
-        last.length = Math.min(last.length, 3 * ROCK_LOOK.trail);
-        const n = last.length / 3, pos = k.line.geometry.attributes.position, col = k.line.geometry.attributes.color;
+        // One trail point per game tick (not per frame), so the trail lasts the same on any screen.
+        trailPush(k, a.pos, world.t, ROCK_LOOK.trail);
+        const last = k.pts, n = last.length / 3, pos = k.line.geometry.attributes.position, col = k.line.geometry.attributes.color;
         pos.array.set(last);
         for (let j = 0; j < n; j++) {
           const f = 0.5 * (1 - j / n) ** 1.5; // additive dots pile up, so start dim or the near end whites out
@@ -549,7 +547,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         const m = blast(i++), k = x.age / ROCKET.showFor;
         m.visible = true;
         m.position.copy(v3(x.pos));
-        m.scale.setScalar(0.5 + (ROCKET.splash - 0.5) * Math.sqrt(k));
+        m.scale.setScalar(0.5 + (x.splash - 0.5) * Math.sqrt(k));
         m.material.opacity = 0.85 * (1 - k);
       }
       for (; i < blasts.length; i++) blasts[i].visible = false;

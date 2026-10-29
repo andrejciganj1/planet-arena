@@ -101,7 +101,7 @@ function hurt(world, e, damage, byId, from) {
 // in a cosmetic world: there only the server sets rocks off, and its explode events draw their blasts.
 export function explode(world, pos, ownerId, lag = 0, id = null, spec = world.tuning.ROCKET) {
   world.events.push({ type: "explode", pos: [...pos], id });
-  world.explosions.push({ pos: [...pos], age: 0 });
+  world.explosions.push({ pos: [...pos], age: 0, splash: spec.splash }); // splash: drawn at its real reach
   for (const e of Object.values(world.entities)) {
     if (!e.alive) continue;
     if (world.cosmetic && e.id !== world.selfId) continue;

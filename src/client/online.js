@@ -113,7 +113,7 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
     for (const ev of msg.events) {
       if ((ev.type === "explode" || ev.type === "burn") && ev.id?.startsWith("rock.")) gone.add(ev.id);
       if (ev.type === "explode" && drawn.has(ev.id)) continue; // your own rocket, drawn when it hit here
-      if (ev.type === "explode" || (ev.type === "death" && ev.cause !== "void")) heard.push({ list: "explosions", item: { pos: ev.pos, age: 0 }, at: msg.t });
+      if (ev.type === "explode" || (ev.type === "death" && ev.cause !== "void")) heard.push({ list: "explosions", item: { pos: ev.pos, age: 0, splash: ev.id?.startsWith("rock.") ? tuning.ASTEROID.blast.splash : tuning.ROCKET.splash }, at: msg.t });
       view.events.push(ev);
     }
     if (view.events.length > EVENTS_KEPT) view.events.splice(0, view.events.length - EVENTS_KEPT);

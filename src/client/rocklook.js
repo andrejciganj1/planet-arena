@@ -6,3 +6,12 @@ export function tumble(id, t) {
   const next = hashRand(`tumble|${id}`), x = next() * 2 * Math.PI, y = next() * 2 * Math.PI;
   return [x + t, y + 0.7 * t];
 }
+
+// Adds a trail point (newest first, x y z) only when the game clock has moved since the last one, so the
+// trail spans the same game time at any frame rate; between ticks the head just follows the drawn rock.
+// Online the view draws rocks every frame, so a point per frame would shorten the warning on fast screens.
+export function trailPush(trail, [x, y, z], t, max = Infinity) {
+  if (trail.pts.length && trail.t === t) trail.pts.splice(0, 3, x, y, z);
+  else (trail.pts.unshift(x, y, z), (trail.t = t));
+  trail.pts.length = Math.min(trail.pts.length, 3 * max);
+}

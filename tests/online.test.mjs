@@ -8,7 +8,7 @@ import { createWorld } from "../src/sim/world.js";
 import { explode, detonate, stepProjectiles } from "../src/sim/weapons.js";
 import { createGame } from "../server/game.js";
 import { createOnlineGame, clockNudge } from "../src/client/online.js";
-import { tumble } from "../src/client/rocklook.js";
+import { tumble, trailPush } from "../src/client/rocklook.js";
 
 const { TICK, NET } = tuning;
 const json = (x) => JSON.parse(JSON.stringify(x));
@@ -294,4 +294,39 @@ test("a rock as the view has it online (no age) still gets a finite tumble", () 
   assert.ok(seen && seen.age === undefined, "snapshots carry no age");
   for (const x of tumble(seen.id, a.g.world.t)) assert.ok(Number.isFinite(x));
   assert.notDeepEqual(tumble("rock.1", 5), tumble("rock.2", 5), "each rock starts at its own angle");
+});
+
+test("a rock's trail covers the same game time at 60 and at 144 frames per second", () => {
+  const points = (fps) => {
+    const trail = { pts: [], t: -1 };
+    // One second and a half of game time; the clock moves in whole ticks, as the view's does.
+    for (let f = 0; f < 1.5 * fps; f++) {
+      const t = Math.floor((f / fps) / TICK) * TICK;
+      trailPush(trail, [f, 0, 0], t, tuning.ROCK_LOOK.trail);
+    }
+    return trail.pts.length / 3;
+  };
+  assert.equal(points(144), points(60));
+  assert.equal(points(60), tuning.ROCK_LOOK.trail, "a full trail is 60 ticks");
+});
+
+test("a blast is drawn at its real reach: a rock's 5 m, a rocket's 4 m", () => {
+  const w = createWorld(tuning, { solo: false });
+  explode(w, [0, 80, 0], "me", 0, "me.1.0");
+  explode(w, [0, 90, 0], "me", 0, "rock.1", tuning.ASTEROID.blast);
+  assert.deepEqual(w.explosions.map((x) => x.splash), [tuning.ROCKET.splash, tuning.ASTEROID.blast.splash]);
+});
+
+test("online, a rock's blast is heard at the rock's reach, a rocket's at the rocket's", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  const a = join("Ana", () => NO_INPUT);
+  for (let f = 0; f < 10; f++) frame();
+  const last = r.sent.at(-1);
+  const events = [{ type: "explode", id: "rock.99", pos: [0, 80, 0] }, { type: "explode", id: "x.1.0", pos: [0, 90, 0] }];
+  r.deliver({ ...last, tick: last.tick + 1, t: last.t + TICK, events });
+  a.g.frame(TICK, () => NO_INPUT);
+  const by = (y) => a.g.world.explosions.find((x) => x.pos[1] === y);
+  assert.equal(by(80).splash, tuning.ASTEROID.blast.splash);
+  assert.equal(by(90).splash, tuning.ROCKET.splash);
 });

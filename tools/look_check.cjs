@@ -10,11 +10,17 @@
 // player) and in third person walking, boosting and on the hook, to look at. Each weapon in first person, at
 // rest and firing (a shot every frame, so the kick and the flash show), one firing on a night side, and in an
 // alien's hand firing, seen from the side. The props (propViews): pickups, pads, the belt, a flying rock and a
-// comet's tails. Also measures the average frame
-// time over 5 s in one view and sums the bytes of every file under assets/ the page fetched. Prints one line per view, then OK when there were no
-// page errors, the dummy was seen, the frame time was measured and the assets fit in LOOK.budget.
+// comet's tails. Sums the bytes of every file under assets/ the page fetched.
+// Performance, at 1080p: in one view, each quality level held for 5 s: the average frame time, the work per
+// frame (from the frame's start until the GPU has finished it, so it shows the cost under the 60 fps cap) and
+// the draw calls and triangles; a warning when the top level misses 60 fps. Then the quality step on a slow
+// machine: the live game with the CPU slowed 4x must drop a level within THROTTLE_DROP s and never climb back
+// within THROTTLE_FOR s (no flipping back and forth).
+// Prints one line per view, then OK when there were no page errors, the dummy was seen, the frame time was
+// measured, the throttled run passed and the assets fit in LOOK.budget.
 // Usage: NODE_PATH=... node tools/look_check.cjs <base url, e.g. http://localhost:8100/> <out dir> [views]
 // views: a pattern for the view names to take (while working on one look); the checks then cover only those.
+// The timing runs when the pattern takes TIMED, the throttled run when it takes "throttled".
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
@@ -25,6 +31,7 @@ const SEEN = ["dummy-night", "dummy-night-ocean"]; // the views whose dummy must
 const NIGHT_CONTRAST = 0.06; // of full scale (sRGB luminance), dummy against the ground behind it
 const SEEN_SHARE = 0.5; // of the dummy's projected outline that must differ from the empty ground
 const FOV = 80, W = 1280, H = 800; // the camera and the window
+const THROTTLE_DROP = 10, THROTTLE_FOR = 25; // s
 
 const v = {
   add: (a, b) => a.map((x, i) => x + b[i]),
@@ -256,6 +263,7 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
       eye: PLAYER.eye,
       hit: PLAYER.hit,
       budget: LOOK.budget,
+      levels: LOOK.quality.res.length,
       colours: COLOURS,
       weapons: WEAPON_ORDER,
       pickups: PICKUPS.map((pk) => ({
@@ -270,7 +278,7 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
     };
   });
 
-  let frameMs = null;
+  let frameMs = null, timed = null;
   const seen = {};
   const only = process.argv[4] ? new RegExp(process.argv[4]) : null;
   for (const view of views(world).filter((x) => !only || only.test(x.name))) {
@@ -340,20 +348,68 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
     }
     const fmt = (a) => a.map((x) => x.toFixed(1)).join(",");
     console.log(`${view.name.padEnd(14)} ${file}  ` + (view.fp ? `first person at ${fmt(view.fp.pos)}` : `eye ${fmt(view.eye)} -> ${fmt(view.target)}`));
-    if (view.name === TIMED) {
-      frameMs = await p.evaluate(() => new Promise((done) => {
-        let n = 0;
-        const t0 = performance.now();
-        const step = (t) => (++n, t - t0 < 5000 ? requestAnimationFrame(step) : done((t - t0) / n));
-        requestAnimationFrame(step);
+    if (view.name === TIMED) timed = view;
+  }
+
+  // Each quality level held in the timed view, at 1080p.
+  const big = await b.newContext({ viewport: { width: 1920, height: 1080 } });
+  const q = await big.newPage();
+  q.on("pageerror", (e) => ((bad = true), console.log("pageerror:", e.message)));
+  if (timed) {
+    for (let level = world.levels - 1; level >= 0; level--) {
+      await q.goto(`${pageUrl(base, timed)}&quality=${level}`);
+      await q.waitForFunction(() => window.game?.world, null, { timeout: 15000 });
+      const m = await q.evaluate(() => new Promise((done) => {
+        const gl = document.getElementById("game").getContext("webgl2"), px = new Uint8Array(4);
+        let n = 0, work = 0, t0 = null;
+        const step = (t) => {
+          gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); // waits for the GPU to finish this frame
+          if (t0 === null) t0 = t; // the first frame only starts the clock
+          else (n++, (work += performance.now() - t));
+          if (t - t0 < 5000) return requestAnimationFrame(step);
+          done({ ms: (t - t0) / n, work: work / n, ...window.game.renderer.stats() });
+        };
+        // Settle first: shaders compiled, every map painted.
+        let warm = 60;
+        const wait = () => (--warm > 0 ? requestAnimationFrame(wait) : requestAnimationFrame(step));
+        requestAnimationFrame(wait);
       }));
+      if (m.level !== level) (bad = true), console.log(`quality ${level}: drawn at level ${m.level}`);
+      console.log(`quality ${level}: frame ${m.ms.toFixed(2)} ms (${(1000 / m.ms).toFixed(0)} fps), work ${m.work.toFixed(2)} ms, ` +
+        `${m.calls} draw calls, ${m.triangles} triangles, at 1920x1080 in ${TIMED}`);
+      if (level === world.levels - 1) frameMs = m.ms;
     }
   }
-  await b.close();
-
   if (frameMs == null && !only) (bad = true), console.log("frame time not measured");
   else if (frameMs == null) console.log("frame time not measured (views filtered)");
-  else console.log(`frame time ${frameMs.toFixed(2)} ms average over 5 s in ${TIMED} (${(1000 / frameMs).toFixed(0)} fps)`);
+  else if (frameMs > 1000 / 58) console.log(`warning: the top level misses 60 fps here (${frameMs.toFixed(2)} ms); is the machine busy?`);
+
+  // A slow machine: the live game (the clock running) with the CPU slowed 4x.
+  if (!only || only.test("throttled")) {
+    const live = new URL(base);
+    live.searchParams.set("debug", "");
+    await q.goto(live.toString());
+    await q.waitForFunction(() => window.game?.world, null, { timeout: 15000 });
+    await frames(q, 60);
+    const cdp = await big.newCDPSession(q);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+    const top = world.levels - 1, t0 = Date.now(), seen = [];
+    let dropped = null, climbed = null, last = top;
+    while (Date.now() - t0 < THROTTLE_FOR * 1000) {
+      await q.waitForTimeout(250);
+      const { level } = await q.evaluate(() => window.game.renderer.stats());
+      const t = (Date.now() - t0) / 1000;
+      if (level !== last) seen.push(`${t.toFixed(1)} s: level ${level}`);
+      if (level < top && dropped === null) dropped = t;
+      if (level > last && climbed === null) climbed = t;
+      last = level;
+    }
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+    console.log(`throttled 4x: ${seen.join(", ") || "stayed at the top level"}, ${THROTTLE_FOR} s in all`);
+    if (dropped === null || dropped > THROTTLE_DROP) (bad = true), console.log(`throttled: no drop within ${THROTTLE_DROP} s`);
+    if (climbed !== null) (bad = true), console.log(`throttled: climbed back at ${climbed.toFixed(1)} s`);
+  }
+  await b.close();
   const measured = SEEN.filter((n) => !only || only.test(n));
   for (const name of measured.flatMap((n) => [n, ...world.colours.map((c) => `${n} ${c.toString(16).padStart(6, "0")}`)])) {
     const m = seen[name];

@@ -32,13 +32,16 @@ const OVERVIEW = [0, 260, 380, 0, 0, 0];
 
 // selfId: your entity, whose eyes the camera uses. Online it is a function, as the id comes with the
 // server's welcome and changes if the server restarts. noSky: skip painting the sky, to see its fallback.
-export function createRenderer(world, canvas, fixedView = null, selfId = "player", { noSky = false } = {}) {
+// hold: a quality level to draw at all the time (for measuring each one), instead of the automatic step.
+export function createRenderer(world, canvas, fixedView = null, selfId = "player", { noSky = false, hold = null } = {}) {
   const self = typeof selfId === "function" ? selfId : () => selfId;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   // The quality step's level sets the pixel ratio and which effects run; it starts at the top.
-  const quality = createQuality({ levels: LOOK.quality.ratio.length, ...LOOK.quality });
-  let level = quality.level, lastNow = null;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOOK.quality.ratio[level]));
+  const { res, most } = LOOK.quality, pixelRatio = (l) => Math.min(window.devicePixelRatio, most) * res[l];
+  const quality = createQuality({ levels: res.length, ...LOOK.quality });
+  const pinned = Number.isInteger(hold) && hold >= 0 && hold < res.length ? hold : null;
+  let level = pinned ?? quality.level, lastNow = null;
+  renderer.setPixelRatio(pixelRatio(level));
   const scene = new THREE.Scene();
   // The sky is painted once; plain space if it can't be. A lost and restored WebGL context loses the painting
   // too (three remakes its own resources, not what was drawn into them), so it is painted again.
@@ -197,6 +200,8 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
     event(ev, now) {
       if (ev.type === "hit") flashAt[ev.id] = now;
     },
+    // The quality level drawn at and the last frame's draw calls and triangles (the look check's measure).
+    stats: () => ({ level, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }),
     // The camera as last drawn: { pos, right, up, forward }, for the HUD's hit arcs.
     camera() {
       const m = camera.matrixWorld.elements;
@@ -206,9 +211,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
     // zoom: the sniper's magnification while zoomed, else 1; shift: added to where you are drawn (online,
     // a prediction's correction eased in); now: real seconds, for the bars' hit flash.
     draw(alpha, look, zoom = 1, shift = null, now = 0) {
-      if (lastNow !== null && quality.frame(now - lastNow) !== level) {
+      if (pinned === null && lastNow !== null && quality.frame(now - lastNow) !== level) {
         level = quality.level;
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOOK.quality.ratio[level]));
+        renderer.setPixelRatio(pixelRatio(level));
         sun.setLevel(level);
         planets.setLevel(level);
       }

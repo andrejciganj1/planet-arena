@@ -8,6 +8,8 @@
 //   ?debug&at=T          solo: the match clock stands still at T s, so screenshots (tools/look_check.cjs) are
 //                        the same every time; whoever stands on a body is carried there with it
 //   ?debug&nosky         the sky is not painted, to see the plain space it falls back to
+//   ?debug&quality=N     draws at quality level N (0 lowest) all the time, to measure it; window.game.renderer
+//                        .stats() gives the level drawn at, draw calls and triangles
 import * as tuning from "../tuning.js";
 import { createWorld, advance } from "../sim/world.js";
 import { NO_INPUT } from "../sim/entity.js";
@@ -43,7 +45,7 @@ if (still) {
 const view = params.get("view")?.split(",").map(Number);
 const canvas = document.getElementById("game");
 const renderer = createRenderer(world, canvas, view && view.length === 6 && !view.some(Number.isNaN) ? view : null, selfId,
-  { noSky: params.has("debug") && params.has("nosky") });
+  { noSky: params.has("debug") && params.has("nosky"), hold: params.has("debug") && params.has("quality") ? Number(params.get("quality")) : null });
 if (params.has("debug")) window.game.renderer = renderer;
 let store = null;
 try {

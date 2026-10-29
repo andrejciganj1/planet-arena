@@ -97,7 +97,8 @@ function hurt(world, e, damage, byId, from) {
 // measured where the shooter saw them (`lag`); the push is added to their current velocity. A cosmetic world
 // pushes only you, so your own rocket jump feels right at once, and says how hard through onSelfPush.
 // `id` is the rocket's, so the browser can tell the server's blast from the one it drew already. `spec` is
-// the blast's size (a rocket's or an asteroid's). Rocks it reaches go off too, as the blast owner's.
+// the blast's size (a rocket's or an asteroid's). Rocks it reaches go off too, as the blast owner's, except
+// in a cosmetic world: there only the server sets rocks off, and its explode events draw their blasts.
 export function explode(world, pos, ownerId, lag = 0, id = null, spec = world.tuning.ROCKET) {
   world.events.push({ type: "explode", pos: [...pos], id });
   world.explosions.push({ pos: [...pos], age: 0 });
@@ -115,6 +116,7 @@ export function explode(world, pos, ownerId, lag = 0, id = null, spec = world.tu
     if (world.cosmetic) world.onSelfPush?.(dv);
     hurt(world, e, spec.damage * f * (e.id === ownerId ? spec.self : 1), ownerId, pos);
   }
+  if (world.cosmetic) return;
   const reach = spec.splash + world.tuning.ASTEROID.radius;
   const reached = (world.asteroids || []).filter((r) => dist(seenRock(world, r, lag), pos) < reach);
   // A rock is gone before its own blast, so a chain never comes back to it, and always ends.
@@ -122,8 +124,10 @@ export function explode(world, pos, ownerId, lag = 0, id = null, spec = world.tu
 }
 
 // Sets a rock off where the shooter saw it (`lag`). Its blast is ownerId's, or nobody's (null) for one that
-// hit something on its own: then `hurt` leaves the last hitter in place, as a fall into the sun does.
+// hit something on its own: then `hurt` leaves the last hitter in place, as a fall into the sun does. A
+// cosmetic world leaves the rock for the server: the shot that met it just stops there, with no blast.
 export function detonate(world, rock, ownerId, lag = 0) {
+  if (world.cosmetic) return;
   const at = seenRock(world, rock, lag);
   world.asteroids = world.asteroids.filter((r) => r !== rock);
   rock.owner = ownerId;

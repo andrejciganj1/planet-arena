@@ -10,8 +10,12 @@ import { PROTOCOL, cleanInput, cleanName, entityState, applyEntity, snapshot } f
 const { TICK, COLOURS, NET } = tuning;
 const online = () => ({ ...createWorld(tuning, { solo: false }), pads: [] });
 
+test("PROTOCOL is 3", () => {
+  // The hit shape and asteroids changed the rules: an older page must be told to reload.
+  assert.equal(PROTOCOL, 3);
+});
+
 test("cleanInput keeps good input and repairs or rejects the rest", () => {
-  assert.equal(PROTOCOL, 2);
   const good = { ...NO_INPUT, move: [0.5, -1], jump: true, fire: true, weapon: "rocket", yawDelta: 0.1, pitchDelta: -0.2, tick: 5, view: 3 };
   assert.deepEqual(cleanInput(good), good);
   const bad = cleanInput({ tick: 5, move: [NaN, 9], yawDelta: Infinity, pitchDelta: "1", fire: "yes", weapon: "bfg" });
@@ -100,4 +104,20 @@ test("a snapshot has every entity, shot, pickup and player, and survives JSON", 
   assert.equal(Object.keys(snap.players).length, 2);
   assert.deepEqual(snap.beams, w.beams);
   assert.deepEqual(snap.events, [{ type: "boom" }]);
+});
+
+test("a snapshot carries the rocks", () => {
+  const w = online();
+  w.asteroids.push({ id: "rock.3", pos: [150, 1, 2], vel: [-4, 0.5, 9], age: 7, owner: null });
+  w.asteroids.push({ id: "rock.4", pos: [10, 20, 30], vel: [1, 2, 3], age: 1, owner: "a" });
+  const snap = snapshot(w, { ack: 0, slack: 0, events: [] });
+  assert.deepEqual(snap.rocks, [
+    { id: "rock.3", pos: [150, 1, 2], vel: [-4, 0.5, 9], owner: null },
+    { id: "rock.4", pos: [10, 20, 30], vel: [1, 2, 3], owner: "a" },
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(snap)).rocks, snap.rocks);
+  // Copies: the world goes on moving its rocks after the snapshot is taken.
+  assert.notEqual(snap.rocks[0].pos, w.asteroids[0].pos);
+  assert.notEqual(snap.rocks[0].vel, w.asteroids[0].vel);
+  assert.deepEqual(snapshot(online(), { ack: 0, slack: 0, events: [] }).rocks, []);
 });

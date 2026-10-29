@@ -11,7 +11,7 @@ const system = createSystem(tuning.BODIES);
 const close = (a, b, eps = 1e-9) => assert.ok(dist(a, b) < eps, `${a} vs ${b}`);
 
 const rec = (id, o) => ({ id, pos: [0, 0, 0], up: [0, 1, 0], forward: [0, 0, 1], groundId: null, alive: true, ...o });
-const snap = (tick, entities, shots = []) => ({ type: "snap", tick, t: tick * TICK, entities, shots });
+const snap = (tick, entities, shots = [], rocks = []) => ({ type: "snap", tick, t: tick * TICK, entities, shots, rocks });
 
 test("halfway between two snapshots, a floating player is halfway", () => {
   const ip = createInterp(system);
@@ -77,6 +77,25 @@ test("shots are interpolated by id", () => {
   close(s.find((x) => x.id === 1).pos, [2, 0, 0]);
   close(s.find((x) => x.id === 2).pos, [9, 9, 9]);
   assert.equal(ip.sample(11.5).shots.find((x) => x.id === 1).pos[0], 3);
+});
+
+test("rocks are drawn between snapshots like shots", () => {
+  const ip = createInterp(system);
+  assert.deepEqual(ip.sample(5).rocks, [], "nothing arrived yet");
+  ip.push(snap(10, [], [], [{ id: "rock.1", pos: [0, 0, 0], vel: [2, 0, 0], owner: null }]));
+  ip.push(snap(12, [], [], [
+    { id: "rock.1", pos: [4, 0, 0], vel: [2, 0, 0], owner: null },
+    { id: "rock.2", pos: [150, 1, 0], vel: [0, 0, 9], owner: null },
+  ]));
+  const r = ip.sample(11).rocks;
+  assert.equal(r.length, 2);
+  close(r.find((x) => x.id === "rock.1").pos, [2, 0, 0]);
+  close(r.find((x) => x.id === "rock.2").pos, [150, 1, 0]); // new in the later snapshot: drawn where it is
+  assert.equal(ip.sample(11.5).rocks.find((x) => x.id === "rock.1").pos[0], 3);
+  // One gone from the later snapshot (set off, burnt, dropped) is not drawn.
+  ip.push(snap(14, [], [], [{ id: "rock.2", pos: [150, 1, 4], vel: [0, 0, 9], owner: null }]));
+  assert.deepEqual(ip.sample(13).rocks.map((x) => x.id), ["rock.2"]);
+  close(ip.sample(13).rocks[0].pos, [150, 1, 2]);
 });
 
 test("before the oldest and after the newest, the end snapshots", () => {

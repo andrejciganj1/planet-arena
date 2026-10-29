@@ -2,7 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as tuning from "../src/tuning.js";
 import { createWorld } from "../src/sim/world.js";
-import { NO_INPUT } from "../src/sim/entity.js";
+import { NO_INPUT, viewDir, unground } from "../src/sim/entity.js";
+import { add, scale, cross, norm } from "../src/sim/vec.js";
+import { launchOf } from "../src/sim/asteroids.js";
 import { PROTOCOL } from "../src/net/protocol.js";
 import { createGame } from "../server/game.js";
 import { feedText } from "../src/client/hud.js";
@@ -347,4 +349,54 @@ test("a kill by a player who has just dropped still shows their name", () => {
   assert.equal(snap.players.p1.away, undefined);
   steps(g, NET.rejoin * 60);
   assert.equal(steps(g, 2).find((o) => o.conn === "a").msg.players.p2, undefined, "gone once the window is over");
+});
+
+test("two players: a rock set off by one player's shot kills the other; scores agree", () => {
+  const g = mk();
+  hi(g, "a", "A"); hi(g, "b", "B");
+  steps(g, 10);
+  const w = g.world, a = w.entities.p1, b = w.entities.p2;
+  Object.assign(a, { weapon: "railgun", weapons: ["pistol", "railgun"], ammo: { railgun: 5 } });
+  // A rock 20 m along a's view; b floats beside it, inside its blast but off the railgun's line.
+  const dir = viewDir(a), at = add(add(a.pos, scale(a.up, tuning.PLAYER.eye)), scale(dir, 20));
+  w.asteroids.push({ id: "rock.99", pos: at, vel: [0, 0, 0], age: 0, owner: null });
+  unground(w, b);
+  Object.assign(b, { pos: add(at, scale(norm(cross(dir, a.up)), 3.5)), vel: [0, 0, 0], health: 10 });
+  const before = steps(g, 2).map((o) => o.msg);
+  for (const m of before) assert.ok(m.rocks.some((x) => x.id === "rock.99" && x.owner === null), "both see the rock");
+  const T = g.world.tick;
+  g.input("a", { type: "input", tick: T + 1, view: T + 1, input: { ...NO_INPUT, fire: true } });
+  const after = steps(g, 2);
+  const events = after[0].msg.events;
+  assert.ok(events.some((e) => e.type === "explode" && e.id === "rock.99"), "a's shot set it off");
+  assert.ok(events.some((e) => e.type === "death" && e.id === "p2" && e.by === "p1" && e.cause === "damage"), "b died, a's kill");
+  assert.ok(!g.world.asteroids.some((x) => x.id === "rock.99"));
+  const seen = Object.fromEntries(after.map((o) => [o.conn, o.msg]));
+  for (const conn of ["a", "b"]) {
+    assert.ok(!seen[conn].rocks.some((x) => x.id === "rock.99"), `${conn}: the rock is gone`);
+    assert.deepEqual(seen[conn].players.p1, { name: "A", colour: g.world.players.p1.colour, kills: 1, deaths: 0 });
+    assert.deepEqual(seen[conn].players.p2, { name: "B", colour: g.world.players.p2.colour, kills: 0, deaths: 1 });
+  }
+  assert.deepEqual(seen.a.players, seen.b.players);
+});
+
+test("after everyone leaves, the new game starts with no rocks and launches from k = 1 again", () => {
+  const { ASTEROID } = tuning;
+  const g = mk();
+  hi(g, "a", "A"); hi(g, "b", "B");
+  steps(g, 35 * 60); // rock.2 is in flight from 30 s
+  assert.ok(g.world.asteroids.length > 0, "rocks flying when everyone leaves");
+  assert.ok(g.world.rocksLaunched >= 2);
+  g.drop("a"); g.drop("b");
+  steps(g, NET.rejoin * 60);
+  assert.equal(g.world, null);
+  hi(g, "c", "C");
+  assert.deepEqual(g.world.asteroids, []);
+  assert.equal(g.world.rocksLaunched, 0);
+  const early = steps(g, ASTEROID.every * 60 - 2).map((o) => o.msg);
+  assert.ok(early.length > 0 && early.every((m) => m.rocks.length === 0), "none before the first launch time");
+  assert.ok(launchOf(tuning, g.world.system, 1));
+  const due = steps(g, 4).map((o) => o.msg);
+  assert.equal(g.world.rocksLaunched, 1);
+  assert.deepEqual(due.at(-1).rocks.map((x) => x.id), ["rock.1"]);
 });

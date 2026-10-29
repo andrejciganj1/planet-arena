@@ -70,7 +70,7 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
     token = msg.token;
     save("sessionStorage", TOKEN, token);
     outcome = null;
-    Object.assign(view, { selfId: id, entities: {}, projectiles: [], beams: [], explosions: [], players: {}, scores: {}, pickups: {}, cues: {} });
+    Object.assign(view, { selfId: id, entities: {}, projectiles: [], beams: [], explosions: [], players: {}, scores: {}, pickups: {}, cues: {}, asteroids: [] });
     own = [];
     heard = [];
     drawn.clear();
@@ -177,6 +177,9 @@ export function createOnlineGame(tuning, url, name, connectFn = connect) {
     }
     for (const eid of Object.keys(view.entities)) if (eid !== id && !seen.entities[eid]) delete view.entities[eid];
     view.projectiles = own.concat(seen.shots.filter((s) => s.owner !== id));
+    // Rocks only from the server, as they were at the others' view time: the view never steps the world, so
+    // it launches none, and your shots meet them where you see them (the server rewinds them to the same).
+    view.asteroids = seen.rocks;
     refreshCues(view);
   }
 

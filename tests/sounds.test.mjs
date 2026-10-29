@@ -165,17 +165,19 @@ test("your own launch sounds once online: the server's echo is skipped", () => {
   assert.deepEqual(names(play(d, w, [{ ...launch, id: "you", remote: true }])), ["boink"], "someone else's");
 });
 
-test("your own rocket blast sounds once online", () => {
+test("your own rocket blast sounds online, the server's too when your prediction missed it", () => {
+  // online.js drops the server's echo of a blast your prediction drew (tests/online.test.mjs), so a remote
+  // blast of yours that reaches the director is one your screen never had: it sounds, as it is drawn.
   const w = scene(["me"]), d = createDirector({ selfId: "me", online: true });
   play(d, w);
   const blast = { type: "explode", pos: [0, 80, 0], id: "me.3.0" };
-  assert.deepEqual(names(play(d, w, [blast])), ["explode"]);
-  assert.deepEqual(names(play(d, w, [{ ...blast, remote: true }])), []);
-  // Someone whose id starts like yours, and a rock your rocket set off, are other blasts.
-  assert.deepEqual(names(play(d, w, [{ ...blast, id: "me2.3.0", remote: true }, { ...blast, id: "rock.4", remote: true }])), ["explode", "explode"]);
-  const solo = createDirector({ selfId: "me", online: false });
-  play(solo, w);
-  assert.deepEqual(names(play(solo, w, [{ ...blast, remote: true }])), ["explode"], "solo has nothing to skip");
+  const predicted = play(d, w, [blast]).once;
+  assert.deepEqual(predicted.map((s) => [s.name, s.own]), [["explode", true]]);
+  const missed = play(d, w, [{ ...blast, id: "me.4.0", remote: true }]).once;
+  assert.deepEqual(missed.map((s) => [s.name, s.own]), [["explode", true]]);
+  // Someone whose id starts like yours, and a rock, are other blasts.
+  const others = play(d, w, [{ ...blast, id: "me2.3.0", remote: true }, { ...blast, id: "rock.4", remote: true }]).once;
+  assert.deepEqual(others.map((s) => [s.name, s.own]), [["explode", false], ["explode", false]]);
 });
 
 test("the hook fires once and pulls while it holds", () => {

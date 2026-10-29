@@ -9,6 +9,7 @@ import { explode, detonate, stepProjectiles } from "../src/sim/weapons.js";
 import { createGame } from "../server/game.js";
 import { createOnlineGame, clockNudge } from "../src/client/online.js";
 import { tumble, trailPush } from "../src/client/rocklook.js";
+import { createDirector } from "../src/client/sounds.js";
 
 const { TICK, NET } = tuning;
 const json = (x) => JSON.parse(JSON.stringify(x));
@@ -114,6 +115,26 @@ test("your own rocket's blast is drawn once, not again when the server's arrives
   assert.equal(r.sent.flatMap((m) => m.events).filter((e) => e.type === "explode").length, 1, "the room's rocket went off");
   assert.equal(events, 1, "one blast event in the view");
   assert.equal(most, 1, "one blast on screen");
+});
+
+test("your own rocket's blast sounds once online, not again when the server's arrives", () => {
+  const r = room();
+  const { join, frame } = play(r);
+  let fire = Infinity;
+  const a = join("Ana", (i) => ({ ...NO_INPUT, pitchDelta: i === 5 ? -2 : 0, weapon: i === 5 ? "rocket" : null, fire: i === fire }));
+  frame();
+  Object.assign(r.game.world.entities[a.g.id], { weapons: ["pistol", "rocket"], ammo: { rocket: 5 } });
+  for (let f = 0; f < 10; f++) frame();
+  const d = createDirector({ selfId: a.g.id, online: true });
+  fire = a.n;
+  let blasts = 0;
+  for (let f = 0; f < 60; f++) {
+    frame();
+    blasts += d.frame(a.g.world, a.g.world.events, TICK).once.filter((s) => s.name === "explode").length;
+    a.g.world.events.length = 0; // as main.js does each frame
+  }
+  assert.equal(r.sent.flatMap((m) => m.events).filter((e) => e.type === "explode").length, 1, "the room's rocket went off");
+  assert.equal(blasts, 1);
 });
 
 test("a hidden tab's snapshots leave only the blasts and beams still showing", () => {

@@ -15,8 +15,8 @@ export const SOUNDS = [
 
 const ALWAYS = { get: () => true };
 
-// online: events marked `remote` came from the server, and the ones about your own pad launches and rocket
-// blasts were already played from your prediction.
+// online: events marked `remote` came from the server; the echo of your own pad launch was already played
+// from your prediction.
 export function createDirector({ selfId, online }) {
   const seen = new Map(); // entity id -> what it was last frame
   let ready = new Map(); // pickup id -> readyAt last frame
@@ -43,7 +43,8 @@ export function createDirector({ selfId, online }) {
           }
           break;
         case "explode":
-          if (echo && mineShot(ev.id)) break;
+          // No echo check: online.js already drops the server's copy of a blast your prediction drew, so one
+          // of yours arriving here is a blast your screen missed, and it is drawn then.
           once.push({ name: "explode", pos: ev.pos, own: mineShot(ev.id) });
           break;
         case "burn":

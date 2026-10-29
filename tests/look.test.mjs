@@ -442,3 +442,156 @@ test("poses over a run of interpolated states change smoothly (no jump above a s
   assert.ok(frames > 400 && ground > 60 && air > 60 && boosted > 10, `the run walks, flies and boosts (${frames}, ${ground}, ${air}, ${boosted})`);
   for (const k of POSE_KEYS) assert.ok(worst[k] <= MAX_STEP[k], `${k} jumped ${worst[k].toFixed(3)} rad in one frame`);
 });
+
+// The weapons. Each is a node named by its weapon with a `<weapon>_muzzle` empty at the barrel's tip, built
+// with the grip at its origin and the barrel along -z; its accent material is its pickup colour.
+const WEAPONS_GLB = "../assets/models/weapons.glb";
+
+// A node's vertices and those of everything under it, where the file puts them.
+function treeVertices(glb, name) {
+  const out = [], index = glb.json.nodes.findIndex((n) => n.name === name);
+  const walk = (i) => {
+    out.push(...nodeVertices(glb, glb.json.nodes[i].name).points);
+    for (const c of glb.json.nodes[i].children || []) walk(c);
+  };
+  walk(index);
+  return out;
+}
+
+// sRGB hex (as three.js and WEAPON colours take it) to the linear factors glTF stores.
+const linear = (hex) => [16, 8, 0].map((s) => {
+  const c = ((hex >> s) & 255) / 255;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+});
+
+test("the weapons file has a node and a muzzle for each of WEAPON_ORDER", async () => {
+  const { WEAPON_ORDER } = await import("../src/tuning.js");
+  const glb = readGlb(WEAPONS_GLB), { nodes, materials } = glb.json;
+  const roots = new Set(glb.json.scenes[glb.json.scene ?? 0].nodes);
+  for (const w of WEAPON_ORDER) {
+    const index = nodes.findIndex((n) => n.name === w);
+    assert.ok(index >= 0 && roots.has(index), `a top-level node named ${w}`);
+    const muzzle = nodes.findIndex((n) => n.name === `${w}_muzzle`);
+    assert.ok(muzzle >= 0 && nodes[index].children?.includes(muzzle), `${w}_muzzle under ${w}`);
+    // The muzzle is ahead of the grip, at the front of the gun: nothing sticks out further forward.
+    const at = nodeVertices(glb, `${w}_muzzle`).at, points = treeVertices(glb, w);
+    assert.ok(points.length > 100, `${w} has a shape`);
+    const front = Math.min(...points.map((p) => p[2]));
+    assert.ok(at[2] < -0.1, `${w}'s muzzle ahead of the grip (${at[2]})`);
+    assert.ok(Math.abs(front - at[2]) < 0.015, `${w}'s muzzle at its front (${at[2]} against ${front})`);
+    // Its accent is the pickup's colour.
+    const accent = materials.find((m) => m.name === `${w}_accent`);
+    assert.ok(accent, `a material named ${w}_accent`);
+    const got = accent.pbrMetallicRoughness.baseColorFactor, want = linear(LOOK.weapons.colors[w]);
+    for (let i = 0; i < 3; i++) assert.ok(Math.abs(got[i] - want[i]) < 0.003, `${w}'s accent is its pickup colour (${got} against ${want})`);
+  }
+});
+
+// Your own player online, predicted ahead of a room in memory (as tests/predict.test.mjs joins one).
+async function onlinePlayer() {
+  const tuning = await import("../src/tuning.js");
+  const { createWorld } = await import("../src/sim/world.js");
+  const { PROTOCOL, snapshot } = await import("../src/net/protocol.js");
+  const { createPrediction } = await import("../src/net/predict.js");
+  const { createGame } = await import("../server/game.js");
+  const json = (x) => JSON.parse(JSON.stringify(x));
+  const game = createGame(tuning, { token: () => "tok" });
+  const w = game.hello("a", { type: "hello", v: PROTOCOL, name: "A" });
+  const view = createWorld(tuning, { solo: false });
+  Object.assign(view, { cosmetic: true, selfId: w.id });
+  const pred = createPrediction(view, w.id);
+  let t = w.t;
+  for (let i = 0; i < tuning.NET.lead; i++) t += TICK;
+  pred.start(w.tick + tuning.NET.lead, t);
+  pred.reconcile(json(snapshot(game.world, { ack: 0, slack: 0, events: [] })));
+  return { view, pred, json };
+}
+
+test("your weapon in view moves only with your shots: online corrections and a shot count put back never move it", async () => {
+  const { createGunWatch, viewGun } = await import("../src/client/look/gunpose.js");
+  const { NO_INPUT } = await import("../src/sim/entity.js");
+  const { entityState } = await import("../src/net/protocol.js");
+  const script = (i) => ({ ...NO_INPUT, move: [0.4, 1], yawDelta: 0.01, fire: i % 90 < 70, jump: i % 120 === 30 });
+  // A run of 6 s at 60 frames a second, one tick a frame. `correct` (tick, view, pred, kept) may reconcile.
+  const run = async (correct) => {
+    const { view, pred, json } = await onlinePlayer();
+    const watch = createGunWatch(), placed = [], kept = [];
+    let shifted = 0, kicks = 0, most = 0, first = null;
+    for (let i = 0; i < 360; i++) {
+      pred.step(script(i));
+      kept.push(json(entityState(pred.me)));
+      kept[i].tick = view.tick;
+      kept[i].t = view.t;
+      if (correct) correct(i, view, pred, kept, json);
+      if (Math.hypot(...pred.offset()) > 0.01) shifted++;
+      const { since } = watch.frame(pred.me, (i + 1) / 60);
+      if (since === 0) kicks++;
+      most = Math.max(most, pred.me.shots);
+      first ??= pred.me.shots;
+      placed.push(JSON.stringify(viewGun(pred.me.weapon, since)));
+    }
+    return { placed, shifted, kicks, most, first };
+  };
+  const clean = await run(null);
+  assert.ok(clean.kicks >= 8, `the run fires (${clean.kicks} shots)`);
+
+  // Every 10 ticks the server says where you were 5 ticks ago, 4 m/s off sideways: replayed and eased in.
+  const moved = await run((i, view, pred, kept) => {
+    if (i % 10 !== 9) return;
+    const { tick, t, ...rec } = kept[i - 5];
+    pred.reconcile({ tick, t, entities: [{ ...rec, vel: [rec.vel[0] + 4, rec.vel[1], rec.vel[2]] }] });
+  });
+  assert.ok(moved.shifted > 100, `the corrections shift the view (${moved.shifted} frames)`);
+  assert.deepEqual(moved.placed, clean.placed, "the gun in view is placed the same, shifted or not");
+
+  // And sometimes a snapshot is an earlier shot behind at the view's own tick, and the next one has it again.
+  const putBack = new Set();
+  const behind = await run((i, view, pred, kept) => {
+    if (i % 25 === 12 && kept[i].shots > kept[i - 1].shots) return; // a shot this very tick: not yet, so later
+    if (i % 25 !== 12 && !(i % 25 === 13 && putBack.has(i - 1))) return;
+    if (i % 25 === 12) putBack.add(i);
+    const { tick, t, ...rec } = kept[i];
+    pred.reconcile({ tick, t, entities: [{ ...rec, shots: rec.shots + (i % 25 === 12 ? -1 : 1) }] });
+  });
+  assert.ok(putBack.size > 5, `counts put back (${putBack.size})`);
+  assert.deepEqual(behind.placed, clean.placed, "a count put back and raised again kicks no second time");
+  assert.equal(clean.kicks, clean.most - clean.first, "one kick per shot");
+  // Between shots the gun is back at rest: the same placement as never having fired.
+  const rest = JSON.stringify(viewGun("pistol", Infinity));
+  assert.ok(clean.placed.filter((p) => p === rest).length > 60, "at rest between bursts");
+});
+
+test("another's muzzle flashes once per shot fired on the server, seen through snapshots, and briefly", async () => {
+  const { createGunWatch, flashShown } = await import("../src/client/look/gunpose.js");
+  const tuning = await import("../src/tuning.js");
+  const { createWorld, stepWorld } = await import("../src/sim/world.js");
+  const { NO_INPUT, createEntity } = await import("../src/sim/entity.js");
+  const { entityState, applyEntity } = await import("../src/net/protocol.js");
+  const { createInterp } = await import("../src/net/interp.js");
+  // The server: a player fires its pistol from 0.5 s to 4 s; 6 s in all.
+  const world = createWorld(tuning);
+  const p = world.entities.player;
+  const snaps = [];
+  for (let tick = 1; tick <= 6 / TICK; tick++) {
+    stepWorld(world, { player: { ...NO_INPUT, fire: tick * TICK > 0.5 && tick * TICK < 4, move: [0, 1] } }, TICK);
+    if (tick % tuning.NET.snapEvery === 0) snaps.push({ tick, t: world.t, entities: Object.values(world.entities).map(entityState), shots: [], rocks: [] });
+  }
+  assert.ok(p.shots >= 10, `the server fired (${p.shots})`);
+  // A browser: snapshots arrive with jitter, frames at 60 Hz.
+  const interp = createInterp(world.system), watch = createGunWatch();
+  const e = createEntity("player", "player", [0, 0, 0], [0, 1, 0]);
+  let next = 0, flashes = 0, shown = 0;
+  for (let f = 0; f < 6 * 60; f++) {
+    const now = (f + 1) / 60;
+    while (next < snaps.length && snaps[next].t <= now - (next % 5 === 0 ? 0 : 0.012)) interp.push(snaps[next++]);
+    const seen = interp.sample(interp.advance(1 / 60)).entities.player;
+    if (!seen) continue;
+    applyEntity(e, seen);
+    const { since, gun } = watch.frame(e, now);
+    if (since === 0) flashes++, assert.equal(gun, "pistol");
+    if (flashShown(since)) shown++;
+  }
+  assert.equal(flashes, p.shots, "one flash per shot");
+  assert.ok(shown <= flashes * Math.ceil(LOOK.weapons.flash.time * 60), `each flash brief (${shown} frames for ${flashes})`);
+  assert.ok(shown >= flashes, "each flash seen for a frame at least");
+});

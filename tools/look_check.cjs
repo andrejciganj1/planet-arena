@@ -7,7 +7,9 @@
 // it (the ground) differ by at least NIGHT_CONTRAST of full scale, over at least SEEN_SHARE of its outline
 // (its two hit spheres projected), so a few stray pixels can't pass. That holds for the grey dummy and for
 // the dummy drawn in every player colour (COLOURS). The alien close up by day and night (grey, and as a blue
-// player) and in third person walking, boosting and on the hook, to look at. Also measures the average frame
+// player) and in third person walking, boosting and on the hook, to look at. Each weapon in first person, at
+// rest and firing (a shot every frame, so the kick and the flash show), one firing on a night side, and in an
+// alien's hand firing, seen from the side. Also measures the average frame
 // time over 5 s in one view and sums the bytes of every file under assets/ the page fetched. Prints one line per view, then OK when there were no
 // page errors, the dummy was seen, the frame time was measured and the assets fit in LOOK.budget.
 // Usage: NODE_PATH=... node tools/look_check.cjs <base url, e.g. http://localhost:8100/> <out dir> [views]
@@ -34,7 +36,7 @@ v.norm = (a) => v.scale(a, 1 / Math.hypot(...a));
 const Y = [0, 1, 0];
 
 // Every view as { name, eye, target, dummy? } from the bodies at the still moment.
-function views({ bodies, poses, eye: eyeHeight }) {
+function views({ bodies, poses, eye: eyeHeight, weapons }) {
   const sun = poses.sun, list = [];
   for (const b of bodies.filter((b) => b.kind === "planet" || b.id === "moon" || b.id === "comet-a")) {
     const c = poses[b.id], s = v.norm(v.sub(sun, c));
@@ -87,7 +89,7 @@ function views({ bodies, poses, eye: eyeHeight }) {
   // (night), so the camera's up (world y) is near the figure's.
   const mid = bodies.find((b) => b.id === "mid"), mc = poses.mid, ms = v.norm(v.sub(sun, mc));
   const mHoriz = v.norm([ms[0], 0, ms[2]]);
-  const close = (name, k, deg, { side = false, dist = 4.2, state = {}, boost = false, as = null } = {}) => {
+  const close = (name, k, deg, { side = false, dist = 4.2, state = {}, boost = false, as = null, fire = false } = {}) => {
     const el = (deg * Math.PI) / 180;
     const up = v.norm(v.add(v.scale(Y, Math.cos(el)), v.scale(mHoriz, k * Math.sin(el))));
     const pos = v.add(mc, v.scale(up, mid.radius));
@@ -98,7 +100,16 @@ function views({ bodies, poses, eye: eyeHeight }) {
     const look = side ? v.norm(v.add(v.add(sunward, v.scale(forward, 0.6)), v.scale(up, 0.2))) : v.norm(v.add(sunward, v.scale(across, 0.5)));
     const eye = v.add(v.add(pos, v.scale(up, 1.3)), v.scale(look, dist));
     const { walk = 0, ...rest } = state;
-    return { name, eye, target: v.add(pos, v.scale(up, 1.0)), dummy: { pos, up, forward, state: { groundId: "mid", vel: v.scale(forward, walk), ...rest }, boost, as } };
+    return { name, eye, target: v.add(pos, v.scale(up, 1.0)), dummy: { pos, up, forward, state: { groundId: "mid", vel: v.scale(forward, walk), ...rest }, boost, as, fire } };
+  };
+  // You, standing where `close` puts a figure, the sun behind you and a little to the right, so the gun in
+  // view is lit from where you see it.
+  const firstPerson = (name, k, weapon, fire) => {
+    const el = (35 * Math.PI) / 180;
+    const up = v.norm(v.add(v.scale(Y, Math.cos(el)), v.scale(mHoriz, k * Math.sin(el))));
+    const across = v.norm(v.cross(mHoriz, up)), sunward = v.cross(up, across);
+    const forward = v.norm(v.add(v.scale(sunward, -1), v.scale(across, 0.4)));
+    return { name, fp: { pos: v.add(mc, v.scale(up, mid.radius)), up, forward, pitch: -0.2, weapon, fire } };
   };
   list.push(close("alien-day", 1, 35));
   list.push(close("alien-night", -1, 35));
@@ -106,6 +117,12 @@ function views({ bodies, poses, eye: eyeHeight }) {
   list.push(close("alien-walk", 1, 40, { side: true, dist: 3.6, state: { walk: 7, pitch: 0.45 }, as: 0xe8505b }));
   list.push(close("alien-boost", 1, 40, { side: true, dist: 3.6, state: { groundId: null, airTime: 0.8, pitch: 0.1 }, boost: true }));
   list.push(close("alien-hook", 1, 40, { side: true, dist: 3.6, state: { groundId: null, airTime: 1.5, pitch: 0.3, hook: { body: "mid", offset: [0, 0, 0] } } }));
+  for (const w of weapons) {
+    list.push(firstPerson(`fp-${w}`, 1, w, false));
+    list.push(firstPerson(`fp-${w}-fire`, 1, w, true));
+  }
+  list.push(firstPerson("fp-night-railgun", -1, "railgun", true));
+  for (const w of weapons) list.push(close(`hold-${w}`, 1, 40, { side: true, dist: 3, state: { weapon: w, pitch: 0.15 }, as: 0x4fb0e8, fire: true }));
   return list;
 }
 
@@ -152,7 +169,7 @@ function pageUrl(base, view) {
   const u = new URL(base);
   u.searchParams.set("debug", "");
   u.searchParams.set("at", String(AT));
-  if (view) u.searchParams.set("view", [...view.eye, ...view.target].map((x) => x.toFixed(3)).join(","));
+  if (view?.eye) u.searchParams.set("view", [...view.eye, ...view.target].map((x) => x.toFixed(3)).join(","));
   return u.toString();
 }
 
@@ -187,7 +204,7 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
 
   await open(null);
   const world = await p.evaluate(async () => {
-    const { PLAYER, LOOK, COLOURS } = await import(new URL("src/tuning.js", location.href));
+    const { PLAYER, LOOK, COLOURS, WEAPON_ORDER } = await import(new URL("src/tuning.js", location.href));
     const w = window.game.world;
     return {
       bodies: w.system.bodies.map(({ id, kind, radius }) => ({ id, kind, radius })),
@@ -196,6 +213,7 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
       hit: PLAYER.hit,
       budget: LOOK.budget,
       colours: COLOURS,
+      weapons: WEAPON_ORDER,
     };
   });
 
@@ -214,7 +232,22 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
           const burn = () => ((e.fuel = e.fuel > 0.1 ? e.fuel - 0.01 : 1.5), requestAnimationFrame(burn));
           burn();
         }
+        if (d.fire) {
+          const shoot = () => (e.shots++, requestAnimationFrame(shoot));
+          shoot();
+        }
       }, view.dummy);
+    }
+    // First person: you stand there holding the weapon (the camera is your eye).
+    if (view.fp) {
+      await p.evaluate((f) => {
+        const e = window.game.world.entities.player;
+        Object.assign(e, { pos: f.pos, up: f.up, forward: f.forward, pitch: f.pitch, prev: null, alive: true, weapon: f.weapon, groundId: "mid", vel: [0, 0, 0] });
+        if (f.fire) {
+          const shoot = () => (e.shots++, requestAnimationFrame(shoot));
+          shoot();
+        }
+      }, view.fp);
     }
     // Measured: the figure alone, its name tag hidden.
     if (SEEN.includes(view.name)) await p.evaluate(() => window.game.renderer.setShown({ tags: false }));
@@ -240,7 +273,7 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
       for (const c of coloured) seen[`${view.name} ${c.hex}`] = await contrastIn(p, c.png, without, discs);
     }
     const fmt = (a) => a.map((x) => x.toFixed(1)).join(",");
-    console.log(`${view.name.padEnd(14)} ${file}  eye ${fmt(view.eye)} -> ${fmt(view.target)}`);
+    console.log(`${view.name.padEnd(14)} ${file}  ` + (view.fp ? `first person at ${fmt(view.fp.pos)}` : `eye ${fmt(view.eye)} -> ${fmt(view.target)}`));
     if (view.name === TIMED) {
       frameMs = await p.evaluate(() => new Promise((done) => {
         let n = 0;

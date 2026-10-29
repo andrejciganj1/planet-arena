@@ -16,9 +16,10 @@ import { starfield, nebulaSky, PLAIN_SPACE } from "./look/sky.js";
 import { glowSprite, sunLook } from "./look/sun.js";
 import { sphereMesh, planetLooks, orbitLines } from "./look/planets.js";
 import { blobUnder, sphereShadow } from "./look/shadow.js";
-import { DUMMY_COLOUR, ALIEN_ASSETS, figureMesh, dressFigure, styleFigure } from "./look/aliens.js";
+import { DUMMY_COLOUR, ALIEN_ASSETS, figureMesh, dressFigure, armFigure, styleFigure, alienMaterial } from "./look/aliens.js";
 import { createPoser } from "./look/alienpose.js";
-import { weaponModels, shotLooks } from "./look/weapons.js";
+import { WEAPON_ASSETS, weaponModels, weaponSet, swapMaterials, muzzleFlash, showFlash, spinGun, shotLooks } from "./look/weapons.js";
+import { createGunWatch, viewGun, flashShown } from "./look/gunpose.js";
 import { pickupMesh, padMesh, cuePath, ropeLine, cometTail, asteroidBelt, flyingRocks } from "./look/props.js";
 import { loadAssets } from "./look/assets.js";
 import { threeLoaders } from "./look/loaders.js";
@@ -52,7 +53,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const rand = rng(7);
   // Models and images: each look module lists its files here and swaps them in when they arrive; until then
   // (or if one never does) it draws its simple shape.
-  const assets = loadAssets([...ALIEN_ASSETS], { loaders: threeLoaders() });
+  const assets = loadAssets([...ALIEN_ASSETS, ...WEAPON_ASSETS], { loaders: threeLoaders() });
 
   // three.js r160 lights are physically based (diffuse divided by pi), hence the large numbers. The night
   // side of a planet must stay readable.
@@ -102,8 +103,14 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const { path, pathGeo, pathMat } = cuePath();
   scene.add(path);
 
-  const weapons = weaponModels();
-  camera.add(...Object.values(weapons));
+  // The gun in view rides a holder on the camera, placed by look/gunpose.js from your shots alone; the model's
+  // guns replace the simple ones when they load. Its materials take the sun away where a planet hides it.
+  const holder = new THREE.Group();
+  camera.add(holder);
+  let weapons = weaponModels(), viewMats = swapMaterials(weapons, alienMaterial), viewArmed = false;
+  holder.add(...Object.values(weapons));
+  const viewFlash = muzzleFlash();
+  const watch = createGunWatch(); // everyone's last shot, for kicks, flashes and the minigun's spin
 
   // Pickups float over their spots; each has a solid look and a faint one for while it is gone.
   const pickups = PICKUPS.map((pk) => {
@@ -250,8 +257,32 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         camera.up.copy(v3(up));
         camera.lookAt(v3(add(eye, dir)));
       }
-      for (const [name, m] of Object.entries(weapons)) m.visible = !free && p.alive && p.weapon === name && zoom === 1;
+      // Figures are lit by the sun only where no body hides it from their head, as the ground is; the gun in
+      // view where none hides it from your eye.
+      for (const k of blockers) k.pos = poses[k.id];
       const viewer = camera.position.toArray();
+      const guns = assets.get("weapons");
+      if (guns && !viewArmed) {
+        holder.remove(...Object.values(weapons));
+        ({ guns: weapons, materials: viewMats } = weaponSet(guns, alienMaterial));
+        holder.add(...Object.values(weapons));
+        viewArmed = true;
+      }
+      const held = !free && p.alive && zoom === 1 ? weapons[p.weapon] : null;
+      for (const m of Object.values(weapons)) m.visible = m === held;
+      const mineShot = !free && p.alive ? watch.frame(p, now) : null;
+      if (mineShot) {
+        const at = viewGun(p.weapon, mineShot.since);
+        holder.position.set(at.pos[0], at.pos[1], at.pos[2]);
+        holder.rotation.x = at.pitch;
+        holder.scale.setScalar(at.scale);
+        if (held) spinGun(held, mineShot.since, dt);
+        let seen = 1;
+        for (const k of blockers) seen *= sphereShadow(viewer, poses.sun, sunRadius, k.pos, k.radius);
+        for (const m of viewMats) m.userData.sun.value = seen * LOOK.weapons.sun;
+      }
+      showFlash(viewFlash, held, !!held && flashShown(mineShot.since), mineShot, p?.shots);
+      camera.updateMatrixWorld(true); // the gun's muzzle is where your own beam starts
 
       let nearest = null;
       for (const pd of pads) {
@@ -279,8 +310,6 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         pathMat.color.setHex(cue.landsOn ? 0x3ee05a : 0xe0443e);
       }
 
-      // Figures are lit by the sun only where no body hides it from their head, as the ground is.
-      for (const k of blockers) k.pos = poses[k.id];
       const alien = assets.get("alien");
       let i = 0;
       for (const [id, d] of Object.entries(world.entities)) {
@@ -292,6 +321,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         const m = figure(i++);
         m.visible = true;
         if (alien && !m.userData.alien) dressFigure(m, alien);
+        if (guns && m.userData.alien && !m.userData.alien.armed) armFigure(m, guns);
         const who = world.players[id];
         m.userData.tag.visible = shown.tags;
         m.userData.tag.userData.show(who ? who.name : "Dummy", d.health / (d.kind === "dummy" ? DUMMY.health : PLAYER.health), now >= flashAt[id] && now - flashAt[id] < FEEDBACK.flash);
@@ -301,10 +331,11 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         const head = add(pos, scale(up, PLAYER.hit.head.at));
         let lit = 1;
         for (const k of blockers) lit *= sphereShadow(head, poses.sun, sunRadius, k.pos, k.radius);
-        styleFigure(m, who ? who.colour : DUMMY_COLOUR, poser.frame(d, now, dt), d.weapon, lit);
+        styleFigure(m, who ? who.colour : DUMMY_COLOUR, poser.frame(d, now, dt), d.weapon, lit, watch.frame(d, now), d.shots, dt);
       }
       for (; i < figures.length; i++) figures[i].visible = false;
       poser.sweep(now - 1);
+      watch.sweep(now - 1);
 
       i = 0;
       for (const s of world.projectiles) {
@@ -353,8 +384,8 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       for (const b of world.beams) {
         const l = beam(i++);
         l.visible = true;
-        // Your own beam starts at the gun, not your eye, or you would see it end-on as a dot.
-        const from = b.owner === p?.id && !free ? camera.localToWorld(new THREE.Vector3(0.17, -0.16, -0.9)) : v3(b.from);
+        // Your own beam starts at the railgun's muzzle, not your eye, or you would see it end-on as a dot.
+        const from = b.owner === p?.id && !free ? weapons.railgun.userData.muzzle.getWorldPosition(new THREE.Vector3()) : v3(b.from);
         l.geometry.setFromPoints([from, v3(b.to)]);
         l.material.opacity = 1 - b.age / WEAPONS.railgun.showFor;
       }

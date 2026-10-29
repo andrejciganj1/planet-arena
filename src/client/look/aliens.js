@@ -4,7 +4,8 @@
 import * as THREE from "three";
 import { PLAYER, LOOK } from "../../tuning.js";
 import { placeAlien } from "./alienpose.js";
-import { weaponModels } from "./weapons.js";
+import { weaponModels, weaponSet, swapMaterials, muzzleFlash, showFlash, spinGun } from "./weapons.js";
+import { flashShown } from "./gunpose.js";
 
 export const DUMMY_COLOUR = LOOK.alien.dummy;
 export const ALIEN_ASSETS = [{ name: "alien", url: "assets/models/alien.glb" }];
@@ -82,8 +83,9 @@ export function figureMesh() {
 
 // The model's materials, patched so the sun's light on a figure can be taken away where a planet hides the
 // sun (the scene's sun is a point light that shines through planets, so a figure on a night side would be
-// lit from below), and the bubble glows at its rim in the player's colour.
-function alienMaterial(src) {
+// lit from below), and the bubble glows at its rim in the player's colour. The guns use it too: the one in
+// view, and those in hands, which share their figure's shadow.
+export function alienMaterial(src) {
   const m = src.clone();
   const sun = { value: 1 }, rim = { value: new THREE.Color(0) };
   const glass = src.name === "glass";
@@ -126,29 +128,37 @@ export function dressFigure(g, gltf) {
   for (const name of ["head", "body", "armL", "armR", "legL", "legR", "hand"]) nodes[name] = model.getObjectByName(name);
   const rest = {};
   for (const name of ["body", "armL", "armR", "legL", "legR"]) rest[name] = nodes[name].position.toArray();
-  // The gun in the hand (the hand's -z runs along the arm); the first-person models, bigger, until Task 5's.
-  // Its materials are patched too, so a planet hides the sun from the gun as from the figure holding it.
-  const guns = weaponModels(), lit = [...mats.values()], gunMats = new Map();
-  for (const gun of Object.values(guns)) {
-    gun.traverse((o) => {
-      if (!o.isMesh) return;
-      if (!gunMats.has(o.material)) gunMats.set(o.material, alienMaterial(o.material));
-      o.material = gunMats.get(o.material);
-    });
-    gun.position.set(0, 0, 0);
-    gun.scale.setScalar(LOOK.alien.hold);
-    gun.visible = false;
-    nodes.hand.add(gun);
-  }
   g.remove(g.userData.simple);
   g.add(model);
-  lit.push(...gunMats.values());
-  g.userData.alien = { model, nodes, rest, mats, lit, guns, colour: null };
+  g.userData.alien = { model, nodes, rest, mats, lit: [...mats.values()], guns: {}, gunMats: [], flash: muzzleFlash(), colour: null };
+  armFigure(g, null);
+}
+
+// Puts guns in a dressed figure's hand: the model's (once weapons.glb has loaded), else the simple ones. The
+// hand's -z runs along the arm, as the guns' barrels do.
+//   gltf: GLTFLoader's result for weapons.glb, or null
+export function armFigure(g, gltf) {
+  const a = g.userData.alien;
+  for (const gun of Object.values(a.guns)) a.nodes.hand.remove(gun);
+  a.lit = a.lit.filter((m) => !a.gunMats.includes(m));
+  let guns, materials;
+  if (gltf) ({ guns, materials } = weaponSet(gltf, alienMaterial));
+  else materials = swapMaterials((guns = weaponModels()), alienMaterial);
+  for (const gun of Object.values(guns)) {
+    gun.scale.setScalar(LOOK.alien.hold);
+    gun.visible = false;
+    a.nodes.hand.add(gun);
+  }
+  a.guns = guns;
+  a.gunMats = materials;
+  a.lit.push(...materials);
+  a.armed = !!gltf;
 }
 
 // This frame's look: colour (skin, trim and rim; hex), pose (look/alienpose.js), weapon (the held one's
-// name), sun (0..1, how much sunlight reaches the figure).
-export function styleFigure(g, colour, pose, weapon, sun) {
+// name), sun (0..1, how much sunlight reaches the figure), shot (its last shot, { since, gun } from
+// look/gunpose.js) and seed (its shot count, which turns the flash), dt (s this frame, for the minigun's spin).
+export function styleFigure(g, colour, pose, weapon, sun, shot = null, seed = 0, dt = 0) {
   const a = g.userData.alien;
   if (!a) {
     g.userData.simple.userData.material.color.setHex(colour);
@@ -170,4 +180,7 @@ export function styleFigure(g, colour, pose, weapon, sun) {
     n.rotation.set(rx, 0, 0);
   }
   for (const [name, gun] of Object.entries(a.guns)) gun.visible = name === weapon;
+  const held = a.guns[weapon];
+  if (held && shot) spinGun(held, shot.since, dt);
+  showFlash(a.flash, held, !!held && !!shot && flashShown(shot.since), shot, seed);
 }

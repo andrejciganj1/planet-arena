@@ -171,7 +171,7 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // dummy's skin and trim; trim, how bright the suit's trim glows in the player's colour (what shows a figure on
 // a night side); rim, the bubble's glow at its edge in the same colour; sun, the sunlight on figures as a share
 // of the scene's sun light (figures use the same light as pickups, too strong for a white suit); hold, the
-// gun's size in the hand against the first-person one. pose (look/alienpose.js), radians unless noted: steps,
+// gun's size in the hand against the model's own. pose (look/alienpose.js), radians unless noted: steps,
 // strides per s at a walk (one rate at any speed, so a speed change never jumps the stride); swing, armSwing:
 // how far legs and the free arm swing at full run; head: the most the head tips with the aim; aim: the range
 // the gun arm follows the aim in (beyond it the arm would pass through the bubble); support: the free arm
@@ -181,8 +181,28 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // jump and after `fall` s in the air; trail: the legs while boosting; fly: the free arm while boosting; flail:
 // the free arm while falling; ease: s, how fast a pose follows its state; boostHold: s a boost pose outlasts
 // the last fuel drop seen.
+// weapons (look/weapons.js, the models from tools/blender/weapons.py; look/gunpose.js): colors, each weapon's
+// accent, its pickup's colour too (the .glb is built with the same, tests/look.test.mjs); glow, how bright an
+// accent glows in its own colour (so a gun reads on a night side); sun, as alien.sun for the gun in view;
+// view, where the grip sits in the camera's frame (m: right, up, back), scale, the gun's size there (smaller
+// and further out than life, so a long gun neither reaches past the near plane nor swells up close; it points
+// straight ahead, so its barrel runs to the crosshair); kick: the recoil after each of your shots, back (m) and up (rad) at its start,
+// gone after `time` s, scaled per weapon by `by`; flash: s a muzzle flash shows, its size per weapon (m, in the
+// model's own size) and its colour; spin: the minigun's barrels, rad per s while firing and for `for` s after.
 export const LOOK = {
   budget: 4_000_000,
+  weapons: {
+    colors: { pistol: 0x8fa1b8, shotgun: 0xc98a4b, rocket: 0x5f8f4e, minigun: 0x9a9fa8, sniper: 0x4b7bc9, railgun: 0x3fe0d0 },
+    glow: 0.35, sun: 0.45,
+    view: [0.2, -0.22, -0.46], scale: 0.95,
+    kick: { time: 0.16, back: 0.035, up: 0.1, by: { pistol: 1, shotgun: 1.6, rocket: 1.4, minigun: 0.35, sniper: 1.8, railgun: 1.5 } },
+    flash: {
+      time: 0.06,
+      size: { pistol: 0.16, shotgun: 0.32, rocket: 0.36, minigun: 0.2, sniper: 0.3, railgun: 0.26 },
+      color: { pistol: 0xffd27a, shotgun: 0xffb45a, rocket: 0xff9a40, minigun: 0xffe08a, sniper: 0xfff0b0, railgun: 0x7ff6ff },
+    },
+    spin: { speed: 30, for: 0.3 },
+  },
   alien: {
     suit: 0xe8ebf0, dummy: 0x8a8e94, trim: 0.9, rim: 0.8, sun: 0.45, hold: 1.6,
     pose: {

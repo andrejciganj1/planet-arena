@@ -44,3 +44,12 @@ test("a corrupt stored value gives the defaults", () => {
     assert.equal(s.get("cues"), true, raw);
   }
 });
+
+test("sound and hits are on by default and toggle like the others", () => {
+  const s = createSettings(memory());
+  for (const name of ["sound", "hits"]) {
+    assert.equal(s.get(name), true);
+    assert.equal(s.toggle(name), false);
+    assert.equal(s.get(name), false);
+  }
+});

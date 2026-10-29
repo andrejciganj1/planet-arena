@@ -63,6 +63,10 @@ document.addEventListener("keydown", (e) => {
     settings.toggle(e.code === "KeyO" ? "orbits" : "cues");
     applyShown();
   }
+  // M and H likewise; until the sound code reads them they only flip the setting.
+  if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && (e.code === "KeyM" || e.code === "KeyH")) {
+    settings.toggle(e.code === "KeyM" ? "sound" : "hits");
+  }
   if (!locked) return;
   if (e.code === "Space") e.preventDefault();
   if (!e.repeat) input.onKey(e.code, true);

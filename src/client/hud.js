@@ -90,7 +90,7 @@ export function createHud(root, online = false) {
   const board = el(root, "hud board");
   const toast = el(root, "hud toast");
   const screen = el(root, "hud screen");
-  const play = el(root, "hud play", `Click to play<small>WASD move · mouse look · space jump, hold in the air to boost · click fire · right mouse hook · 1 to 6 / wheel weapons · Shift zoom (sniper) · O orbits · P pad cues</small>`);
+  const play = el(root, "hud play", `Click to play<small>WASD move · mouse look · space jump, hold in the air to boost · click fire · right mouse hook · 1 to 6 / wheel weapons · Shift zoom (sniper) · O orbits · P pad cues · M sound · H hit sound</small>`);
   let toastAt = -Infinity, vignetteAt = -Infinity, vignetteStrength = 0, boardOn = false;
   const arcs = []; // { from, at, node }
   const lines = []; // { at, node }

@@ -1,6 +1,6 @@
 // Your own on-screen choices (toggles), remembered by the browser. The storage is passed in so tests can
 // load this under node; private windows may block or throw, so every access is guarded and the choice then
-// lives in memory only. Names are free: the sounds round adds "mute" and "hits".
+// lives in memory only. Names are free: the sounds round adds "sound" (all sound) and "hits" (the hit sound).
 const KEY = "planet-arena.settings";
 const DEFAULTS = { orbits: true, cues: true };
 

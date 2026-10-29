@@ -105,7 +105,7 @@ export function nebulaSky(renderer, { cfg = LOOK.sky, skip = false } = {}) {
   let rt = null, error = null, pixel = null;
   gl.getError(); // start from no error
   try {
-    rt = new THREE.WebGLCubeRenderTarget(cfg.size, { colorSpace: THREE.SRGBColorSpace, generateMipmaps: false });
+    rt = new THREE.WebGLCubeRenderTarget(cfg.size, { colorSpace: THREE.SRGBColorSpace, generateMipmaps: false, depthBuffer: false, stencilBuffer: false });
     paint(renderer, rt, cfg, skip);
     pixel = new Uint8Array(4);
     renderer.readRenderTargetPixels(rt, cfg.size >> 1, cfg.size >> 1, 1, 1, pixel, 0);

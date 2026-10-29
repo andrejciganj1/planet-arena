@@ -148,28 +148,35 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   // An entity's interpolated feet and up.
   const between = (e, alpha) => (e.prev ? { pos: lerp(e.prev.pos, e.pos, alpha), up: norm(lerp(e.prev.up, e.up, alpha)) } : { pos: e.pos, up: e.up });
 
-  // The soft shadows under figures, pickups and flying rocks, the nearest to the eye first (the shader takes
-  // LOOK.planets.blob.max). Your own counts too, as you can see it under you, but not under a free camera.
-  // Needs the blockers moved to this frame.
+  // The soft shadows under figures, pickups and flying rocks, nearest to the eye first (the shader takes the
+  // first LOOK.planets.blob.max). Your own counts too, as you can see it under you, but not under a free
+  // camera. Needs the blockers moved to this frame. The blob objects are reused frame to frame.
+  const blobPool = [], blobList = [], byDistance = (a, b) => a.d - b.d;
   const blobsNear = (p, free, alpha, poses, viewer) => {
-    const list = [];
+    blobList.length = 0;
     const put = (pos, size) => {
-      const b = blobUnder(pos, size, blockers);
-      if (b) list.push({ ...b, d: dist(b.at, viewer) });
+      const n = blobList.length;
+      if (n === blobPool.length) blobPool.push({ at: [0, 0, 0], radius: 0, strength: 0, d: 0 });
+      const b = blobUnder(pos, size, blockers, LOOK.planets.blob, blobPool[n]);
+      if (b) (b.d = dist(b.at, viewer)), blobList.push(b);
     };
-    for (const e of Object.values(world.entities)) if (e.alive && !(e === p && free)) put(between(e, alpha).pos, PLAYER.hit.body.r * 2);
+    for (const id in world.entities) {
+      const e = world.entities[id];
+      if (e.alive && !(e === p && free)) put(e.prev ? lerp(e.prev.pos, e.pos, alpha) : e.pos, PLAYER.hit.body.r * 2);
+    }
     for (const pk of PICKUPS) {
       if (!pickupReady(world, pk)) continue;
       const b = world.system.byId[pk.body];
       put(add(poses[pk.body], scale(pk.dir, b.radius + 0.7)), 0.45);
     }
     for (const a of world.asteroids) put(a.pos, ASTEROID.radius);
-    return list.sort((a, b) => a.d - b.d).slice(0, LOOK.planets.blob.max);
+    return blobList.sort(byDistance);
   };
 
-  let shown = { orbits: true, cues: true };
+  let shown = { orbits: true, cues: true, tags: true };
   return {
-    // Your own choices (O and P): { orbits, cues }. Cues cover the dashed path and the pad's light.
+    // Your own choices (O and P): { orbits, cues }. Cues cover the dashed path and the pad's light. tags: name
+    // tags and bars over others (the look check hides them to measure a figure alone).
     setShown(s) {
       shown = { ...shown, ...s };
       for (const r of rings) r.ring.visible = shown.orbits;
@@ -276,6 +283,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         m.visible = true;
         const who = world.players[id];
         m.userData.body.material.color.setHex(who ? who.colour : DUMMY_COLOUR);
+        m.userData.tag.visible = shown.tags;
         m.userData.tag.userData.show(who ? who.name : "Dummy", d.health / (d.kind === "dummy" ? DUMMY.health : PLAYER.health), now >= flashAt[id] && now - flashAt[id] < FEEDBACK.flash);
         const { pos, up } = between(d, alpha);
         const fwd = norm(rotateFromTo(d.forward, d.up, up)), right = cross(fwd, up);
@@ -364,7 +372,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
 
       for (const k of blockers) k.pos = poses[k.id];
       sun.update(t, dt, camera, poses.sun, blockers);
-      planets.update(t, poses, blobsNear(p, free, alpha, poses, viewer));
+      planets.update(t, poses, blobsNear(p, free, alpha, poses, viewer), viewer);
       renderer.render(scene, camera);
     },
   };

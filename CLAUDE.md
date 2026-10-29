@@ -9,7 +9,7 @@ A physics arena shooter across a small solar system, in the browser. Spec:
   `http://localhost:8100/?server=ws://localhost:8787`.
 - Page check (server running): `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/page_check.cjs "http://localhost:8100/?debug" shots/start.png`
   prints `OK` when the page has no errors and the clock keeps real time. `?view=x,y,z,tx,ty,tz` fixes a free
-  camera for screenshots; `?debug` exposes `window.game = { world, audio }`.
+  camera for screenshots; `?debug` exposes `window.game = { world, audio, renderer }`.
 - Two-browser check (both servers running): `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/net_check.cjs "http://localhost:8100/?server=ws://localhost:8787&debug" shots`
   prints `OK` when two players see each other and both clocks keep real time.
 - Sound check (static server running): `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/sound_check.cjs "http://localhost:8100/sounds.html"`

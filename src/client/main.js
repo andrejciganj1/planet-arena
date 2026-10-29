@@ -3,7 +3,7 @@
 // of the server and draws everyone else from its snapshots.
 //   ?server=<ws url>     plays online against that server (the page on *.github.io uses config.js's)
 //   ?solo                plays solo whatever the address
-//   ?debug               exposes window.game = { world, audio } (online: the view world)
+//   ?debug               exposes window.game = { world, audio, renderer } (online: the view world)
 //   ?view=x,y,z,tx,ty,tz fixes a free camera at x,y,z looking at tx,ty,tz (for screenshots)
 //   ?debug&at=T          solo: the match clock stands still at T s, so screenshots (tools/look_check.cjs) are
 //                        the same every time; whoever stands on a body is carried there with it
@@ -44,6 +44,7 @@ const view = params.get("view")?.split(",").map(Number);
 const canvas = document.getElementById("game");
 const renderer = createRenderer(world, canvas, view && view.length === 6 && !view.some(Number.isNaN) ? view : null, selfId,
   { noSky: params.has("debug") && params.has("nosky") });
+if (params.has("debug")) window.game.renderer = renderer;
 let store = null;
 try {
   store = localStorage; // even reading the property throws when storage is blocked

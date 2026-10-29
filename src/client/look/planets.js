@@ -2,10 +2,11 @@
 // sphere until they get their own look).
 //
 // Each planet and moon is a smooth sphere with one shader. Its big picture (continents, canyons, bands,
-// craters) is painted once at load by a shader into a cube map per body: no download, no seam or pinch at the
-// poles, and drawing it is one texture lookup. The colour is in rgb and a height in alpha; the height lights
-// the relief (bump from screen derivatives) and marks what is water, lava or cracks, so one texture carries
-// both. Close up a detail layer is computed in the shader (ripples, fine cracks, sand, frost) and fades out
+// craters) is painted by a shader into a cube map per body: no download, no seam or pinch at the poles, and
+// drawing it is one texture lookup. One body is painted per frame from the second frame on, nearest first,
+// so the game never waits on it; until then a body shows its flat colour. The colour is in rgb and a height
+// in alpha; the height lights the relief (its slope from neighbouring texels) and marks what is water, lava
+// or cracks, so one texture carries both. Close up a detail layer is computed in the shader (ripples, fine cracks, sand, frost) and fades out
 // by LOOK.planets.far metres, so the ground holds up underfoot and costs nothing from afar. Shadows from
 // other bodies and the ring are exact sphere and plane tests per pixel (shadow.js); blob shadows under
 // figures are the same pass.
@@ -515,11 +516,10 @@ void main() {
 }`;
 
 // Paints one body's big picture into a cube map; null after one warning if it couldn't (the body is then
-// drawn in its flat colour, lit and shadowed as usual).
+// drawn in its flat colour, lit and shadowed as usual). No pixel is read back, as that would stall the GPU
+// mid-game: three's own check of the shader program says whether it could run.
 function bake(renderer, body, w, size) {
-  const gl = renderer.getContext();
-  let rt = null, error = null, pixel = null;
-  gl.getError();
+  let rt = null, error = null, runnable = true;
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       col: { value: Array.from({ length: 6 }, (_, i) => new THREE.Color(w.colors[i] ?? w.colors[0])) },
@@ -533,30 +533,31 @@ function bake(renderer, body, w, size) {
   });
   const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), mat);
   try {
-    rt = new THREE.WebGLCubeRenderTarget(size, { colorSpace: THREE.SRGBColorSpace, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
+    // Colour only: a depth buffer would be six unused renderbuffers per body.
+    rt = new THREE.WebGLCubeRenderTarget(size, {
+      colorSpace: THREE.SRGBColorSpace, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, depthBuffer: false, stencilBuffer: false,
+    });
     const scene = new THREE.Scene();
     scene.add(box);
     new THREE.CubeCamera(0.1, 10, rt).update(renderer, scene);
-    pixel = new Uint8Array(4);
-    renderer.readRenderTargetPixels(rt, size >> 1, size >> 1, 1, 1, pixel, 0);
+    runnable = renderer.properties.get(mat).currentProgram?.diagnostics?.runnable !== false;
   } catch (e) {
     error = e;
   }
   box.geometry.dispose();
   mat.dispose();
-  const glError = gl.getError();
-  // Every world paints some colour; a shader that failed leaves the black clear colour.
-  if (!error && glError === 0 && pixel && pixel[0] + pixel[1] + pixel[2] > 0) return rt;
-  console.warn(`look: ${body.id} could not be painted (${error?.message ?? (glError ? `WebGL error ${glError}` : "nothing drew")}), flat colour instead`);
+  if (!error && runnable) return rt;
+  console.warn(`look: ${body.id} could not be painted (${error?.message ?? "its shader did not build"}), flat colour instead`);
   try {
     rt?.dispose();
   } catch {} // a broken context may refuse even this
   return null;
 }
 
-// The planets and moons of `system`. Returns { meshes: { id: mesh }, setLevel(level), update(t, poses, blobs) }:
-// the caller adds the meshes to the scene and moves them; update sets the sun, the shadows and the blob
-// shadows ([{ at, radius, strength }], nearest first) each frame.
+// The planets and moons of `system`. Returns { meshes: { id: mesh }, setLevel(level), update(t, poses, blobs, eye) }:
+// the caller adds the meshes to the scene and moves them; update, before each frame is drawn, sets the sun,
+// the shadows and the blob shadows ([{ at, radius, strength }], nearest first; at most cfg.blob.max) and
+// paints the next body's map.
 export function planetLooks(system, renderer, rand, cfg = LOOK.planets) {
   const sunBody = system.bodies.find((b) => b.kind === "sun");
   const casters = system.bodies.filter((b) => b.kind !== "sun");
@@ -608,17 +609,34 @@ export function planetLooks(system, renderer, rand, cfg = LOOK.planets) {
   // Moons share their planet's ring plane.
   for (const l of looks) if (!l.body.ring && l.own.ringOn.value) l.own.ringN.value.copy(looks.find((k) => k.body === l.ringOwner).own.ringN.value);
 
-  // Paints every body's map; again after a lost WebGL context, which loses what was drawn into them.
-  const paint = () => {
+  // Bodies whose map is still to paint; all again after a lost WebGL context, which loses what was drawn.
+  let toPaint = [], frames = 0;
+  const unpaint = () => {
     for (const l of looks) {
       l.rt?.dispose();
-      l.rt = bake(renderer, l.body, l.w, l.w.bake ?? cfg.bake[l.body.kind]);
-      l.own.map.value = l.rt?.texture ?? null;
-      l.own.useMap.value = l.rt ? 1 : 0;
+      l.rt = l.own.map.value = null;
+      l.own.useMap.value = 0;
     }
+    toPaint = looks.slice();
+    frames = 0;
   };
-  paint();
-  renderer.domElement.addEventListener("webglcontextrestored", paint);
+  unpaint();
+  renderer.domElement.addEventListener("webglcontextrestored", unpaint);
+  // The nearest surface to the eye first, so where you stand gets its look first.
+  const paintNext = (poses, eye) => {
+    let k = 0, best = Infinity;
+    for (let i = 0; i < toPaint.length; i++) {
+      const b = toPaint[i].body, q = poses[b.id];
+      const d = Math.hypot(q[0] - eye[0], q[1] - eye[1], q[2] - eye[2]) - b.radius;
+      if (d < best) (best = d), (k = i);
+    }
+    const l = toPaint.splice(k, 1)[0];
+    l.rt = bake(renderer, l.body, l.w, l.w.bake ?? cfg.bake[l.body.kind]);
+    l.own.map.value = l.rt?.texture ?? null;
+    l.own.useMap.value = l.rt ? 1 : 0;
+  };
+  // Shadow casters per body, nearest first: reused every frame.
+  const near = Array.from({ length: OCCLUDERS }, () => ({ c: null, gap: 0 }));
 
   return {
     meshes,
@@ -630,31 +648,39 @@ export function planetLooks(system, renderer, rand, cfg = LOOK.planets) {
         m.needsUpdate = true;
       }
     },
-    // t: s on the match clock; poses: id -> [x, y, z]; blobs as returned by blobUnder, at most cfg.blob.max.
-    update(t, poses, blobs) {
+    // t: s on the match clock; poses: id -> [x, y, z]; blobs as returned by blobUnder; eye: [x, y, z].
+    update(t, poses, blobs, eye) {
+      if (frames++ > 0 && toPaint.length) paintNext(poses, eye); // the first frame goes out unpainted
       shared.time.value = t;
-      shared.sunPos.value.set(...poses[sunBody.id]);
+      shared.sunPos.value.fromArray(poses[sunBody.id]);
       for (let i = 0; i < cfg.blob.max; i++) {
-        const b = blobs[i];
+        const b = i < blobs.length ? blobs[i] : null;
         if (b) shared.blobs.value[i].set(b.at[0], b.at[1], b.at[2], b.radius), (shared.blobK.value[i] = b.strength);
         else shared.blobs.value[i].w = 0;
       }
       for (const l of looks) {
         // The nearest other bodies are the ones whose shadow can fall here.
         const p = poses[l.body.id];
-        const near = casters.filter((c) => c !== l.body)
-          .map((c) => { const q = poses[c.id]; return { c, gap: Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]) - c.radius }; })
-          .sort((a, b) => a.gap - b.gap).slice(0, OCCLUDERS);
-        if (l.ringOwner) l.own.ringC.value.set(...poses[l.ringOwner.id]);
+        for (const k of near) (k.c = null), (k.gap = Infinity);
+        for (const c of casters) {
+          if (c === l.body) continue;
+          const q = poses[c.id], gap = Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]) - c.radius;
+          if (gap >= near[OCCLUDERS - 1].gap) continue;
+          // Insert in order, the farthest drops off the end.
+          let i = OCCLUDERS - 1;
+          for (; i > 0 && near[i - 1].gap > gap; i--) (near[i].c = near[i - 1].c), (near[i].gap = near[i - 1].gap);
+          (near[i].c = c), (near[i].gap = gap);
+        }
+        if (l.ringOwner) l.own.ringC.value.fromArray(poses[l.ringOwner.id]);
         for (let i = 0; i < OCCLUDERS; i++) {
           const k = near[i], o = l.own.occ.value[i];
-          if (k) o.set(...poses[k.c.id], k.c.radius);
+          if (k.c) o.set(poses[k.c.id][0], poses[k.c.id][1], poses[k.c.id][2], k.c.radius);
           else o.w = 0;
         }
         if (l.ringUniforms) for (let i = 0; i < OCCLUDERS; i++) {
           // The ring is shadowed by its planet first, then the nearest moons.
-          const src = i === 0 ? { c: l.body } : near[i - 1], o = l.ringUniforms.occ.value[i];
-          if (src) o.set(...poses[src.c.id], src.c.radius);
+          const c = i === 0 ? l.body : near[i - 1].c, o = l.ringUniforms.occ.value[i];
+          if (c) o.set(poses[c.id][0], poses[c.id][1], poses[c.id][2], c.radius);
           else o.w = 0;
         }
       }

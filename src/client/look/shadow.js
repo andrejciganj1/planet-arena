@@ -42,8 +42,9 @@ float sphereShadow(vec3 p, vec3 sun, float sunR, vec3 c, float r) {
 // The soft dark patch under something near a body's surface: { at, radius, strength } with `at` on the
 // nearest surface straight below, or null when it is too high to cast one. It widens and fades as the thing
 // rises, as a real shadow under a big soft light would.
-//   pos: the thing's lowest point; size: its radius in m; bodies: [{ pos, radius }]
-export function blobUnder(pos, size, bodies, cfg = LOOK.planets.blob) {
+//   pos: the thing's lowest point; size: its radius in m; bodies: [{ pos, radius }]; out: filled and returned
+//   (a new object if not given), so a caller can reuse its own every frame
+export function blobUnder(pos, size, bodies, cfg = LOOK.planets.blob, out = { at: [0, 0, 0], radius: 0, strength: 0 }) {
   let best = null, gap = Infinity;
   for (const b of bodies) {
     const g = Math.hypot(pos[0] - b.pos[0], pos[1] - b.pos[1], pos[2] - b.pos[2]) - b.radius;
@@ -54,9 +55,8 @@ export function blobUnder(pos, size, bodies, cfg = LOOK.planets.blob) {
   if (h >= cfg.fade) return null;
   const d = Math.hypot(pos[0] - best.pos[0], pos[1] - best.pos[1], pos[2] - best.pos[2]) || 1;
   const k = best.radius / d;
-  return {
-    at: [best.pos[0] + (pos[0] - best.pos[0]) * k, best.pos[1] + (pos[1] - best.pos[1]) * k, best.pos[2] + (pos[2] - best.pos[2]) * k],
-    radius: size * (1 + h * cfg.spread),
-    strength: cfg.strength * (1 - h / cfg.fade) ** 2,
-  };
+  for (let i = 0; i < 3; i++) out.at[i] = best.pos[i] + (pos[i] - best.pos[i]) * k;
+  out.radius = size * (1 + h * cfg.spread);
+  out.strength = cfg.strength * (1 - h / cfg.fade) ** 2;
+  return out;
 }

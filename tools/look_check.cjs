@@ -1,10 +1,11 @@
 // Look check: screenshots of a fixed list of views with the match clock standing still (?at), so two runs
 // can be compared pixel for pixel. Views are worked out from the world itself: each planet from afar and
 // standing on its day and night side, a moon and a comet from afar, the sun, the sky, and the dummy on a night
-// side seen from 30 m (the tiny planet, and the heavy one from inside its shadow, where the planet hides the
-// whole sun so no glow brightens the screen). In that last view the dummy must stand out from the ground
-// behind it: the mean brightness of its pixels and of the same pixels without it (the ground) differ by at
-// least NIGHT_CONTRAST of full scale. Also measures the average frame time over 5 s in one view and sums the
+// side seen from 30 m (the tiny planet; the heavy desert and the ocean from inside their shadows, where the
+// planet hides the whole sun so no glow brightens the screen). In the last two the dummy must stand out from
+// the ground behind it, its name tag hidden: the mean brightness of its pixels and of the same pixels without
+// it (the ground) differ by at least NIGHT_CONTRAST of full scale, over at least SEEN_SHARE of its outline
+// (its two hit spheres projected), so a few stray pixels can't pass. Also measures the average frame time over 5 s in one view and sums the
 // bytes of every file under assets/ the page fetched. Prints one line per view, then OK when there were no
 // page errors, the dummy was seen, the frame time was measured and the assets fit in LOOK.budget.
 // Usage: NODE_PATH=... node tools/look_check.cjs <base url, e.g. http://localhost:8100/> <out dir>
@@ -14,8 +15,9 @@ const path = require("path");
 
 const AT = 40; // s on the match clock for every view
 const TIMED = "mid-day"; // the view whose frame time is measured
-const SEEN = "dummy-night"; // the view whose dummy must stand out
+const SEEN = ["dummy-night", "dummy-night-ocean"]; // the views whose dummy must stand out
 const NIGHT_CONTRAST = 0.06; // of full scale (sRGB luminance), dummy against the ground behind it
+const SEEN_SHARE = 0.5; // of the dummy's projected outline that must differ from the empty ground
 const FOV = 80, W = 1280, H = 800; // the camera and the window
 
 const v = {
@@ -61,17 +63,20 @@ function views({ bodies, poses, eye: eyeHeight }) {
     target: v.add(pos, v.scale(up, 1)),
     dummy: { pos, up, forward },
   });
-  // The dummy at the heavy planet's midnight, seen from 30 m at 55 degrees above its horizon. The eye stays
-  // inside the planet's shadow (17 m off its axis, radius 23), so the planet hides the whole sun.
-  const heavy = bodies.find((b) => b.id === "heavy"), hc = poses.heavy, hs = v.norm(v.sub(sun, hc));
-  const hup = v.scale(hs, -1), hpos = v.add(hc, v.scale(hup, heavy.radius));
-  const hacross = v.norm(v.cross(Y, hs)), hforward = v.norm(v.cross(hacross, hup)), el = (55 * Math.PI) / 180;
-  list.push({
-    name: "dummy-night",
-    eye: v.add(hpos, v.scale(v.add(v.scale(hup, Math.sin(el)), v.scale(hacross, Math.cos(el))), 30)),
-    target: v.add(hpos, v.scale(hup, 1)),
-    dummy: { pos: hpos, up: hup, forward: hforward },
-  });
+  // The dummy at a planet's midnight, seen from 30 m at `deg` degrees above its horizon, the eye inside the
+  // planet's shadow so the planet hides the whole sun: the desert at 55 (17 m off the axis, radius 23) and the
+  // ocean, a smaller planet nearer the sun, almost from above at 85 (3 m off the axis, radius 12).
+  for (const [name, id, deg] of [["dummy-night", "heavy", 55], ["dummy-night-ocean", "mid", 85]]) {
+    const body = bodies.find((b) => b.id === id), bc = poses[id], bs = v.norm(v.sub(sun, bc));
+    const bup = v.scale(bs, -1), bpos = v.add(bc, v.scale(bup, body.radius));
+    const bacross = v.norm(v.cross(Y, bs)), el = (deg * Math.PI) / 180;
+    list.push({
+      name,
+      eye: v.add(bpos, v.scale(v.add(v.scale(bup, Math.sin(el)), v.scale(bacross, Math.cos(el))), 30)),
+      target: v.add(bpos, v.scale(bup, 1)),
+      dummy: { pos: bpos, up: bup, forward: v.norm(v.cross(bacross, bup)) },
+    });
+  }
   return list;
 }
 
@@ -92,7 +97,7 @@ function dummyDiscs(view, hit) {
 }
 
 // In the page: mean sRGB luminance (0..1) of the pixels inside the discs that differ between two screenshots,
-// in each, and how many there are.
+// in each, how many there are and how many lie inside the discs at all.
 const contrastIn = (p, a, b, discs) => p.evaluate(async ({ a, b, discs }) => {
   const pixels = async (b64) => {
     const bmp = await createImageBitmap(await (await fetch(`data:image/png;base64,${b64}`)).blob());
@@ -102,14 +107,15 @@ const contrastIn = (p, a, b, discs) => p.evaluate(async ({ a, b, discs }) => {
   };
   const A = await pixels(a), B = await pixels(b);
   const lum = (d, i) => (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
-  let n = 0, la = 0, lb = 0;
+  let n = 0, la = 0, lb = 0, inside = 0;
   for (let y = 0; y < A.height; y++) for (let x = 0; x < A.width; x++) {
     if (!discs.some((c) => (x - c.x) ** 2 + (y - c.y) ** 2 <= c.r * c.r)) continue;
+    inside++;
     const i = 4 * (y * A.width + x);
     if (Math.abs(A.data[i] - B.data[i]) + Math.abs(A.data[i + 1] - B.data[i + 1]) + Math.abs(A.data[i + 2] - B.data[i + 2]) < 6) continue;
     n++, (la += lum(A.data, i)), (lb += lum(B.data, i));
   }
-  return { n, dummy: n ? la / n : 0, ground: n ? lb / n : 0 };
+  return { n, inside, dummy: n ? la / n : 0, ground: n ? lb / n : 0 };
 }, { a: a.toString("base64"), b: b.toString("base64"), discs });
 
 // The page at the still moment, optionally with a view; the HUD hidden so only the world shows.
@@ -163,7 +169,8 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
     };
   });
 
-  let frameMs = null, seen = null;
+  let frameMs = null;
+  const seen = {};
   for (const view of views(world)) {
     await open(view);
     if (view.dummy) {
@@ -172,15 +179,17 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
         Object.assign(e, { pos: d.pos, up: d.up, forward: d.forward, prev: null, alive: true });
       }, view.dummy);
     }
-    await frames(p, 30); // shaders compiled and a few frames drawn
+    // Measured: the figure alone, its name tag hidden.
+    if (SEEN.includes(view.name)) await p.evaluate(() => window.game.renderer.setShown({ tags: false }));
+    await frames(p, 30); // shaders compiled, every map painted (one a frame) and a few frames drawn
     const file = path.join(out, `${view.name}.png`);
     const shot = await p.screenshot({ path: file });
-    if (view.name === SEEN) {
+    if (SEEN.includes(view.name)) {
       // The same view without the dummy: what is left in its place is the ground behind it.
       await p.evaluate(() => (window.game.world.entities.dummy.alive = false));
       await frames(p, 5);
       const without = await p.screenshot({ path: path.join(out, `${view.name}-empty.png`) });
-      seen = await contrastIn(p, shot, without, dummyDiscs(view, world.hit));
+      seen[view.name] = await contrastIn(p, shot, without, dummyDiscs(view, world.hit));
     }
     const fmt = (a) => a.map((x) => x.toFixed(1)).join(",");
     console.log(`${view.name.padEnd(14)} ${file}  eye ${fmt(view.eye)} -> ${fmt(view.target)}`);
@@ -197,11 +206,17 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
 
   if (frameMs == null) (bad = true), console.log("frame time not measured");
   else console.log(`frame time ${frameMs.toFixed(2)} ms average over 5 s in ${TIMED} (${(1000 / frameMs).toFixed(0)} fps)`);
-  if (!seen || !seen.n) (bad = true), console.log(`${SEEN}: the dummy was not found on screen`);
-  else {
-    const k = Math.abs(seen.dummy - seen.ground);
-    console.log(`${SEEN}: dummy ${seen.dummy.toFixed(3)} against ground ${seen.ground.toFixed(3)} over ${seen.n} px, contrast ${k.toFixed(3)} (at least ${NIGHT_CONTRAST})`);
-    if (k < NIGHT_CONTRAST) (bad = true), console.log("the dummy is too hard to see on the night side");
+  for (const name of SEEN) {
+    const m = seen[name];
+    if (!m || !m.inside) {
+      (bad = true), console.log(`${name}: the dummy is not on screen`);
+      continue;
+    }
+    const k = Math.abs(m.dummy - m.ground), share = m.n / m.inside;
+    console.log(`${name}: dummy ${m.dummy.toFixed(3)} against ground ${m.ground.toFixed(3)} over ${m.n} of ${m.inside} px ` +
+      `(${(100 * share).toFixed(0)}%, at least ${100 * SEEN_SHARE}%), contrast ${k.toFixed(3)} (at least ${NIGHT_CONTRAST})`);
+    if (share < SEEN_SHARE) (bad = true), console.log(`${name}: too little of the dummy differs from the ground`);
+    if (k < NIGHT_CONTRAST) (bad = true), console.log(`${name}: the dummy is too hard to see on the night side`);
   }
   const bytes = [...assets.values()].reduce((a, n) => a + n, 0);
   console.log(`assets ${bytes} bytes in ${assets.size} files, budget ${world.budget}`);

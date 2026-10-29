@@ -1,11 +1,11 @@
-// Draws the simulation with three.js: flat-shaded bodies, pads with their cue, the dummy and other
+// Draws the simulation with three.js: the bodies, pads with their cue, the dummy and other
 // players, shots and blasts, and the weapon in view. It only reads the world; drawing happens between the
 // last two ticks (alpha) so motion stays smooth on screens faster than the 60 Hz simulation. What each
 // thing looks like lives in look/ (sky, sun, planets, aliens, weapons, props); this file keeps the scene,
 // camera, lights and the frame, and moves the pieces to where the world says they are.
 import * as THREE from "three";
 import { tumble, trailPush } from "./rocklook.js";
-import { PLAYER, DUMMY, ROCKET, PAD_CUE, TICK, PICKUPS, WEAPONS, FEEDBACK, ROCK_LOOK, LOOK } from "../tuning.js";
+import { PLAYER, DUMMY, ROCKET, PAD_CUE, TICK, PICKUPS, WEAPONS, FEEDBACK, ROCK_LOOK, LOOK, ASTEROID } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
 import { pickupReady } from "../sim/pickups.js";
 import { posesAt } from "../sim/system.js";
@@ -14,7 +14,8 @@ import { add, sub, scale, lerp, norm, cross, dist, rotateAxis, rotateFromTo } fr
 import { rng, v3, Y } from "./look/common.js";
 import { starfield, nebulaSky, PLAIN_SPACE } from "./look/sky.js";
 import { glowSprite, sunLook } from "./look/sun.js";
-import { sphereMesh, planetRing, orbitLines } from "./look/planets.js";
+import { sphereMesh, planetLooks, orbitLines } from "./look/planets.js";
+import { blobUnder } from "./look/shadow.js";
 import { DUMMY_COLOUR, dummyMesh } from "./look/aliens.js";
 import { weaponModels, shotLooks } from "./look/weapons.js";
 import { pickupMesh, padMesh, cuePath, ropeLine, cometTail, asteroidBelt, flyingRocks } from "./look/props.js";
@@ -61,23 +62,27 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const rings = orbitLines(world.system);
   for (const r of rings) scene.add(r.ring);
 
+  // The sun first, then the planets and moons, then the comets: the order they draw from `rand` in.
   const bodies = {}, tails = [];
-  let sun = null;
+  const sun = sunLook(world.system.bodies.find((b) => b.kind === "sun"), rand);
+  const planets = planetLooks(world.system, renderer, rand);
   for (const b of world.system.bodies) {
-    if (b.kind === "sun") sun = sunLook(b, rand);
-    const m = b.kind === "sun" ? sun.mesh : sphereMesh(b, rand);
-    if (b.kind === "comet") {
-      m.add(glowSprite(0xbfe8ff, b.radius * 5));
-      tails.push({ id: b.id, mesh: cometTail() });
+    let m = b.kind === "sun" ? sun.mesh : planets.meshes[b.id];
+    if (!m) {
+      m = sphereMesh(b, rand);
+      if (b.kind === "comet") {
+        m.add(glowSprite(0xbfe8ff, b.radius * 5));
+        tails.push({ id: b.id, mesh: cometTail() });
+      }
     }
-    if (b.ring) m.add(planetRing(b));
     bodies[b.id] = m;
     scene.add(m);
   }
   for (const t of tails) scene.add(t.mesh);
   scene.add(sun.flare);
   sun.setLevel(level);
-  // Everything that can hide the sun.
+  planets.setLevel(level);
+  // Everything that can hide the sun, and the ground blob shadows fall on.
   const blockers = world.system.bodies.filter((b) => b.kind !== "sun").map((b) => ({ id: b.id, pos: null, radius: b.radius }));
   const belt = asteroidBelt(rand);
   scene.add(belt.group);
@@ -143,6 +148,25 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   // An entity's interpolated feet and up.
   const between = (e, alpha) => (e.prev ? { pos: lerp(e.prev.pos, e.pos, alpha), up: norm(lerp(e.prev.up, e.up, alpha)) } : { pos: e.pos, up: e.up });
 
+  // The soft shadows under figures, pickups and flying rocks, the nearest to the eye first (the shader takes
+  // LOOK.planets.blob.max). Your own counts too, as you can see it under you, but not under a free camera.
+  // Needs the blockers moved to this frame.
+  const blobsNear = (p, free, alpha, poses, viewer) => {
+    const list = [];
+    const put = (pos, size) => {
+      const b = blobUnder(pos, size, blockers);
+      if (b) list.push({ ...b, d: dist(b.at, viewer) });
+    };
+    for (const e of Object.values(world.entities)) if (e.alive && !(e === p && free)) put(between(e, alpha).pos, PLAYER.hit.body.r * 2);
+    for (const pk of PICKUPS) {
+      if (!pickupReady(world, pk)) continue;
+      const b = world.system.byId[pk.body];
+      put(add(poses[pk.body], scale(pk.dir, b.radius + 0.7)), 0.45);
+    }
+    for (const a of world.asteroids) put(a.pos, ASTEROID.radius);
+    return list.sort((a, b) => a.d - b.d).slice(0, LOOK.planets.blob.max);
+  };
+
   let shown = { orbits: true, cues: true };
   return {
     // Your own choices (O and P): { orbits, cues }. Cues cover the dashed path and the pad's light.
@@ -168,6 +192,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         level = quality.level;
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, LOOK.quality.ratio[level]));
         sun.setLevel(level);
+        planets.setLevel(level);
       }
       const dt = lastNow === null ? 0 : now - lastNow;
       lastNow = now;
@@ -339,6 +364,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
 
       for (const k of blockers) k.pos = poses[k.id];
       sun.update(t, dt, camera, poses.sun, blockers);
+      planets.update(t, poses, blobsNear(p, free, alpha, poses, viewer));
       renderer.render(scene, camera);
     },
   };

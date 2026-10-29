@@ -158,6 +158,15 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // churn: how fast the surface moves; corona: how far it reaches, in sun radii; flare: the screen glow's
 // strength looking straight at the sun, drawn from level `flareFrom` up; fade: 1/s, how fast the glow
 // follows the sun going behind a planet.
+// planets (look/planets.js): bake, the cube map's px a face painted at load per planet and moon (a world's own
+// `bake` overrides it); detail, the close-up layer at each quality level (0 off, 1 one layer, 2 all); near,
+// far: m from the eye where it is full and gone. sun, light: the sunlight's colour and strength on the ground;
+// night, nightLight: the faint light on the night side (dark but never black). blob: the soft shadow under
+// figures and pickups, darkest `strength` on the ground, gone `fade` m up, widening by `spread` per m; at most
+// `max` at once. Each world: its kind, a seed for its shapes, relief (m of painted height, for the lighting
+// only), its colours (darkest or main first; see the kind's paint function for each one's role), glow (lava,
+// the island's lights), rim (the haze round its lit edge from afar) and feature (the island, the great
+// storm). Quick to change after a look: colours here, shapes in planets.js.
 export const LOOK = {
   budget: 4_000_000,
   quality: { down: 1 / 50, up: 10, window: 2, pause: 0.25, maxUp: 240, ratio: [1, 1.5, 2] },
@@ -172,6 +181,32 @@ export const LOOK = {
     galaxy: { dir: [0.5, 0.82, 0.05], size: 0.2, tilt: 60, turn: 25 },
   },
   sun: { octaves: [2, 3, 5], streamers: [2, 4, 4], churn: 0.06, corona: 3.2, flare: 0.5, flareFrom: 1, fade: 8 },
+  planets: {
+    bake: { planet: 512, moon: 256 },
+    detail: [0, 1, 2],
+    near: 8, far: 22,
+    sun: 0xfff1d6, light: 1.35, night: 0x8090c0, nightLight: 0.08,
+    blob: { strength: 0.65, fade: 5, spread: 0.3, max: 16 },
+    worlds: {
+      hot: { world: "lava", seed: 1, relief: 0.6, colors: [0x1a1412, 0x3b2f2a, 0x5c2617, 0xff7a20], glow: 0xff5a12, rim: 0xff6a3a },
+      tiny: { world: "jungle", seed: 2, relief: 0.9, colors: [0x163d16, 0x2f7a26, 0x8cbf3a, 0x1f5f66, 0x8a7448], rim: 0x9fe8b8 },
+      mid: {
+        world: "ocean", seed: 3, relief: 0.3, feature: [0.35, 0.55, 0.76],
+        colors: [0x0f4f8c, 0x1fb4c8, 0x9fe6d2, 0xf2e2a8, 0xc9b27a, 0x2a7a6a], glow: 0xffb860, rim: 0xa8e4ff,
+      },
+      heavy: { world: "desert", seed: 4, relief: 1.2, bake: 1024, colors: [0xe8a868, 0xc87a3e, 0xa8482a, 0x4e1e14, 0xf2dcb4], rim: 0xffb478 },
+      giant: {
+        world: "gas", seed: 5, relief: 0, feature: [0.82, -0.28, 0.5],
+        colors: [0x4c3590, 0x8f74da, 0xe2d4f4, 0xb862a6, 0x261a58, 0xf0909a], rim: 0xc8a8ff,
+        ring: { colors: [0xcbb8f0, 0x9a86c8, 0xe8dcc8], opacity: 0.85 },
+      },
+      far: { world: "ice", seed: 6, relief: 0.25, colors: [0xeef8fc, 0x9ed8e2, 0x2f78c0, 0xffffff, 0x6fd3c9], rim: 0xb0fff4, aurora: [0x3cff9c, 0x8a5aff] },
+      moon: { world: "rock", seed: 7, relief: 0.6, craters: 1, colors: [0x9a948c, 0xc4beb4, 0x5c5854] },
+      "mid-moon": { world: "rock", seed: 8, relief: 0.5, craters: 0.7, colors: [0x8e98a2, 0xbcc6cf, 0x4e5862] },
+      "ring-moon": { world: "rock", seed: 9, relief: 0.5, craters: 1.3, colors: [0x9c94aa, 0xc8bfd6, 0x5a5268] },
+      "outer-moon": { world: "rock", seed: 10, relief: 0.6, craters: 0.85, colors: [0xa69e86, 0xd2c8aa, 0x625a46] },
+    },
+  },
 };
 
 // Online play. Ticks unless noted: maxLag, history, rejoin, unreachable and smooth are seconds, snap is metres.

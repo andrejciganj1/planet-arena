@@ -205,3 +205,42 @@ test("the sky counts as painted only when the bake ran clean and left its colour
   assert.equal(skyPainted({ pixel: [0, 0, 0, 0], glError: 0 }), false);
   assert.equal(skyPainted({ pixel: null, glError: 0 }), false);
 });
+
+test("sphereShadow: a point behind a sphere from the sun is shadowed, one beside it is not, the edge is soft", async () => {
+  const { sphereShadow } = await import("../src/client/look/shadow.js");
+  const sun = [0, 0, 0], R = 25, moon = [100, 0, 0], r = 5;
+  // Straight behind the moon, near enough that it hides the whole sun: dark.
+  assert.ok(sphereShadow([110, 0, 0], sun, R, moon, r) < 0.05);
+  // Beside it, and on the sun's side of it: full light.
+  assert.equal(sphereShadow([110, 30, 0], sun, R, moon, r), 1);
+  assert.equal(sphereShadow([80, 0, 0], sun, R, moon, r), 1);
+  // Inside the sphere: dark.
+  assert.equal(sphereShadow([101, 0, 0], sun, R, moon, r), 0);
+  // Walking sideways out of the shadow, the light rises smoothly: some points in between, never back down.
+  let last = -1, between = 0;
+  for (let y = 0; y <= 12; y += 0.25) {
+    const k = sphereShadow([110, y, 0], sun, R, moon, r);
+    assert.ok(k >= last - 1e-9, `no dip at y ${y}`);
+    if (k > 0.05 && k < 0.95) between++;
+    last = k;
+  }
+  assert.ok(between >= 8, `a soft edge, ${between} steps of 0.25 m in between`);
+  assert.equal(last, 1);
+  // Far behind, the moon covers only part of the sun: never fully dark.
+  const far = sphereShadow([1000, 0, 0], sun, R, moon, r);
+  assert.ok(far > 0.3 && far < 1, `far behind: ${far}`);
+});
+
+test("a blob shadow sits on the ground under a figure and fades as it rises", async () => {
+  const { blobUnder } = await import("../src/client/look/shadow.js");
+  const bodies = [{ pos: [0, 0, 0], radius: 10 }, { pos: [100, 0, 0], radius: 5 }];
+  const b = blobUnder([0, 10, 0], 0.5, bodies);
+  assert.deepEqual(b.at.map((x) => Math.round(x * 1e6) / 1e6), [0, 10, 0]);
+  const up = blobUnder([0, 12, 0], 0.5, bodies), high = blobUnder([0, 30, 0], 0.5, bodies);
+  assert.ok(up.strength < b.strength && up.strength > 0, "fainter a little above");
+  assert.ok(up.radius > b.radius, "wider a little above");
+  assert.equal(high, null, "none high above");
+  // The nearest surface wins: over the small body, the blob is on it.
+  const m = blobUnder([94, 0.5, 0], 0.5, bodies);
+  assert.ok(Math.abs(Math.hypot(m.at[0] - 100, m.at[1], m.at[2]) - 5) < 1e-9);
+});

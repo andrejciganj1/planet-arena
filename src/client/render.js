@@ -14,6 +14,7 @@ import { add, sub, scale, lerp, norm, cross, dist, rotateAxis, rotateFromTo } fr
 import { rng, v3, Y, haloMap } from "./look/common.js";
 import { starfield, nebulaSky, PLAIN_SPACE } from "./look/sky.js";
 import { sunLook } from "./look/sun.js";
+import { flareLook, flareState } from "./look/solarflare.js";
 import { sphereMesh, planetLooks, orbitLines } from "./look/planets.js";
 import { blobUnder, sphereShadow } from "./look/shadow.js";
 import { DUMMY_COLOUR, ALIEN_ASSETS, figureMesh, dressFigure, armFigure, styleFigure, alienMaterial, jetAt, viewArm } from "./look/aliens.js";
@@ -33,7 +34,7 @@ const OVERVIEW = [0, 260, 380, 0, 0, 0];
 // selfId: your entity, whose eyes the camera uses. Online it is a function, as the id comes with the
 // server's welcome and changes if the server restarts. noSky: skip painting the sky, to see its fallback.
 // hold: a quality level to draw at all the time (for measuring each one), instead of the automatic step.
-export function createRenderer(world, canvas, fixedView = null, selfId = "player", { noSky = false, hold = null } = {}) {
+export function createRenderer(world, canvas, fixedView = null, selfId = "player", { noSky = false, hold = null, flareAt = null } = {}) {
   const self = typeof selfId === "function" ? selfId : () => selfId;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   // The quality step's level sets the pixel ratio and which effects run; it starts at the top.
@@ -84,6 +85,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   }
   for (const t of tails) scene.add(t.look.group);
   scene.add(sun.flare);
+  const storm = flareLook(world.system.bodies.find((b) => b.kind === "sun"));
+  sun.mesh.add(storm.arches);
+  scene.add(storm.shell, storm.cloud);
   sun.setLevel(level);
   planets.setLevel(level);
   // Everything that can hide the sun, and the ground blob shadows fall on.
@@ -477,6 +481,12 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         ropeGeo.setFromPoints([v3(hand), v3(anchor)]);
       }
 
+      // A solar flare: flareAt pins a moment of the spike timeline (s into its cycle) for screenshots.
+      const fs = flareState(flareAt ?? t);
+      sun.setStorm(fs);
+      planets.setStorm(fs.burn);
+      sunLight.intensity = 7 * (1 + LOOK.flare.bleach * fs.burn);
+      storm.update(fs, t, poses.sun);
       sun.update(t, dt, camera, poses.sun, blockers);
       planets.update(t, poses, blobsNear(p, free, alpha, poses, viewer), viewer);
       renderer.render(scene, camera);

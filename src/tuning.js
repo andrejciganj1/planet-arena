@@ -278,6 +278,10 @@ export const LOOK = {
       { dir: [-0.2, -0.85, -0.2], size: 0.75, colors: [0x24308c, 0x8c2f7a], seed: 4 },
     ],
     galaxy: { dir: [0.5, 0.82, 0.05], size: 0.2, tilt: 60, turn: 25 },
+    // The Milky Way: a band round the sky square to `pole` (60 degrees from the planets' plane normal, clear
+    // of the galaxy and the nebulas' middles), width the sine of its half-height, brighter towards `core` (on
+    // the band); strength its glow, dust how dark its lanes cut, stars how many more faint stars it holds.
+    milky: { pole: [0.866, 0.5, 0], core: [0, 0, 1], width: 0.16, strength: 0.055, dust: 0.85, stars: 0.25 },
   },
   // Explosions (look/blastpose.js, look/blast.js), all in s: flash, grow (the fire swelling to the blast's
   // reach), burn (the fire dying after), ring (the shock ring running out to ringReach times the reach), sparks,

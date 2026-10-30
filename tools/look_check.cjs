@@ -69,6 +69,8 @@ function views(world) {
   }
   list.push({ name: "sun", eye: v.add(sun, v.scale(v.norm([1, 0.35, 0.6]), 90)), target: sun });
   list.push({ name: "sky", eye: [0, 60, 0], target: [300, 900, 200] });
+  // The Milky Way towards its core, from out past the far planet so no body is in the way.
+  list.push({ name: "milky-way", eye: [0, 30, 380], target: [0, 120, 1380] });
   // The dummy on the tiny planet's night side, seen from 30 m and from high up, so the dark ground is behind it.
   const tiny = bodies.find((b) => b.id === "tiny"), c = poses.tiny, s = v.norm(v.sub(sun, c));
   const up = v.norm(v.add(v.scale(s, -1), v.scale(Y, 0.35))), pos = v.add(c, v.scale(up, tiny.radius));

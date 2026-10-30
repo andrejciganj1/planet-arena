@@ -1,4 +1,4 @@
-// The sky behind everything: a few nebulas and a distant galaxy, painted once at load by a shader into a cube
+// The sky behind everything: a few nebulas, a distant galaxy and the Milky Way, painted once at load by a shader into a cube
 // map, with the field of stars drawn in front. Painting it here costs no download (a smooth image of nebulas
 // compresses badly) and a few milliseconds of GPU once; after that the background is one texture lookup.
 import * as THREE from "three";
@@ -29,8 +29,8 @@ const fragmentShader = (nebulaCount) => /* glsl */ `
 #define NEB ${nebulaCount}
 uniform vec3 nebDir[NEB], nebA[NEB], nebB[NEB];
 uniform float nebSize[NEB], nebSeed[NEB];
-uniform vec3 galDir, galU, galV;
-uniform float galSize, galSquash, stars;
+uniform vec3 galDir, galU, galV, milkyPole, milkyCore;
+uniform float galSize, galSquash, stars, milkyWidth, milkyStrength, milkyDust, milkyStars;
 varying vec3 vDir;
 ${NOISE_GLSL}
 
@@ -80,11 +80,32 @@ float hash1(vec3 p) {
   return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
 }
 
+// The Milky Way: the band (look/skycheck.js milkyBand) clumped by noise, cut by dark dust lanes along its
+// middle, warmer towards its core, and thick with faint stars.
+vec3 milky(vec3 d) {
+  float b = dot(d, milkyPole), c = 0.5 + 0.5 * dot(d, milkyCore);
+  float band = exp(-b * b / (milkyWidth * milkyWidth)) * (0.55 + 0.45 * c * c);
+  if (band < 0.002) return vec3(0.0);
+  // Star clouds: bright knots and fine grain over a fainter haze.
+  float clouds = fbm(d * 8.0 + 11.0, 6) * 0.5 + 0.5;
+  float clumps = 0.25 + 1.6 * pow(clouds, 2.5) + 0.35 * (noise3(d * 60.0) * 0.5 + 0.5);
+  // A dark rift down the middle, ragged and broken, and smaller lanes off it.
+  float rift = exp(-pow((b + 0.03 * fbm(d * 5.0, 4)) / (milkyWidth * 0.3), 2.0));
+  float lanes = smoothstep(0.42, 0.7, fbm(d * 6.0 + vec3(3.0, 7.0, 1.0), 5) * 0.5 + 0.5);
+  float dark = clamp(rift * (0.5 + 0.5 * lanes) + 0.5 * lanes * band, 0.0, 1.0);
+  vec3 col = mix(vec3(0.55, 0.62, 0.9), vec3(1.0, 0.82, 0.6), c * c) * band * clumps * (1.0 - milkyDust * dark) * milkyStrength;
+  // Thick with faint stars, a few brighter.
+  float h = hash1(floor(d * 1500.0) + 3.0), many = milkyStars * band * (0.4 + clouds);
+  if (h > 1.0 - many) col += vec3(0.85, 0.9, 1.0) * pow((h - 1.0 + many) / many, 3.0) * 0.12;
+  return col;
+}
+
 void main() {
   vec3 d = normalize(vDir);
   vec3 col = vec3(0.0015, 0.0018, 0.004); // the old flat backdrop, as the floor
   col += nebulas(d) * 0.22;
   col += galaxy(d);
+  col += milky(d);
   // Faint distant stars, one texel each, a few more inside the nebulas.
   float h = hash1(floor(d * 900.0));
   if (h > 1.0 - stars) {
@@ -138,6 +159,8 @@ function paint(renderer, rt, cfg, skip) {
       galDir: { value: gd }, galU: { value: gu }, galV: { value: gv },
       galSize: { value: g.size }, galSquash: { value: Math.cos((g.tilt * Math.PI) / 180) },
       stars: { value: cfg.stars },
+      milkyPole: { value: dir(cfg.milky.pole) }, milkyCore: { value: dir(cfg.milky.core) }, milkyWidth: { value: cfg.milky.width },
+      milkyStrength: { value: cfg.milky.strength }, milkyDust: { value: cfg.milky.dust }, milkyStars: { value: cfg.milky.stars },
     },
     vertexShader, fragmentShader: fragmentShader(cfg.nebulas.length), side: THREE.BackSide, depthTest: false, depthWrite: false,
   });

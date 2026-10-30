@@ -939,3 +939,23 @@ test("blasts reuse the oldest of a fixed pool", async () => {
   assert.equal(pickSlot([0.5, null, 0.9], 3), 1, "a free slot first");
   assert.equal(pickSlot([0.5, 0.2, 0.9], 3), 2, "else the oldest");
 });
+
+test("the Milky Way is a band right round the sky, brightest along its middle and towards its core", async () => {
+  const { milkyBand } = await import("../src/client/look/skycheck.js");
+  const m = LOOK.sky.milky, n = Math.hypot(...m.pole), pole = m.pole.map((x) => x / n);
+  // A great circle square to the pole: every point on it is in the band.
+  const a = [pole[1], -pole[0], 0].map((x) => x / Math.hypot(pole[1], pole[0])), b = [
+    pole[1] * a[2] - pole[2] * a[1], pole[2] * a[0] - pole[0] * a[2], pole[0] * a[1] - pole[1] * a[0]];
+  for (let k = 0; k < 12; k++) {
+    const t = (k * Math.PI) / 6, d = a.map((x, i) => x * Math.cos(t) + b[i] * Math.sin(t));
+    assert.ok(milkyBand(d) > 0.5, `on the band at ${k * 30} degrees: ${milkyBand(d)}`);
+  }
+  assert.ok(milkyBand(pole) < 0.01, "not at its pole");
+  const core = m.core, back = core.map((x) => -x);
+  assert.ok(milkyBand(core) > milkyBand(back) * 1.3, "brighter towards the core");
+  // Clear of the galaxy and the nebulas' middles, so it doesn't drown them.
+  for (const d of [LOOK.sky.galaxy.dir, ...LOOK.sky.nebulas.map((x) => x.dir)]) {
+    const u = d.map((x) => x / Math.hypot(...d));
+    assert.ok(milkyBand(u) < 0.25, `${d}: ${milkyBand(u)}`);
+  }
+});

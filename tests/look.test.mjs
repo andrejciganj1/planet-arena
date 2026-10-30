@@ -798,3 +798,38 @@ test("a flying asteroid's trail glows only as it falls in on a body: none out in
   assert.ok(mid1 > 0 && mid1 < 1, `warming on the way in (${mid1})`);
   assert.equal(rockHeat(above(from + 1, -10), system, poses), 0, "not yet");
 });
+
+test("the flare's look follows the schedule", async () => {
+  const { flareView } = await import("../src/client/look/flarepose.js");
+  const { flareAt } = await import("../src/sim/flares.js");
+  const { FLARE } = await import("../src/tuning.js");
+  for (let t = 0, n = 0; n < 20; n++) {
+    const f = flareAt(t);
+    const calm = flareView(f.warnAt - 1);
+    assert.equal(calm.warn, 0);
+    assert.equal(calm.burn, 0);
+    assert.equal(calm.since, -Infinity);
+    let last = 0;
+    for (let s = 0.1; s < FLARE.warn; s += 0.5) {
+      const v = flareView(f.warnAt + s);
+      assert.ok(v.warn > last && v.warn < 1 && v.burn === 0, `warn rises at ${s}`);
+      last = v.warn;
+    }
+    for (let s = f.burnAt + 0.5; s < f.endAt - 1; s += 0.25) assert.equal(flareView(s).burn, 1, `blazing at ${s - f.burnAt}`);
+    assert.equal(flareView(f.endAt + 0.01).burn, 0);
+    assert.ok(Math.abs(flareView(f.endAt + 1).since - (f.endAt + 1 - f.burnAt)) < 1e-9);
+    t = f.endAt + FLARE.fade + 1;
+  }
+});
+
+test("the two patches stand 130 to 140 degrees apart", async () => {
+  const { flareView } = await import("../src/client/look/flarepose.js");
+  const { flareAt } = await import("../src/sim/flares.js");
+  for (let t = 0, n = 0; n < 30; n++) {
+    const f = flareAt(t), { dir, dir2 } = flareView(f.burnAt);
+    const deg = (Math.acos(dir[0] * dir2[0] + dir[1] * dir2[1] + dir[2] * dir2[2]) * 180) / Math.PI;
+    assert.ok(deg >= 130 && deg <= 140, `${deg}`);
+    assert.ok(Math.abs(Math.hypot(...dir) - 1) < 1e-9 && Math.abs(Math.hypot(...dir2) - 1) < 1e-9);
+    t = f.endAt + 4;
+  }
+});

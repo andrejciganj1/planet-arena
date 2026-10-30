@@ -276,9 +276,8 @@ export const LOOK = {
     galaxy: { dir: [0.5, 0.82, 0.05], size: 0.2, tilt: 60, turn: 25 },
   },
   sun: { octaves: [2, 3, 5], streamers: [2, 4, 4], churn: 0.06, corona: 3.2, flare: 0.5, flareFrom: 1, fade: 8 },
-  // A solar flare as seen (look/solarflare.js). spike: { cycle, warn, burn } s, a stand-in timeline until the
-  // game rules own it; rise: s to full brightness; decay: how sharply it dies away; after: s the arches and
-  // cloud take to fade. Units of `arches` are sun radii: span (half the gap between the feet) and height
+  // A solar flare as seen (look/solarflare.js), on FLARE's schedule. rise: s to full brightness at the burst;
+  // cloudFrom: the lowest quality level that draws the plasma cloud. Units of `arches` are sun radii: span (half the gap between the feet) and height
   // ranges, tube thickness, spread of the feet round the patch, sink (feet a hair under the surface), hot
   // (heat at the burst; over 1 is white), snap (how much they jump at the burst), bright (overall gain).
   // beacon: a glow over each patch (sun radii) that reads from afar. second: the smaller set of arches, `apart`
@@ -289,7 +288,7 @@ export const LOOK = {
   // wave: a shell of light running out to `reach` m in `time` s. cloud: the plasma cloud's puffs, cone (radians
   // round the patch), speed m/s, size m from start to end, colours.
   flare: {
-    spike: { cycle: 30, warn: 10, burn: 6 }, rise: 0.25, decay: 1.6, after: 3,
+    rise: 0.25, cloudFrom: 1,
     arches: { count: 11, span: [0.08, 0.22], height: [0.2, 0.7], thick: 0.03, spread: 0.12, sink: 0.995, hot: 1.8, snap: 0.35, bright: 4 },
     beacon: { size: 1.4, lift: 0.25, opacity: 1, color: 0xffb060 },
     second: { size: 0.6, count: 7, glow: 0.8, apart: 135 },

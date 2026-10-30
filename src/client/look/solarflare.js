@@ -1,30 +1,9 @@
 // A solar flare as seen: glowing arches over a patch of the sun, and a smaller set well round the sun from it so
-// it shows from anywhere, that stir during the warning, then the patch
-// snaps white-hot, a shell of light races out and a plasma cloud lifts off. Real flares are a flash from one
+// it shows from anywhere, that stir during the warning, then the patch snaps white-hot, a shell of light races out and a plasma cloud lifts off. Real flares are a flash from one
 // patch's tangled loops (coronal loops); the cloud is a coronal mass ejection, slower in truth, kept for show.
 import * as THREE from "three";
-import { LOOK } from "../../tuning.js";
+import { LOOK, FLARE } from "../../tuning.js";
 import { NOISE_GLSL, haloMap, rng } from "./common.js";
-
-// Where a flare stands at time t. Spike timeline only: the game rules will own the schedule.
-// Returns { warn: 0..1 through the warning (0 outside it), burn: 0..1 brightness, since: s since the burst
-// (negative before it), dir: unit vector of the patch, in the sun's frame; dir2: the smaller patch's }.
-export function flareState(t, cfg = LOOK.flare) {
-  const { cycle, warn, burn } = cfg.spike;
-  const n = Math.floor(t / cycle), s = t - n * cycle - (cycle - warn - burn);
-  const r = rng(n * 7919 + 13);
-  const a = r() * Math.PI * 2, e = (r() - 0.5) * 0.9;
-  const dir = [Math.cos(a) * Math.cos(e), Math.sin(e), Math.sin(a) * Math.cos(e)];
-  // The smaller patch is cfg.second.apart degrees round the sun, near the planets' plane like the first.
-  const b = a + (cfg.second.apart * Math.PI) / 180, f = -e * 0.5;
-  const dir2 = [Math.cos(b) * Math.cos(f), Math.sin(f), Math.sin(b) * Math.cos(f)];
-  const since = s - warn;
-  return {
-    warn: s >= 0 && s < warn ? s / warn : 0,
-    burn: since >= 0 && since < burn ? Math.min(1, since / cfg.rise) * (1 - since / burn) ** cfg.decay : 0,
-    since: s >= 0 ? since : -Infinity, dir, dir2,
-  };
-}
 
 const loopVertex = /* glsl */ `
 attribute float along;
@@ -71,7 +50,7 @@ void main() {
 }`;
 
 // body: the sun. Returns { arches (add to the sun's mesh: unit sun radius), shell and cloud (add to the
-// scene), update(state, t, sunPos) }.
+// scene), setLevel(level), update(state, t, sunPos) }.
 export function flareLook(body, cfg = LOOK.flare) {
   const r = rng(4242), c = cfg.arches;
   const arches = new THREE.Group(), loops = [], beacons = [];
@@ -140,18 +119,23 @@ export function flareLook(body, cfg = LOOK.flare) {
     tA.crossVectors(normal, Math.abs(normal.y) < 0.9 ? Yup : new THREE.Vector3(1, 0, 0)).normalize();
     tB.crossVectors(normal, tA);
   };
+  let cloudOn = true;
   return {
     arches, shell, cloud,
-    // state: as flareState returns; t: s on the match clock; sunPos: [x, y, z].
+    // The plasma cloud's 40 big soft sprites cost fill: the lowest level goes without.
+    setLevel(level) {
+      cloudOn = level >= cfg.cloudFrom;
+    },
+    // state: as look/flarepose.js flareView returns; t: s on the match clock; sunPos: [x, y, z].
     update(state, t, sunPos) {
-      const on = state.warn > 0 || state.since >= 0 && state.since < cfg.spike.burn + cfg.after;
+      const on = state.warn > 0 || state.since >= 0 && state.since < FLARE.burn + FLARE.fade;
       arches.visible = on;
       if (on) {
         // Heat climbs through the warning, with a nervous flicker; the burst makes it white-hot, then it cools.
         const after = state.since >= 0 ? state.since : -1;
         const flick = 0.75 + 0.25 * Math.sin(t * (6 + 20 * state.warn)) * Math.sin(t * 2.3 + 1);
         let heat = state.warn > 0 ? (0.25 + 0.75 * state.warn ** 1.5) * flick : state.burn * c.hot;
-        const fade = after >= 0 ? 1 - THREE.MathUtils.smoothstep(after, cfg.spike.burn, cfg.spike.burn + cfg.after) : 1;
+        const fade = after >= 0 ? 1 - THREE.MathUtils.smoothstep(after, FLARE.burn, FLARE.burn + FLARE.fade) : 1;
         if (after >= 0 && state.burn < 0.05) heat = 0.4 * fade;
         // They rise through the warning, jump at the burst and sag as they fade.
         const rise = state.warn > 0 ? 0.35 + 0.65 * state.warn ** 0.7 : (1 + c.snap * Math.min(1, after / 0.5)) * (0.6 + 0.4 * fade);
@@ -184,8 +168,8 @@ export function flareLook(body, cfg = LOOK.flare) {
         shellU.strength.value = cfg.wave.strength * (1 - k) ** 1.5;
       }
       // The cloud lifts off the patch, swells and thins out.
-      const cloudFor = cfg.spike.burn + cfg.after;
-      cloud.visible = s >= 0 && s < cloudFor;
+      const cloudFor = FLARE.burn + FLARE.fade;
+      cloud.visible = cloudOn && s >= 0 && s < cloudFor;
       if (cloud.visible) {
         const k = s / cloudFor;
         for (const p of puffs) {

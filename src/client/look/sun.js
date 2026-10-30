@@ -1,7 +1,7 @@
 // The sun: a churning surface, a soft corona round it and a glow over the screen when you look at it. The
 // glow is one additive full-screen quad, not a post-processing pass, so it costs a single cheap fill.
 import * as THREE from "three";
-import { LOOK } from "../../tuning.js";
+import { LOOK, FLARE } from "../../tuning.js";
 import { NOISE_GLSL } from "./common.js";
 import { sunInSight } from "./sunsight.js";
 
@@ -108,7 +108,7 @@ void main() {
 // body: the sun from BODIES; rand: the shared look random stream.
 // Returns { mesh, flare, setLevel(level), setStorm(state), update(t, dt, camera, sunPos, blockers) }: add the
 // mesh to the scene as the sun's body and the flare (the glare in the eye) to the scene; blockers are
-// { pos, radius } of every other body. setStorm takes a solar flare's state (look/solarflare.js flareState).
+// { pos, radius } of every other body. setStorm takes a solar flare's state (look/flarepose.js flareView).
 export function sunLook(body, rand, cfg = LOOK.sun) {
   // The faceted sun this replaced drew a shade per face from the shared random stream; drawing as many keeps
   // every body made after it looking as it did. It was an icosahedron split 4 times: 20 (4 + 1)^2 faces.
@@ -155,7 +155,7 @@ export function sunLook(body, rand, cfg = LOOK.sun) {
     setStorm(state, f = LOOK.flare) {
       storm.spotDir.value.fromArray(state.dir);
       storm.spotDir2.value.fromArray(state.dir2);
-      const fading = state.since >= 0 ? 1 - THREE.MathUtils.smoothstep(state.since, f.spike.burn, f.spike.burn + f.after) : 1;
+      const fading = state.since >= 0 ? 1 - THREE.MathUtils.smoothstep(state.since, FLARE.burn, FLARE.burn + FLARE.fade) : 1;
       storm.spotHeat.value = state.warn > 0 ? state.warn ** 1.5 : state.since >= 0 ? Math.max(state.burn * 1.5, 0.5 * fading) : 0;
       burn = storm.burn.value = state.burn;
       mesh.scale.setScalar(body.radius * (1 + f.swell * burn));

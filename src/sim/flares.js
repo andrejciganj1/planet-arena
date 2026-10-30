@@ -46,11 +46,16 @@ function groundShade(world, e) {
   return dot(normal, sub(sun, e.pos)) <= 0;
 }
 
+// Health/s a burn would take from e where it is ({ pos, up, groundId } is enough), whatever the phase.
+export function exposure(world, e, F = world.tuning.FLARE) {
+  if (groundShade(world, e)) return 0;
+  return flareReach(world, hitCentre(e), F, e.groundId);
+}
+
 // Health/s the flare takes from e now: players and the dummy, alive, in its light, during a burn.
 export function burnRate(world, e, F = world.tuning.FLARE) {
   if (!e.alive || (e.kind !== "player" && e.kind !== "dummy") || flareAt(world.t, F).phase !== "burn") return 0;
-  if (groundShade(world, e)) return 0;
-  return flareReach(world, hitCentre(e), F, e.groundId);
+  return exposure(world, e, F);
 }
 
 // The burn, once a tick. No hit events and no credit: it would flash and sound 60 times a second, and

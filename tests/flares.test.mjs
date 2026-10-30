@@ -2,8 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as tuning from "../src/tuning.js";
-import { flareAt, burnRate } from "../src/sim/flares.js";
-import { createWorld, stepWorld } from "../src/sim/world.js";
+import { flareAt, burnRate, exposure } from "../src/sim/flares.js";
+import { createWorld, stepWorld, spawnGap } from "../src/sim/world.js";
 import { createEntity, standOn } from "../src/sim/entity.js";
 import { posesAt } from "../src/sim/system.js";
 import { radiusAt } from "../src/sim/shape.js";
@@ -200,4 +200,38 @@ test("a flare death credits the last hitter as falling into the sun does", () =>
   assert.equal(died.by, "other");
   assert.equal(world.scores.other.kills, 1);
   assert.ok(!world.events.some((ev) => ev.type === "hit"), "no hit events from the flare");
+});
+
+test("a respawn during a warning or a burn lands out of the flare's reach", () => {
+  const world = createWorld(tuning);
+  const { respawn } = tuning.PLAYER;
+  let checked = 0;
+  for (let t = 0; checked < 10; ) {
+    const f = flareAt(t);
+    // One death whose respawn falls in the warning, one in the burn.
+    for (const dieAt of [f.warnAt + 1, f.burnAt]) {
+      at(world, dieAt);
+      for (const id of ["player", "dummy"]) world.entities[id].health = 0;
+      world.events = [];
+      while (world.t < dieAt + respawn + 1) stepWorld(world, {}, TICK);
+      const back = world.events.filter((ev) => ev.type === "respawn").map((ev) => ev.id);
+      assert.deepEqual(back.sort(), ["dummy", "player"]);
+      for (const id of ["player", "dummy"]) {
+        const e = world.entities[id];
+        assert.equal(exposure(world, e), 0, `${id} respawned in the flare's light at ${world.t.toFixed(1)}`);
+      }
+      assert.equal(world.entities.player.groundId, tuning.PLAYER_BODY);
+      assert.equal(world.entities.dummy.groundId, tuning.DUMMY.body);
+      checked += 2;
+    }
+    t = f.endAt + FLARE.fade + 1;
+  }
+});
+
+test("if every spot is lit, the respawn still happens", () => {
+  const world = createWorld(tuning);
+  at(world, flareAt(0).burnAt + 1);
+  const s = spawnGap(world, "mid", "player", () => false);
+  assert.ok(s && s.pos && s.up);
+  assert.ok(Math.abs(dist(s.pos, world.poses.mid.pos) - world.system.byId.mid.radius) < 1e-6);
 });

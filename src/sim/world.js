@@ -10,7 +10,7 @@ import { record } from "./lag.js";
 import { stepPickups } from "./pickups.js";
 import { stepHook } from "./hook.js";
 import { stepAsteroids } from "./asteroids.js";
-import { stepFlare } from "./flares.js";
+import { stepFlare, flareAt, exposure } from "./flares.js";
 import { add, scale, dist, norm, anyPerpendicular } from "./vec.js";
 
 // Spawn candidates: an evenly spread, fixed list of directions (Fibonacci sphere).
@@ -28,11 +28,22 @@ function candidates(world, body) {
 // PLAYER.spawnFromOther, or as far as the body allows (the tiny planet is smaller than that). `gap` is the
 // distance to the nearest other alive entity, so a caller can compare bodies.
 // Tries candidates in a fixed order, starting further along after each spawn, so the same world always
-// gives the same point but respawns don't all land on one spot.
-export function spawnGap(world, bodyId, forId = null) {
-  const { PLAYER } = world.tuning;
+// gives the same point but respawns don't all land on one spot. During a flare's warning or burn only spots
+// out of its reach count (`safe`), unless there are none: dying again at once, with no time to react, is unfair.
+export function spawnGap(world, bodyId, forId = null, safe = flareSafe(world, bodyId)) {
   const body = world.system.byId[bodyId];
-  const list = candidates(world, body);
+  const all = candidates(world, body), list = safe ? all.filter(safe) : all;
+  return list.length ? pickSpawn(world, list, forId) : pickSpawn(world, all, forId);
+}
+
+function flareSafe(world, bodyId) {
+  const phase = flareAt(world.t, world.tuning.FLARE).phase;
+  if (phase !== "warn" && phase !== "burn") return null;
+  return (cand) => exposure(world, { pos: cand.pos, up: cand.up, groundId: bodyId }) === 0;
+}
+
+function pickSpawn(world, list, forId) {
+  const { PLAYER } = world.tuning;
   const pads = world.pads.map((p) => padPos(world, p, world.poses));
   const others = Object.values(world.entities).filter((e) => e.alive && e.id !== forId);
   const start = (world.spawns * 7) % list.length;

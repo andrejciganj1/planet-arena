@@ -1,4 +1,4 @@
-// The things around the bodies: pickups, pads and their cue path, the hook's rope, comet tails, the
+// The things around the bodies: pickups, pads and their cue path, comet tails, the
 // asteroid belt and the flying asteroids. The models (assets/models/props.glb, from tools/blender/props.py; a
 // weapon pickup shows its gun from weapons.glb) replace the simple shapes when they load; which model shows
 // for a pickup and where the tails run are in look/proppose.js.
@@ -8,7 +8,7 @@ import { v3, Y, haloMap } from "./common.js";
 import { add, sub, scale, cross, norm, len, anyPerpendicular } from "../../sim/vec.js";
 import { WEAPON_COLORS } from "./weapons.js";
 import { alienMaterial } from "./aliens.js";
-import { pickupModel, tailAt, cometStir, comaLook, jetVents, jetLook } from "./proppose.js";
+import { pickupModel, tailAt, cometStir, comaLook, jetVents, jetLook, beltRocks } from "./proppose.js";
 import { radiusAt } from "../../sim/shape.js";
 
 export const PROP_ASSETS = [{ name: "props", url: "assets/models/props.glb" }];
@@ -178,14 +178,6 @@ export function cuePath() {
   return { path, pathGeo, pathMat };
 }
 
-// The rope, from the hand to where the hook caught.
-export function ropeLine() {
-  const ropeGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-  const rope = new THREE.Line(ropeGeo, new THREE.LineBasicMaterial({ color: 0xd9d2c0 }));
-  rope.frustumCulled = false;
-  return { rope, ropeGeo };
-}
-
 // One comet tail: a tube along tailAt, rewritten each frame (a few hundred points), glowing and fading to its
 // tip. Its edges fade where the view grazes them, so it reads as a soft plume, not a pipe. The dust tail is a
 // fan, flatter across the plane it curves in.
@@ -349,20 +341,14 @@ const HOLLOW_VERTEX = ["#include <begin_vertex>", "#include <begin_vertex>\nvHol
 // The asteroid belt: tumbling rocks turning round the sun the way the planets go. Looks only, so it lives here
 // and not in the simulation. Until the model loads it is one instanced mesh of dodecahedra; then one per rock
 // shape (rock i shows shape i % 4), so each draw carries only its own shape's vertices.
-export function asteroidBelt(rand) {
+// cfg: the ring (BELT, or LOOK.outerRing); tumble: whether each rock turns on its own axis (the outer ring's
+// are too far off to see it, and turning them would cost a matrix each a frame).
+export function asteroidBelt(rand, cfg = BELT, { tumble = true } = {}) {
   const plain = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
-  const rocks = [], base = new THREE.Color(P.rocks.belt);
-  for (let i = 0; i < BELT.rocks; i++) {
-    const r = BELT.inner + rand() * (BELT.outer - BELT.inner), a = rand() * 2 * Math.PI;
-    const s = BELT.size[0] + rand() * (BELT.size[1] - BELT.size[0]);
-    rocks.push({
-      pos: new THREE.Vector3(r * Math.cos(a), (rand() - 0.5) * BELT.thick, r * Math.sin(a)),
-      scale: new THREE.Vector3(s, s * (0.6 + rand() * 0.4), s * (0.7 + rand() * 0.3)),
-      axis: new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).normalize(),
-      rate: 0.2 + rand() * 0.8,
-      color: base.clone().multiplyScalar(1 + (rand() - 0.5) * 2 * P.rocks.variety),
-    });
-  }
+  const base = new THREE.Color(P.rocks.belt);
+  const rocks = beltRocks(rand, cfg).map((k) => ({
+    pos: v3(k.pos), scale: v3(k.scale), axis: v3(k.axis), rate: k.rate, color: base.clone().multiplyScalar(k.shade),
+  }));
   const group = new THREE.Group();
   // An instanced mesh of `geo` drawing the rocks in `ids`, each in its own shade.
   const draw = (geo, mat, ids) => {
@@ -372,7 +358,7 @@ export function asteroidBelt(rand) {
     group.add(mesh);
     return mesh;
   };
-  let meshes = [draw(simpleRock(), plain, rocks.map((_, i) => i))];
+  let meshes = [draw(simpleRock(), plain, rocks.map((_, i) => i))], placed = null;
   const q = new THREE.Quaternion(), m = new THREE.Matrix4();
   return {
     group,
@@ -393,7 +379,9 @@ export function asteroidBelt(rand) {
       meshes = parts.map((p, k) => draw(withHollows(p.geometry), mat, rocks.map((_, i) => i).filter((i) => i % parts.length === k)));
     },
     update(t) {
-      group.rotation.y = (-2 * Math.PI * t) / BELT.period; // three's +y turn runs x towards -z; orbits go x towards +z
+      group.rotation.y = (-2 * Math.PI * t) / cfg.period; // three's +y turn runs x towards -z; orbits go x towards +z
+      if (!tumble && placed === meshes) return;
+      placed = meshes;
       for (const mesh of meshes) {
         mesh.userData.ids.forEach((id, j) => {
           const k = rocks[id];

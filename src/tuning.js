@@ -257,6 +257,9 @@ export const LOOK = {
     pickups: { float: 1, bob: 0.15, bobRate: 2, spin: 1, glow: 0.6, night: 0.3, nightTint: 0.06, halo: [1.8, 0.5], sun: 0.55, weapon: 2.2 },
     pads: { lands: 0x3ee05a, misses: 0xe0443e, hidden: 0x8a8f9c, glow: 1.2, halo: [2.6, 0.3] },
     rocks: { belt: 0x34302d, variety: 0.3, cracks: 1.6, rim: 0.4 },
+    // The grappling hook: snap and reel s to open on a catch and to come back to the hand; spin rad/s in
+    // flight; openAngle rad the prongs swing out; dust: the puff on a catch (m across at the end, s).
+    hook: { snap: 0.2, reel: 0.2, spin: 12, openAngle: 1.9, dust: { size: 2.2, life: 0.5, opacity: 0.6 } },
     comets: {
       ion: { color: 0x5fa8ff, length: [12, 2400, 80], width: [0.7, 1.4], opacity: 0.55 },
       dust: { color: 0xffe6a8, length: [8, 1500, 50], width: [2.2, 10], opacity: 0.55, bend: 0.5 },
@@ -275,9 +278,30 @@ export const LOOK = {
       { dir: [-0.2, -0.85, -0.2], size: 0.75, colors: [0x24308c, 0x8c2f7a], seed: 4 },
     ],
     galaxy: { dir: [0.5, 0.82, 0.05], size: 0.2, tilt: 60, turn: 25 },
+    // The Milky Way: a band round the sky square to `pole` (60 degrees from the planets' plane normal, clear
+    // of the galaxy and the nebulas' middles), width the sine of its half-height, brighter towards `core` (on
+    // the band); strength its glow, dust how dark its lanes cut, stars how many more faint stars it holds.
+    milky: { pole: [0.866, 0.5, 0], core: [0, 0, 1], width: 0.16, strength: 0.055, dust: 0.85, stars: 0.25 },
   },
-  sun: { octaves: [2, 3, 5], streamers: [2, 4, 4], churn: 0.06, corona: 3.2, flare: 0.5, flareFrom: 1, fade: 8 },
+  // Explosions (look/blastpose.js, look/blast.js), all in s: flash, grow (the fire swelling to the blast's
+  // reach), burn (the fire dying after), ring (the shock ring running out to ringReach times the reach), sparks,
+  // life (until the smoke is gone); billow: how much bigger the smoke grows; max: blasts drawn at once;
+  // death: m, the reach drawn for a death's burst; light: the brightest a blast lights things near it, within
+  // lightRange m; sparkCount per blast; from: the lowest quality level with sparks and light.
+  blast: {
+    flash: 0.12, grow: 0.25, burn: 0.45, ring: 0.35, ringReach: 1.6, sparks: 0.6, life: 1.6, billow: 0.6, max: 12,
+    death: 2.5, light: 40, lightRange: 30, sparkCount: 28, from: 1,
+  },
+  // The outer ring: scenery past the edge of the game (VOID_RADIUS), drawn like the belt with bigger rocks and
+  // its own random seed; m and s as BELT; from: the lowest quality level that draws it.
+  outerRing: { inner: 680, outer: 740, thick: 30, rocks: 700, size: [2, 8], period: 2400, seed: 31, from: 1 },
+  // The third-person view (look/camerapose.js): the camera back, side (right) and lift (up) m from the eye along
+  // the view; pad: m it keeps off a body in the way; range: m out the crosshair looks for where a shot lands;
+  // near: m from your eye within which your own figure is hidden (it would fill the screen).
+  third: { back: 3.5, side: 0.7, lift: 0.4, pad: 0.3, range: 300, near: 1.5 },
+  sun: { octaves: [2, 3, 5], streamers: [2, 4, 4], churn: 0.06, corona: 3.2, flare: 0.5, flareFrom: 1, fade: 8, light: 7 },
   // A solar flare as seen (look/solarflare.js), on FLARE's schedule. rise: s to full brightness at the burst;
+  // dim: s it takes to dim once the burn ends;
   // cloudFrom: the lowest quality level that draws the plasma cloud. Units of `arches` are sun radii: span (half the gap between the feet) and height
   // ranges, tube thickness, spread of the feet round the patch, sink (feet a hair under the surface), hot
   // (heat at the burst; over 1 is white), snap (how much they jump at the burst), bright (overall gain).
@@ -289,7 +313,7 @@ export const LOOK = {
   // wave: a shell of light running out to `reach` m in `time` s. cloud: the plasma cloud's puffs, cone (radians
   // round the patch), speed m/s, size m from start to end, colours.
   flare: {
-    rise: 0.25, cloudFrom: 1,
+    rise: 0.25, dim: 0.5, cloudFrom: 1,
     arches: { count: 11, span: [0.08, 0.22], height: [0.2, 0.7], thick: 0.03, spread: 0.12, sink: 0.995, hot: 1.8, snap: 0.35, bright: 4 },
     beacon: { size: 1.4, lift: 0.25, opacity: 1, color: 0xffb060 },
     second: { size: 0.6, count: 7, glow: 0.8, apart: 135 },
@@ -372,11 +396,12 @@ export const PADS = [
   { id: "far-c", body: "far", dir: heading(300), speed: 24 },
 ];
 
-// The hook. range: m along the view it reaches; pull: m/s^2 towards the caught point, applied only while
+// The hook. range: m along the view it reaches; fly: m/s it flies out at (0.5 s to full range, the owner's
+// number); pull: m/s^2 towards the caught point, applied only while
 // closing slower than `speed` m/s; steady: 1/s, how fast sideways motion relative to the caught body dies
 // away, so the rope reels you in instead of swinging you round it; cooldown: s after letting go (or a
 // miss) before it fires again.
-export const HOOK = { range: 25, pull: 30, speed: 15, steady: 3, cooldown: 0.5 };
+export const HOOK = { range: 25, fly: 50, pull: 30, speed: 15, steady: 3, cooldown: 0.5 };
 
 // Pickups. touch: feet within this of one take it; health: points a pack restores; fuelMax: the fuel
 // pickup fills the booster to this many tanks (the extra is used up, never refilled by standing);

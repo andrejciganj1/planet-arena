@@ -1,12 +1,13 @@
 // Your own on-screen choices (toggles), remembered by the browser. The storage is passed in so tests can
 // load this under node; private windows may block or throw, so every access is guarded and the choice then
-// lives in memory only. Names are free: the sounds round adds "sound" (all sound) and "hits" (the hit sound).
+// lives in memory only. Names are free: the sounds round adds "sound" (all sound) and "hits" (the hit sound);
+// "third" is the third-person view, off at first.
 const KEY = "planet-arena.settings";
-const DEFAULTS = { orbits: true, cues: true };
+const DEFAULTS = { orbits: true, cues: true, third: false };
 
 // The keys that toggle a setting, and what the toast says after (M and H change nothing on screen).
-export const TOGGLES = { KeyO: "orbits", KeyP: "cues", KeyM: "sound", KeyH: "hits" };
-const LABELS = { orbits: "Orbit lines", cues: "Pad cues", sound: "Sound", hits: "Hit sound" };
+export const TOGGLES = { KeyO: "orbits", KeyP: "cues", KeyM: "sound", KeyH: "hits", KeyV: "third" };
+const LABELS = { orbits: "Orbit lines", cues: "Pad cues", sound: "Sound", hits: "Hit sound", third: "Third person" };
 export const toggleText = (name, on) => `${LABELS[name]} ${on ? "on" : "off"}`;
 
 export function createSettings(storage) {

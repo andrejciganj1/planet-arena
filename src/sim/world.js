@@ -2,7 +2,7 @@
 // and the fixed 60 Hz tick driven from real elapsed time.
 import { createSystem, posesAt } from "./system.js";
 import { createEntity, standOn, stepEntity, hitCentre, NO_INPUT } from "./entity.js";
-import { surfaceInfo, sphereContacts } from "./collide.js";
+import { sphereContacts } from "./collide.js";
 import { radiusAt, normalAt } from "./shape.js";
 import { padPos, touchPads, refreshCues } from "./pads.js";
 import { fire, stepProjectiles } from "./weapons.js";
@@ -11,7 +11,7 @@ import { stepPickups } from "./pickups.js";
 import { stepHook } from "./hook.js";
 import { stepAsteroids } from "./asteroids.js";
 import { stepFlare, flareAt, exposure } from "./flares.js";
-import { add, sub, scale, dist, norm, anyPerpendicular } from "./vec.js";
+import { add, sub, scale, dist } from "./vec.js";
 
 // Spawn candidates: an evenly spread, fixed list of directions (Fibonacci sphere).
 const SPAWN_DIRS = Array.from({ length: 48 }, (_, i) => {
@@ -161,6 +161,7 @@ function die(world, e, cause) {
   const by = creditOf(world, e), pos = hitCentre(e);
   e.alive = false;
   e.hook = null;
+  e.hookShot = null;
   e.respawnAt = world.t + (e.kind === "dummy" ? world.tuning.DUMMY.respawn : world.tuning.PLAYER.respawn);
   world.events.push({ type: "death", id: e.id, cause, by, pos });
   // Dummy kills and deaths don't count; neither does a kill on yourself.
@@ -205,7 +206,7 @@ export function stepWorld(world, inputs, dt) {
   stepFlare(world, dt);
   if (!world.noCues) refreshCues(world);
 
-  const sun = world.system.bodies.find((b) => b.kind === "sun");
+  const sun = world.system.sun;
   const { KILL } = world.tuning;
   for (const e of entities) {
     if (!e.alive) continue;

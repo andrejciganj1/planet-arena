@@ -55,7 +55,7 @@ try {
   store = localStorage; // even reading the property throws when storage is blocked
 } catch {}
 const settings = createSettings(store);
-const applyShown = () => renderer.setShown({ orbits: settings.get("orbits"), cues: settings.get("cues") });
+const applyShown = () => renderer.setShown({ orbits: settings.get("orbits"), cues: settings.get("cues"), third: settings.get("third") });
 applyShown();
 const hud = createHud(document.body, !!game);
 const input = createInput();
@@ -158,7 +158,7 @@ function frame(now) {
   renderer.draw(alpha, locked ? input.pending() : { yaw: 0, pitch: 0 }, zoom, shift, secs, feel);
   const cam = renderer.camera();
   const me = id ? world.entities[id] : null;
-  hud.update(world, locked, secs, id, cam, feel, { banner: flareBanner(world.t), burning: !!me && burnRate(world, me) > 0 });
+  hud.update(world, locked, secs, id, cam, feel, { banner: flareBanner(world.t), burning: !!me && burnRate(world, me) > 0 }, renderer.crosshair());
   // Heard from the camera just drawn, so a sound comes from where it is on screen.
   audio.setListener(cam.pos, cam.forward, cam.up);
   if (sounds) {

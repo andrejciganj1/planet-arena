@@ -69,6 +69,11 @@ function views(world) {
   }
   list.push({ name: "sun", eye: v.add(sun, v.scale(v.norm([1, 0.35, 0.6]), 90)), target: sun });
   list.push({ name: "sky", eye: [0, 60, 0], target: [300, 900, 200] });
+  // The outer ring from near the edge of the game, and from the far planet's orbit.
+  list.push({ name: "outer-ring", eye: [60, 40, 560], target: [-80, -5, 715] });
+  list.push({ name: "outer-ring-far", eye: [0, 50, 330], target: [200, 0, 700] });
+  // The Milky Way towards its core, from out past the far planet so no body is in the way.
+  list.push({ name: "milky-way", eye: [0, 30, 380], target: [0, 120, 1380] });
   // The dummy on the tiny planet's night side, seen from 30 m and from high up, so the dark ground is behind it.
   const tiny = bodies.find((b) => b.id === "tiny"), c = poses.tiny, s = v.norm(v.sub(sun, c));
   const up = v.norm(v.add(v.scale(s, -1), v.scale(Y, 0.35))), pos = v.add(c, v.scale(up, tiny.radius));
@@ -127,6 +132,18 @@ function views(world) {
   list.push(close("alien-night", -1, 35));
   list.push(close("alien-night-blue", -1, 35, { as: 0x4fb0e8 }));
   list.push(close("alien-walk", 1, 40, { side: true, dist: 3.6, state: { walk: 7, pitch: 0.45 }, as: 0xe8505b }));
+  // Hooked onto the ground 6 m ahead: the hook dug in, prongs open, the rope from the hand.
+  const hookAt = (k, deg, ahead) => {
+    const el = (deg * Math.PI) / 180, up = v.norm(v.add(v.scale(Y, Math.cos(el)), v.scale(mHoriz, k * Math.sin(el))));
+    const fwd = v.scale(v.norm(v.cross(mHoriz, up)), -1); // the way a side view's figure faces
+    return v.scale(v.norm(v.add(up, v.scale(fwd, ahead / mid.radius))), mid.radius);
+  };
+  list.push(close("hook-caught", 1, 35, { side: true, dist: 6, state: { hook: { body: "mid", offset: hookAt(1, 35, 4), len: 4 }, pitch: -0.2 } }));
+  // A rocket blast 3 m in front of a figure on Mid, a fifth of a second in (`blast`: set off once the view is
+  // ready, then `frames` frames drawn before the shot).
+  const boom = close("explosion", 1, 35, { dist: 11 });
+  boom.blast = { pos: v.add(boom.dummy.pos, v.add(v.scale(boom.dummy.up, 0.5), v.scale(boom.dummy.forward, 3))), splash: 4, frames: 12 };
+  list.push(boom);
   list.push(close("alien-boost", 1, 40, { side: true, dist: 3.6, state: { groundId: null, airTime: 0.8, pitch: 0.1 }, boost: true, lift: 1 }));
   list.push(close("alien-boost-far", -1, 35, { side: true, dist: 14, state: { groundId: null, airTime: 0.8, pitch: 0.1 }, boost: true, lift: 1, as: 0x4fb0e8 }));
   list.push(close("alien-hook", 1, 40, { side: true, dist: 3.6, state: { groundId: null, airTime: 1.5, pitch: 0.3, hook: { body: "mid", offset: [0, 0, 0] } } }));
@@ -135,6 +152,11 @@ function views(world) {
     list.push(firstPerson(`fp-${w}-fire`, 1, w, true));
   }
   list.push(firstPerson("fp-night-railgun", -1, "railgun", true));
+  // Third person: over the shoulder with the rocket launcher, and looking steeply up, where the camera's spot
+  // would be underground and it is pulled in.
+  list.push({ ...firstPerson("third-person", 1, "rocket", false), shown: { third: true } });
+  const steep = firstPerson("third-person-tight", 1, "rocket", false);
+  list.push({ ...steep, fp: { ...steep.fp, pitch: 1.2 }, shown: { third: true } });
   for (const w of weapons) list.push(close(`hold-${w}`, 1, 40, { side: true, dist: 3, state: { weapon: w, pitch: 0.15 }, as: 0x4fb0e8, fire: true }));
   list.push(...propViews(world));
   return list;
@@ -347,6 +369,10 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
     // Measured: the figure alone, its name tag hidden.
     if (SEEN.includes(view.name)) await p.evaluate(() => window.game.renderer.setShown({ tags: false }));
     await frames(p, 30); // shaders compiled, every map painted (one a frame) and a few frames drawn
+    if (view.blast) {
+      await p.evaluate((b) => window.game.world.explosions.push({ pos: b.pos, age: 0, splash: b.splash }), view.blast);
+      await frames(p, view.blast.frames);
+    }
     const file = path.join(out, `${view.name}.png`);
     const shot = await p.screenshot({ path: file });
     if (SEEN.includes(view.name)) {

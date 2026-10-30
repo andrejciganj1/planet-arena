@@ -1,5 +1,5 @@
-// The guns (assets/models/weapons.glb, from tools/blender/weapons.py), their muzzle flashes, and what shots,
-// blasts and beams look like. A gun is built with the grip at its origin and the barrel along -z, at its
+// The guns (assets/models/weapons.glb, from tools/blender/weapons.py), their muzzle flashes, and what shots
+// and beams look like. A gun is built with the grip at its origin and the barrel along -z, at its
 // first-person size; userData.muzzle is the barrel's tip and userData.spin the part that turns (the minigun's).
 import * as THREE from "three";
 import { LOOK, WEAPON_ORDER } from "../../tuning.js";
@@ -148,16 +148,14 @@ export function spinGun(gun, since, dt) {
   if (spin && since < LOOK.weapons.spin.for) spin.rotation.z += LOOK.weapons.spin.speed * dt;
 }
 
-// Rockets and bullets share one pool of meshes (geometry and material swapped per shot); each blast and
-// beam gets its own material, as their opacity fades one by one.
+// Rockets and bullets share one pool of meshes (geometry and material swapped per shot); each beam gets its own
+// material, as their opacity fades one by one. Blasts are look/blast.js.
 export function shotLooks() {
   const rocketGeo = new THREE.CapsuleGeometry(0.12, 0.45, 4, 8), rocketMat = new THREE.MeshLambertMaterial({ color: 0xd8dde6 });
   const bulletGeo = new THREE.SphereGeometry(0.09, 8, 6), bulletMat = new THREE.MeshBasicMaterial({ color: 0xfff27a });
-  const blastGeo = new THREE.SphereGeometry(1, 16, 12);
   return {
     rocketGeo, rocketMat, bulletGeo, bulletMat,
     shot: () => new THREE.Mesh(rocketGeo, rocketMat),
-    blast: () => new THREE.Mesh(blastGeo, new THREE.MeshBasicMaterial({ color: 0xff9a2e, transparent: true, depthWrite: false })),
     beam: () => {
       const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0x6fe3ff, transparent: true }));
       l.frustumCulled = false;

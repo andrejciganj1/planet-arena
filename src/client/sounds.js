@@ -12,7 +12,7 @@ import { flareAt, burnRate } from "../sim/flares.js";
 export const SOUNDS = [
   "pistol", "shotgun", "rocket", "minigun", "sniper", "railgun", "rocketFlight", "explode", "rockIncoming", "rockBurn",
   "ding", "hurt", "death", "announcer", "boink", "pickup", "pickupBack", "step", "hookFire", "hookPull", "boost",
-  "switch", "empty", "scream", "flareAlarm", "flareVoice", "flareRoar", "sizzle",
+  "switch", "empty", "scream", "flareAlarm", "flareVoice", "flareRoar", "sizzle", "hookCatch",
 ];
 
 // While a status screen covers the game (online: connecting, unreachable, full, version, no player yet) the
@@ -27,6 +27,7 @@ export function createDirector({ selfId, online }) {
   const seen = new Map(); // entity id -> what it was last frame
   let ready = new Map(); // pickup id -> readyAt last frame
   let lastT = null, spots = null;
+  const said = { alarm: -1, voice: -1, roar: -1 }; // the last flare (k) each was played for: a clock resync can't replay it
   const mineShot = (id) => typeof id === "string" && id.startsWith(`${selfId}.`);
   // Your own sounds are in your head: the listener is the drawn camera (interpolated, shifted by online
   // corrections), so a place at your eye would pan your own gun along your motion. Another's are where they are.
@@ -85,7 +86,7 @@ export function createDirector({ selfId, online }) {
     // The highest count heard, so a count a server correction put back doesn't sound again.
     const now = {
       ref: e, shots: was?.ref === e ? Math.max(was.shots, e.shots) : e.shots, weapon: e.weapon, hook: !!e.hook,
-      fuel: e.fuel, alive: e.alive, stride: 0, boostUntil: -Infinity,
+      fuel: e.fuel, alive: e.alive, stride: 0, boostUntil: -Infinity, shot: !!e.hookShot,
     };
     if (!quiet) {
       // The last round hands over the pistol in the same tick: that shot was the old weapon's.
@@ -94,7 +95,12 @@ export function createDirector({ selfId, online }) {
       // Another's railgun sounds from its beam event instead.
       if (mine || gun !== "railgun") for (let k = was.shots; k < e.shots; k++) once.push({ name: gun, ...eye });
       if (mine && e.weapon !== was.weapon) once.push({ name: emptied ? "empty" : "switch", pos: null, own: true, src: selfId });
-      if (e.hook && !was.hook) once.push({ name: "hookFire", ...eye });
+      if (e.hookShot && !was.shot) once.push({ name: "hookFire", ...eye });
+      // The catch clanks where the hook bit, yours too: it is out there, not in your head.
+      if (e.hook && !was.hook) {
+        const at = world.poses[e.hook.body] && add(world.poses[e.hook.body].pos, e.hook.offset);
+        if (at) once.push({ name: "hookCatch", pos: at, own: mine, src: e.id });
+      }
       const speed = len(e.vel);
       if (e.alive && e.groundId && speed > SOUND.stepSpeed) {
         now.stride = was.stride + speed * dt;
@@ -149,10 +155,15 @@ export function createDirector({ selfId, online }) {
 
     // A solar flare is for everyone, in your head: the alarm, then the voice, as the warning starts, and the roar
     // at the burst; only on a frame that follows the last (a late join hears none of it). The sizzle while you burn.
-    const f = flareAt(world.t, world.tuning.FLARE), crossed = (at) => !gap && lastT < at && at <= world.t;
-    if (crossed(f.warnAt)) once.push({ name: "flareAlarm", pos: null, own: true });
-    if (crossed(f.warnAt + SOUND.flareVoiceAfter)) once.push({ name: "flareVoice", pos: null, own: true });
-    if (crossed(f.burnAt)) once.push({ name: "flareRoar", pos: null, own: true });
+    const f = flareAt(world.t, world.tuning.FLARE);
+    const cue = (key, at, name) => {
+      if (gap || said[key] === f.k || !(lastT < at && at <= world.t)) return;
+      said[key] = f.k;
+      once.push({ name, pos: null, own: true });
+    };
+    cue("alarm", f.warnAt, "flareAlarm");
+    cue("voice", f.warnAt + SOUND.flareVoiceAfter, "flareVoice");
+    cue("roar", f.burnAt, "flareRoar");
     const me = world.entities[selfId];
     if (me && burnRate(world, me) > 0) loops.set("sizzle", { name: "sizzle", pos: null, own: true, src: selfId });
 

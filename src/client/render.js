@@ -5,7 +5,7 @@
 // camera, lights and the frame, and moves the pieces to where the world says they are.
 import * as THREE from "three";
 import { tumble, trailPush, trailFade, rockHeat } from "./rocklook.js";
-import { PLAYER, DUMMY, ROCKET, PAD_CUE, TICK, PICKUPS, WEAPONS, FEEDBACK, ROCK_LOOK, LOOK, ASTEROID, COLOURS } from "../tuning.js";
+import { PLAYER, DUMMY, PAD_CUE, TICK, PICKUPS, WEAPONS, FEEDBACK, ROCK_LOOK, LOOK, ASTEROID, COLOURS } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
 import { pickupReady } from "../sim/pickups.js";
 import { posesAt } from "../sim/system.js";
@@ -16,13 +16,16 @@ import { starfield, nebulaSky, PLAIN_SPACE } from "./look/sky.js";
 import { sunLook } from "./look/sun.js";
 import { flareLook } from "./look/solarflare.js";
 import { flareView } from "./look/flarepose.js";
+import { thirdCamera, aimPoint } from "./look/camerapose.js";
 import { sphereMesh, planetLooks, orbitLines } from "./look/planets.js";
 import { blobUnder, sphereShadow } from "./look/shadow.js";
 import { DUMMY_COLOUR, ALIEN_ASSETS, figureMesh, dressFigure, armFigure, styleFigure, alienMaterial, jetAt, viewArm } from "./look/aliens.js";
 import { createPoser } from "./look/alienpose.js";
 import { WEAPON_ASSETS, weaponModels, weaponSet, swapMaterials, muzzleFlash, showFlash, spinGun, shotLooks } from "./look/weapons.js";
 import { createGunWatch, viewGun, flashShown } from "./look/gunpose.js";
-import { PROP_ASSETS, pickupLook, padLook, cuePath, ropeLine, cometTailLook, cometHalo, asteroidBelt, flyingRocks } from "./look/props.js";
+import { createGrapples } from "./look/grapple.js";
+import { createBlasts } from "./look/blast.js";
+import { PROP_ASSETS, pickupLook, padLook, cuePath, cometTailLook, cometHalo, asteroidBelt, flyingRocks } from "./look/props.js";
 import { cometTails } from "./look/proppose.js";
 import { loadAssets } from "./look/assets.js";
 import { threeLoaders } from "./look/loaders.js";
@@ -64,7 +67,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   // three.js r160 lights are physically based (diffuse divided by pi), hence the large numbers. The night
   // side of a planet must stay readable.
   scene.add(new THREE.AmbientLight(0xa3acd0, 0.45));
-  const sunLight = new THREE.PointLight(0xfff1d6, 7, 0, 0);
+  const sunLight = new THREE.PointLight(0xfff1d6, LOOK.sun.light, 0, 0);
   scene.add(sunLight, starfield(rand));
 
   const rings = orbitLines(world.system);
@@ -72,7 +75,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
 
   // The sun first, then the planets, moons and comets: the order they draw from `rand` in.
   const bodies = {}, tails = [];
-  const sun = sunLook(world.system.bodies.find((b) => b.kind === "sun"), rand);
+  const sun = sunLook(world.system.sun, rand);
   const planets = planetLooks(world.system, renderer, rand);
   for (const b of world.system.bodies) {
     const m = b.kind === "sun" ? sun.mesh : planets.meshes[b.id] ?? sphereMesh(b, rand);
@@ -86,7 +89,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   }
   for (const t of tails) scene.add(t.look.group);
   scene.add(sun.flare);
-  const storm = flareLook(world.system.bodies.find((b) => b.kind === "sun"));
+  const storm = flareLook(world.system.sun);
   sun.mesh.add(storm.arches);
   storm.setLevel(level);
   scene.add(storm.shell, storm.cloud);
@@ -94,9 +97,13 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   planets.setLevel(level);
   // Everything that can hide the sun, and the ground blob shadows fall on.
   const blockers = world.system.bodies.filter((b) => b.kind !== "sun").map((b) => ({ id: b.id, pos: null, radius: b.radius }));
-  const sunRadius = world.system.bodies.find((b) => b.kind === "sun").radius;
+  const sunRadius = world.system.sun.radius;
   const belt = asteroidBelt(rand);
   scene.add(belt.group);
+  // Its own random stream, so the shared one (and every body made from it) is as it was.
+  const outerRing = asteroidBelt(rng(LOOK.outerRing.seed), LOOK.outerRing, { tumble: false });
+  outerRing.group.visible = level >= LOOK.outerRing.from;
+  scene.add(outerRing.group);
 
   // Pads ride on their bodies: keep each pad's offset from its body's centre.
   const pads = world.pads.map((pad) => {
@@ -127,11 +134,12 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
     scene.add(look.group);
     return { pk, look };
   });
-  const { rope, ropeGeo } = ropeLine();
-  scene.add(rope);
+  const grapples = createGrapples(scene);
 
   const looks = shotLooks(), { rocketGeo, rocketMat, bulletGeo, bulletMat } = looks;
-  const shots = [], blasts = [], beams = [];
+  const shots = [], beams = [];
+  const blastLooks = createBlasts(scene);
+  blastLooks.setLevel(level);
   const pooled = (list, make) => (i) => list[i] || (list[i] = (() => { const m = make(); scene.add(m); return m; })());
   // Flying asteroids: the trail is kept per rock id and dropped with the rock.
   const rockLook = flyingRocks();
@@ -168,7 +176,6 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   };
   const flashAt = {}; // entity id -> when its bar began to flash (real seconds: the match clock can go back)
   const shot = pooled(shots, looks.shot);
-  const blast = pooled(blasts, looks.blast);
   const beam = pooled(beams, looks.beam);
 
   function resize() {
@@ -208,9 +215,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
     return blobList.sort(byDistance);
   };
 
-  let shown = { orbits: true, cues: true, tags: true };
+  let shown = { orbits: true, cues: true, tags: true, third: false }, aim = null;
   return {
-    // Your own choices (O and P): { orbits, cues }. Cues cover the dashed path and the pad's light. tags: name
+    // Your own choices (O, P and V): { orbits, cues, third }. Cues cover the dashed path and the pad's light. tags: name
     // tags and bars over others (the look check hides them to measure a figure alone).
     setShown(s) {
       shown = { ...shown, ...s };
@@ -224,6 +231,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
     // The quality level drawn at and the last frame's draw calls and triangles (the look check's measure).
     stats: () => ({ level, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }),
     // The camera as last drawn: { pos, right, up, forward }, for the HUD's hit arcs.
+    // In third person, where the crosshair goes: the screen point (CSS px from the canvas's top left) where a
+    // shot from your eye lands; null in first person (the middle of the screen).
+    crosshair: () => aim,
     camera() {
       const m = camera.matrixWorld.elements;
       return { pos: [m[12], m[13], m[14]], right: [m[0], m[1], m[2]], up: [m[4], m[5], m[6]], forward: [-m[8], -m[9], -m[10]] };
@@ -239,6 +249,8 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         sun.setLevel(level);
         planets.setLevel(level);
         storm.setLevel(level);
+        blastLooks.setLevel(level);
+        outerRing.group.visible = level >= LOOK.outerRing.from;
       }
       const dt = lastNow === null ? 0 : now - lastNow;
       lastNow = now;
@@ -260,8 +272,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       // Tails point away from the sun and grow as the comet nears it; the dust tail trails the path.
       for (const t of tails) t.look.update(cometTails(poses[t.id], world.poses[t.id].vel, poses.sun));
       const props = assets.get("props");
-      if (props) belt.dress(props), rockLook.dress(props);
+      if (props) belt.dress(props), rockLook.dress(props), outerRing.dress(props);
       belt.update(world.t + (alpha - 1) * TICK);
+      outerRing.update(world.t + (alpha - 1) * TICK);
 
       const p = world.entities[self()];
       // You, interpolated and shifted.
@@ -270,6 +283,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         return { pos: shift ? add(pos, shift) : pos, up };
       };
       const free = fixedView || (!p && OVERVIEW);
+      // Third person: over the shoulder, while alive and not zoomed (the sniper's zoom is first person).
+      const third = !free && shown.third && p.alive && zoom === 1;
+      aim = null;
       if (free) {
         camera.position.set(free[0], free[1], free[2]);
         camera.up.set(0, 1, 0);
@@ -281,9 +297,15 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         const pitch = Math.min(MAX_PITCH, Math.max(-MAX_PITCH, p.pitch + look.pitch));
         const dir = add(scale(fwd, Math.cos(pitch)), scale(up, Math.sin(pitch)));
         const eye = add(pos, scale(up, PLAYER.eye));
-        camera.position.copy(v3(eye));
+        const at = third ? thirdCamera(eye, dir, up, world.system, world.poses) : eye;
+        camera.position.copy(v3(at));
         camera.up.copy(v3(up));
-        camera.lookAt(v3(add(eye, dir)));
+        camera.lookAt(v3(add(at, dir)));
+        if (third) {
+          camera.updateMatrixWorld();
+          const s = v3(aimPoint(world, p, eye, dir)).project(camera), r = canvas.getBoundingClientRect();
+          aim = s.z < 1 ? { x: ((s.x + 1) / 2) * r.width, y: ((1 - s.y) / 2) * r.height } : null;
+        }
       }
       // Figures are lit by the sun only where no body hides it from their head, as the ground is; the gun in
       // view where none hides it from your eye.
@@ -297,7 +319,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         holder.add(...Object.values(weapons));
         viewArmed = true;
       }
-      const held = !free && p.alive && zoom === 1 ? weapons[p.weapon] : null;
+      const held = !free && !third && p.alive && zoom === 1 ? weapons[p.weapon] : null;
       for (const m of Object.values(weapons)) m.visible = m === held;
       const alienModel = assets.get("alien");
       if (alienModel && arm === null && (arm = viewArm(alienModel) || false)) {
@@ -358,7 +380,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       const alien = assets.get("alien");
       let i = 0;
       for (const [id, d] of Object.entries(world.entities)) {
-        if (d === p) continue;
+        // In first person you are the view, not a figure in it; in third person too while the camera is pressed
+        // in close (looking steeply up or against a wall), where your figure would fill the screen.
+        if (d === p && (!third || camera.position.distanceTo(v3(add(mine().pos, scale(mine().up, PLAYER.eye)))) < LOOK.third.near)) continue;
         if (!d.alive) {
           poser.drop(id); // a respawn starts its pose afresh
           continue;
@@ -368,9 +392,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         if (alien && !m.userData.alien) dressFigure(m, alien);
         if (guns && m.userData.alien && !m.userData.alien.armed) armFigure(m, guns);
         const who = world.players[id];
-        m.userData.tag.visible = shown.tags;
+        m.userData.tag.visible = shown.tags && d !== p;
         m.userData.tag.userData.show(who ? who.name : "Dummy", d.health / (d.kind === "dummy" ? DUMMY.health : PLAYER.health), now >= flashAt[id] && now - flashAt[id] < FEEDBACK.flash);
-        const { pos, up } = between(d, alpha);
+        const { pos, up } = d === p ? mine() : between(d, alpha);
         const fwd = norm(rotateFromTo(d.forward, d.up, up)), right = cross(fwd, up);
         m.matrix.makeBasis(v3(right), v3(up), v3(scale(fwd, -1))).setPosition(v3(pos));
         const head = add(pos, scale(up, PLAYER.hit.head.at));
@@ -441,20 +465,13 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         rockTrails.delete(id);
       }
       i = 0;
-      for (const x of world.explosions) {
-        const m = blast(i++), k = x.age / ROCKET.showFor;
-        m.visible = true;
-        m.position.copy(v3(x.pos));
-        m.scale.setScalar(0.5 + (x.splash - 0.5) * Math.sqrt(k));
-        m.material.opacity = 0.85 * (1 - k);
-      }
-      for (; i < blasts.length; i++) blasts[i].visible = false;
+      blastLooks.update(world.explosions, now);
       i = 0;
       for (const b of world.beams) {
         const l = beam(i++);
         l.visible = true;
         // Your own beam starts at the railgun's muzzle, not your eye, or you would see it end-on as a dot.
-        const from = b.owner === p?.id && !free ? weapons.railgun.userData.muzzle.getWorldPosition(new THREE.Vector3()) : v3(b.from);
+        const from = b.owner === p?.id && !free && !third ? weapons.railgun.userData.muzzle.getWorldPosition(new THREE.Vector3()) : v3(b.from);
         l.geometry.setFromPoints([from, v3(b.to)]);
         l.material.opacity = 1 - b.age / WEAPONS.railgun.showFor;
       }
@@ -475,20 +492,17 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         look.show(pickupReady(world, pk), sunAt(at));
       }
 
-      // The rope from just below the eye to the caught point (interpolated with its body).
-      rope.visible = !!p?.alive && !!p.hook;
-      if (rope.visible) {
-        const { pos, up } = mine();
-        const hand = add(pos, scale(up, PLAYER.eye - 0.4));
-        const anchor = add(poses[p.hook.body], p.hook.offset);
-        ropeGeo.setFromPoints([v3(hand), v3(anchor)]);
-      }
+      // Every hook and its rope, from just below the eye (interpolated, yours shifted as you are drawn).
+      grapples.update(world, poses, alpha, now, (e) => {
+        const { pos, up } = e === p ? mine() : between(e, alpha);
+        return add(pos, scale(up, PLAYER.eye - 0.4));
+      }, props);
 
       // A solar flare, from the match clock like everything else (?debug&at=T stills one).
       const fs = flareView(t);
       sun.setStorm(fs);
       planets.setStorm(fs.burn);
-      sunLight.intensity = 7 * (1 + LOOK.flare.bleach * fs.burn);
+      sunLight.intensity = LOOK.sun.light * (1 + LOOK.flare.bleach * fs.burn);
       storm.update(fs, t, poses.sun);
       sun.update(t, dt, camera, poses.sun, blockers);
       planets.update(t, poses, blobsNear(p, free, alpha, poses, viewer), viewer);

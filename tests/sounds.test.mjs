@@ -42,7 +42,7 @@ test("the list of sounds is the one Task 3 makes recipes for", () => {
   assert.deepEqual([...SOUNDS].sort(), [
     "pistol", "shotgun", "rocket", "minigun", "sniper", "railgun", "rocketFlight", "explode", "rockIncoming", "rockBurn",
     "ding", "hurt", "death", "announcer", "boink", "pickup", "pickupBack", "step", "hookFire", "hookPull", "boost",
-    "switch", "empty", "scream", "flareAlarm", "flareVoice", "flareRoar", "sizzle",
+    "switch", "empty", "scream", "flareAlarm", "flareVoice", "flareRoar", "sizzle", "hookCatch",
   ].sort());
   for (const w of tuning.WEAPON_ORDER) assert.ok(SOUNDS.includes(w), `${w} fires a sound of its own name`);
 });
@@ -207,13 +207,19 @@ test("your own rocket blast sounds online, the server's too when your prediction
   assert.deepEqual(others.map((s) => [s.name, s.own]), [["explode", false], ["explode", false]]);
 });
 
-test("the hook fires once and pulls while it holds", () => {
+test("firing the hook thwips, catching clanks at the anchor, and it pulls while it holds", () => {
   const w = scene(["me"]), me = w.entities.me, d = createDirector({ selfId: "me", online: false });
   play(d, w);
+  me.hookShot = { pos: eye(me), dir: [0, -1, 0], gone: 0 };
+  const fired = play(d, w);
+  assert.deepEqual(names(fired), ["hookFire"]);
+  assert.equal(fired.once[0].pos, null);
+  assert.deepEqual(names(play(d, w)), [], "in flight: once");
+  me.hookShot = null;
   me.hook = { body: "mid", offset: [0, 12, 0], len: 10 };
   const out = play(d, w);
-  assert.deepEqual(names(out), ["hookFire"]);
-  assert.equal(out.once[0].pos, null);
+  assert.deepEqual(names(out), ["hookCatch"]);
+  near(out.once[0].pos, add(w.poses.mid.pos, [0, 12, 0]));
   assert.ok(out.loops.get("hook:me")?.name === "hookPull");
   const held = play(d, w);
   assert.deepEqual(names(held), []);
@@ -232,12 +238,16 @@ test("your own sounds are in your head, another's where they are, each with its 
   // Fire and hook.
   me.shots++;
   you.shots++;
-  me.hook = you.hook = { body: "mid", offset: [0, 12, 0], len: 10 };
+  me.hookShot = { pos: eye(me), dir: [0, -1, 0], gone: 0 };
+  you.hookShot = { pos: eye(you), dir: [0, -1, 0], gone: 0 };
   let out = play(d, w);
   assert.equal(by(out, "minigun", "me").pos, null);
   near(by(out, "minigun", "you").pos, eye(you));
   assert.equal(by(out, "hookFire", "me").pos, null);
   near(by(out, "hookFire", "you").pos, eye(you));
+  me.hookShot = you.hookShot = null;
+  me.hook = you.hook = { body: "mid", offset: [0, 12, 0], len: 10 };
+  out = play(d, w);
   assert.equal(out.loops.get("hook:me").pos, null);
   near(out.loops.get("hook:you").pos, eye(you));
   // Pad launches and pickups.
@@ -460,4 +470,12 @@ test("you hear the sizzle only while you burn", () => {
   assert.ok(play(d, w).loops.has("sizzle"), "in the light");
   put(scale(u, -1));
   assert.ok(!play(d, w).loops.has("sizzle"), "on the night side");
+});
+
+test("a clock that jumps back over a warning doesn't sound it again", () => {
+  const f = flareAt(0), d = createDirector({ selfId: "me", online: false }), w = scene();
+  const first = across(d, w, f.warnAt - 0.5, f.warnAt + 0.5);
+  const again = across(d, w, f.warnAt - 2, f.warnAt + SOUND.flareVoiceAfter + 1);
+  assert.equal((first.flareAlarm || 0) + (again.flareAlarm || 0), 1);
+  assert.equal(again.flareVoice || 0, 1, "the voice was still due");
 });

@@ -816,7 +816,7 @@ test("the flare's look follows the schedule", async () => {
       last = v.warn;
     }
     for (let s = f.burnAt + 0.5; s < f.endAt - 1; s += 0.25) assert.equal(flareView(s).burn, 1, `blazing at ${s - f.burnAt}`);
-    assert.equal(flareView(f.endAt + 0.01).burn, 0);
+    assert.equal(flareView(f.endAt + 0.51).burn, 0); // dimmed half a second after the burn
     assert.ok(Math.abs(flareView(f.endAt + 1).since - (f.endAt + 1 - f.burnAt)) < 1e-9);
     t = f.endAt + FLARE.fade + 1;
   }
@@ -832,4 +832,157 @@ test("the two patches stand 130 to 140 degrees apart", async () => {
     assert.ok(Math.abs(Math.hypot(...dir) - 1) < 1e-9 && Math.abs(Math.hypot(...dir2) - 1) < 1e-9);
     t = f.endAt + 4;
   }
+});
+
+test("the sun blazes until the burn ends, then dims over half a second", async () => {
+  const { flareView } = await import("../src/client/look/flarepose.js");
+  const { flareAt } = await import("../src/sim/flares.js");
+  const f = flareAt(0);
+  assert.equal(flareView(f.endAt - 0.05).burn, 1);
+  const mid = flareView(f.endAt + 0.25).burn;
+  assert.ok(mid > 0.3 && mid < 0.7, `${mid}`);
+  assert.equal(flareView(f.endAt + 0.6).burn, 0);
+});
+
+test("the hook opens as it catches and folds as it reels back", async () => {
+  const { hookPose } = await import("../src/client/look/proppose.js");
+  const { snap, reel, spin } = LOOK.props.hook;
+  assert.equal(hookPose("flying", 0.3).open, 0);
+  assert.ok(Math.abs(hookPose("flying", 0.5).spin - spin * 0.5) < 1e-9, "spins in flight");
+  assert.equal(hookPose("caught", 0).open, 0);
+  const half = hookPose("caught", snap / 2).open;
+  assert.ok(half > 0.3 && half < 1, `${half}`);
+  assert.equal(hookPose("caught", snap).open, 1);
+  assert.equal(hookPose("caught", 5).open, 1);
+  assert.equal(hookPose("reeling", 0).open, 1);
+  assert.equal(hookPose("reeling", reel).open, 0);
+});
+
+test("the props file has a grappling hook: a shank along +y about half a metre long, and a prong pivoting at the crown", () => {
+  const glb = readGlb(PROPS_GLB);
+  const hook = nodeVertices(glb, "hook").points, prong = nodeVertices(glb, "hook_prong").points;
+  const ys = hook.map((p) => p[1]);
+  assert.ok(Math.max(...ys) > 0.05 && Math.min(...ys) < -0.4 && Math.max(...ys) - Math.min(...ys) < 0.7, "shank along +y, nose forward");
+  for (const p of hook) assert.ok(Math.hypot(p[0], p[2]) < 0.06, `slim: ${p}`);
+  // Folded, the prong runs back along -y from its pivot with its claw out along +z.
+  assert.ok(Math.min(...prong.map((p) => p[1])) < -0.25 && Math.max(...prong.map((p) => p[1])) <= 0.02);
+  assert.ok(Math.max(...prong.map((p) => p[2])) > 0.08, "the claw sticks out");
+});
+
+test("the third-person camera sits back, right and up of the eye, and never inside a body", async () => {
+  const { thirdCamera } = await import("../src/client/look/camerapose.js");
+  const { createSystem, posesAt } = await import("../src/sim/system.js");
+  const tuning = await import("../src/tuning.js");
+  const system = createSystem(tuning.BODIES), poses = posesAt(system, 0), { back, side, lift } = LOOK.third;
+  // Open space, far above the sun.
+  const eye = [0, 400, 0], dir = [0, 0, -1], up = [0, 1, 0];
+  const cam = thirdCamera(eye, dir, up, system, poses);
+  const right = [1, 0, 0];
+  const want = eye.map((x, i) => x - dir[i] * back + right[i] * side + up[i] * lift);
+  assert.ok(Math.hypot(...cam.map((x, i) => x - want[i])) < 1e-9, `${cam}`);
+  // Pressed against Mid's moon, looking straight away from it: the camera's spot would be inside it.
+  const b = system.byId["mid-moon"], c = poses["mid-moon"].pos, n = [0, 1, 0];
+  const near = c.map((x, i) => x + n[i] * (b.radius + 0.5));
+  const tight = thirdCamera(near, n, [1, 0, 0], system, poses);
+  for (const k of system.bodies) {
+    const d = Math.hypot(...tight.map((x, i) => x - poses[k.id].pos[i])) - k.radius;
+    assert.ok(d > 0.2, `${k.id}: ${d}`);
+  }
+  assert.ok(tight.map((x, i) => (x - near[i]) * n[i]).reduce((a, x) => a + x) < 0.01, "pulled in towards the eye, not through");
+});
+
+test("the third-person crosshair is where the shot lands", async () => {
+  const { aimPoint } = await import("../src/client/look/camerapose.js");
+  const tuning = await import("../src/tuning.js");
+  const { createWorld } = await import("../src/sim/world.js");
+  const { createEntity } = await import("../src/sim/entity.js");
+  const w = createWorld(tuning, { solo: false });
+  const eye = [0, 400, 0], dir = [0, 0, -1];
+  assert.deepEqual(aimPoint(w, null, eye, dir), [0, 400, -300], "nothing: 300 m out");
+  // A player 5 m ahead, a little off the line but in it with their body.
+  w.entities.you = createEntity("you", "player", [0.2, 400 - tuning.PLAYER.hit.body.at, -5], [0, 1, 0]);
+  const hit = aimPoint(w, null, eye, dir);
+  assert.ok(hit[2] > -5 && hit[2] < -4, `${hit}`);
+  // A body ahead: Mid, from 40 m out.
+  const mid = w.poses.mid.pos, r = w.system.byId.mid.radius;
+  const from = [mid[0], mid[1], mid[2] + r + 40];
+  const onMid = aimPoint(w, null, from, [0, 0, -1]);
+  assert.ok(Math.abs(onMid[2] - (mid[2] + r)) < 0.01, `${onMid}`);
+});
+
+test("a blast flashes, swells to its size, turns to smoke and is gone by its life", async () => {
+  const { blastLook } = await import("../src/client/look/blastpose.js");
+  const { ROCKET } = await import("../src/tuning.js");
+  const size = 4, at = (t) => blastLook(t, size);
+  assert.equal(at(0).flash, 1);
+  assert.ok(at(0).fireSize < size && at(0).sparks === 1);
+  assert.ok(at(0.1).flash < 0.2 && at(0.1).fireSize > at(0).fireSize && at(0.1).fireSize < size);
+  assert.equal(at(0.25).fireSize, size);
+  assert.equal(at(ROCKET.showFor).fireSize, size, "at the old blast's end it still shows its reach");
+  assert.equal(at(0.25).flash, 0);
+  const late = at(0.8);
+  assert.ok(late.fire === 0 && late.smoke > 0 && late.ring === 0 && late.sparks === 0, JSON.stringify(late));
+  const gone = at(LOOK.blast.life + 0.1);
+  for (const k of ["flash", "fire", "smoke", "ring", "sparks", "light"]) assert.equal(gone[k], 0, k);
+  assert.ok(at(0.2).ringSize > 0 && at(0.2).ringSize <= 1.6 * size);
+});
+
+test("blasts reuse the oldest of a fixed pool", async () => {
+  const { pickSlot } = await import("../src/client/look/blastpose.js");
+  const slots = [];
+  for (let i = 0; i < 13; i++) {
+    const k = pickSlot(slots, 12);
+    for (let j = 0; j < slots.length; j++) if (slots[j] !== null) slots[j] += 0.1;
+    slots[k] = 0;
+  }
+  assert.equal(slots.length, 12);
+  assert.equal(pickSlot([0.5, null, 0.9], 3), 1, "a free slot first");
+  assert.equal(pickSlot([0.5, 0.2, 0.9], 3), 2, "else the oldest");
+});
+
+test("the Milky Way is a band right round the sky, brightest along its middle and towards its core", async () => {
+  const { milkyBand } = await import("../src/client/look/skycheck.js");
+  const m = LOOK.sky.milky, n = Math.hypot(...m.pole), pole = m.pole.map((x) => x / n);
+  // A great circle square to the pole: every point on it is in the band.
+  const a = [pole[1], -pole[0], 0].map((x) => x / Math.hypot(pole[1], pole[0])), b = [
+    pole[1] * a[2] - pole[2] * a[1], pole[2] * a[0] - pole[0] * a[2], pole[0] * a[1] - pole[1] * a[0]];
+  for (let k = 0; k < 12; k++) {
+    const t = (k * Math.PI) / 6, d = a.map((x, i) => x * Math.cos(t) + b[i] * Math.sin(t));
+    assert.ok(milkyBand(d) > 0.5, `on the band at ${k * 30} degrees: ${milkyBand(d)}`);
+  }
+  assert.ok(milkyBand(pole) < 0.01, "not at its pole");
+  const core = m.core, back = core.map((x) => -x);
+  assert.ok(milkyBand(core) > milkyBand(back) * 1.3, "brighter towards the core");
+  // Clear of the galaxy and the nebulas' middles, so it doesn't drown them.
+  for (const d of [LOOK.sky.galaxy.dir, ...LOOK.sky.nebulas.map((x) => x.dir)]) {
+    const u = d.map((x) => x / Math.hypot(...d));
+    assert.ok(milkyBand(u) < 0.25, `${d}: ${milkyBand(u)}`);
+  }
+});
+
+test("the outer ring is a wide band of big rocks at 680 to 740 m, beyond the void, and the belt draws as before", async () => {
+  const { beltRocks } = await import("../src/client/look/proppose.js");
+  const { seeded: rng } = await import("../src/sim/world.js"); // any seeded stream; common.js's needs three.js
+  const { BELT, VOID_RADIUS } = await import("../src/tuning.js");
+  const R = LOOK.outerRing, rocks = beltRocks(rng(R.seed), R);
+  assert.equal(rocks.length, R.rocks);
+  assert.ok(R.inner > VOID_RADIUS, "scenery past the edge of the game");
+  for (const k of rocks) {
+    const r = Math.hypot(k.pos[0], k.pos[2]);
+    assert.ok(r >= R.inner && r <= R.outer && Math.abs(k.pos[1]) <= R.thick / 2, `${k.pos}`);
+    assert.ok(k.scale[0] >= R.size[0] && k.scale[0] <= R.size[1]);
+  }
+  // The belt takes 11 draws a rock from the renderer's shared stream, in the order it always did, so every
+  // body made after it looks as it did.
+  let n = 0;
+  const counted = () => ((n = (n + 1) % 7), 0.05 + n * 0.13);
+  const draws = (() => { let c = 0; const r = rng(3); return [() => (c++, r()), () => c]; })();
+  beltRocks(draws[0], BELT);
+  assert.equal(draws[1](), 11 * BELT.rocks);
+  const first = beltRocks(counted, { ...BELT, rocks: 1 })[0];
+  // Draws 0.18, 0.31, 0.44, 0.57, ...: radius, angle, size, height in that order.
+  const r = BELT.inner + 0.18 * (BELT.outer - BELT.inner), a = 0.31 * 2 * Math.PI;
+  assert.ok(Math.abs(first.pos[0] - r * Math.cos(a)) < 1e-9 && Math.abs(first.pos[2] - r * Math.sin(a)) < 1e-9);
+  assert.ok(Math.abs(first.pos[1] - (0.57 - 0.5) * BELT.thick) < 1e-9);
+  assert.ok(Math.abs(first.scale[0] - (BELT.size[0] + 0.44 * (BELT.size[1] - BELT.size[0]))) < 1e-9);
 });

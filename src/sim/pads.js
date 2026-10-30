@@ -47,7 +47,7 @@ export function predictLaunch(world, pad, t) {
   const e = createEntity("cue", "dummy", at, surfaceInfo(body, sim.poses[pad.body], at).normal);
   standOn(e, pad.body);
   launch(sim, e, pad);
-  const sun = world.system.bodies.find((b) => b.kind === "sun");
+  const sun = world.system.sun;
   const path = [[...e.pos]];
   const steps = Math.round(PAD_CUE.predict / TICK);
   for (let i = 1; i <= steps; i++) {

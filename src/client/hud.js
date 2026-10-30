@@ -1,9 +1,12 @@
 // The HUD: crosshair (with a ring when the hook can reach something), health, weapon and ammo, the weapons
 // you hold, booster fuel (extra fuel from a pickup in a second colour), toasts, "Click to play", hit
 // feedback (a red vignette and an arc towards the shooter), the kill feed, scores, a solar flare's banner and
-// the orange glow while it burns you, and online the name box and the connection's status screens. Names come from the server: only ever set as text.
+// the orange glow while it burns you, your distance to the sun beside the booster (orange where a flare
+// reaches), and online the name box and the connection's status screens. Names come from the server: only ever
+// set as text.
 import { BOOST, PLAYER, HOOK, WEAPON_ORDER, NET, FEEDBACK, COLOURS, LOOK } from "../tuning.js";
 import { segmentHit } from "../sim/collide.js";
+import { sunReadout } from "./look/flarepose.js";
 import { viewDir } from "../sim/entity.js";
 import { add, sub, scale, dot } from "../sim/vec.js";
 
@@ -85,7 +88,7 @@ export function createHud(root, online = false) {
   const cross = el(root, "hud crosshair");
   // Health matters even alone: your own rockets hurt you.
   const slots = WEAPON_ORDER.map((w, i) => `<span data-w="${w}">${i + 1}</span>`).join("");
-  const bottom = el(root, "hud bottom", `<div class="health">Health<div class="bar"><div></div></div></div><div class="slots">${slots}</div><div class="weapon"></div><div class="fuel">Booster<div class="bar"><div></div><div class="over"></div></div></div>`);
+  const bottom = el(root, "hud bottom", `<div class="health">Health<div class="bar"><div></div></div></div><div class="slots">${slots}</div><div class="weapon"></div><div class="fuel">Booster<span class="sun"></span><div class="bar"><div></div><div class="over"></div></div></div>`);
   const vignette = el(root, "hud vignette");
   const flames = el(root, "hud flames"); // your booster's light from below while you boost
   const burn = el(root, "hud burn"); // a solar flare's light on you
@@ -95,7 +98,7 @@ export function createHud(root, online = false) {
   const board = el(root, "hud board");
   const toast = el(root, "hud toast");
   const screen = el(root, "hud screen");
-  const play = el(root, "hud play", `Click to play<small>WASD move · mouse look · space jump, hold in the air to boost · click fire · right mouse hook · 1 to 6 / wheel weapons · Shift zoom (sniper) · O orbits · P pad cues · M sound · H hit sound</small>`);
+  const play = el(root, "hud play", `Click to play<small>WASD move · mouse look · space jump, hold in the air to boost · click fire · right mouse hook · 1 to 6 / wheel weapons · Shift zoom (sniper) · V third person · O orbits · P pad cues · M sound · H hit sound</small>`);
   let toastAt = -Infinity, vignetteAt = -Infinity, vignetteStrength = 0, boardOn = false;
   const arcs = []; // { from, at, node }
   const lines = []; // { at, node }
@@ -137,8 +140,9 @@ export function createHud(root, online = false) {
     },
     // now: real seconds. camera: { pos, right, up, forward } as drawn, to aim the hit arcs; null when there is none.
     // feel: your own boost (look/gunpose.js thrustView): the flames' light and a burning fuel bar.
-    // sun: { banner (look/flarepose.js flareBanner), burning (you, now) } for a solar flare.
-    update(world, locked, now, selfId = "player", camera = null, feel = null, sun = null) {
+    // sun: { banner (look/flarepose.js flareBanner), burning (you, now) } for a solar flare. aim: in third
+    // person, the screen point { x, y } (px) where your shot lands, for the crosshair; null in first person.
+    update(world, locked, now, selfId = "player", camera = null, feel = null, sun = null, aim = null) {
       const p = world.entities[selfId];
       // Online there is no body until the first snapshot.
       for (const x of [bottom, cross, play]) x.style.display = p ? "" : "none";
@@ -187,10 +191,16 @@ export function createHud(root, online = false) {
         s.classList.toggle("hand", p.weapon === s.dataset.w);
       }
       bottom.querySelector(".fuel .bar > div").style.width = `${(100 * Math.min(p.fuel, BOOST.fuel)) / BOOST.fuel}%`;
-      const glow = feel ? feel.glow : 0;
+      cross.style.left = aim ? `${aim.x}px` : "";
+      cross.style.top = aim ? `${aim.y}px` : "";
+      // The booster's light from below is your own view's; in third person you see the flames on your figure.
+      const glow = feel && !aim ? feel.glow : 0;
       flames.style.opacity = glow;
       if (glow > 0) flames.style.setProperty("--flame", hexColour(world.players[selfId]?.colour ?? COLOURS[0]));
       bottom.querySelector(".fuel").classList.toggle("burning", glow > 0.05);
+      const sunline = bottom.querySelector(".fuel .sun"), sr = sunReadout(world, p);
+      sunline.textContent = sr.text;
+      sunline.classList.toggle("near", sr.near);
       bottom.querySelector(".fuel .over").style.width = `${(100 * Math.max(0, p.fuel - BOOST.fuel)) / BOOST.fuel}%`;
       bottom.querySelector(".health .bar > div").style.width = `${p.alive ? (100 * Math.max(0, p.health)) / PLAYER.health : 0}%`;
       cross.classList.toggle("hookable", locked && hookable(world, p));

@@ -7,6 +7,10 @@ import { fire } from "../src/sim/weapons.js";
 import { pickupPos } from "../src/sim/pickups.js";
 import { add, scale, dist } from "../src/sim/vec.js";
 import { createDirector, heard, SOUNDS } from "../src/client/sounds.js";
+import { flareAt } from "../src/sim/flares.js";
+import { createEntity as standing, standOn } from "../src/sim/entity.js";
+import { posesAt } from "../src/sim/system.js";
+import { norm, sub } from "../src/sim/vec.js";
 
 const { SOUND, PLAYER } = tuning;
 const FRAME = 1 / 60;
@@ -38,7 +42,7 @@ test("the list of sounds is the one Task 3 makes recipes for", () => {
   assert.deepEqual([...SOUNDS].sort(), [
     "pistol", "shotgun", "rocket", "minigun", "sniper", "railgun", "rocketFlight", "explode", "rockIncoming", "rockBurn",
     "ding", "hurt", "death", "announcer", "boink", "pickup", "pickupBack", "step", "hookFire", "hookPull", "boost",
-    "switch", "empty", "scream",
+    "switch", "empty", "scream", "flareAlarm", "flareVoice", "flareRoar", "sizzle",
   ].sort());
   for (const w of tuning.WEAPON_ORDER) assert.ok(SOUNDS.includes(w), `${w} fires a sound of its own name`);
 });
@@ -413,4 +417,47 @@ test("while a status screen covers the game, nothing plays and no loop is held",
   assert.deepEqual(quiet.once, []);
   assert.equal(quiet.loops.size, 0);
   assert.equal(heard(undefined, true).loops.size, 0, "no director yet: still silent");
+});
+
+// Frames of 1/60 s from t0 to t1, counting each sound's plays.
+function across(d, w, t0, t1) {
+  w.t = t0;
+  w.poses = posesAt(w.system, w.t);
+  const count = {};
+  d.frame(w, [], FRAME, on);
+  while (w.t < t1) {
+    const out = play(d, w);
+    for (const n of names(out)) count[n] = (count[n] || 0) + 1;
+  }
+  return count;
+}
+
+test("a flare's warning sounds the alarm and the voice once, and its burst roars once", () => {
+  const f = flareAt(0), d = createDirector({ selfId: "me", online: false }), w = scene();
+  const count = across(d, w, f.warnAt - 1, f.burnAt + 1);
+  assert.equal(count.flareAlarm, 1);
+  assert.equal(count.flareVoice, 1);
+  assert.equal(count.flareRoar, 1);
+});
+
+test("joining mid-warning plays no late alarm", () => {
+  const f = flareAt(0), d = createDirector({ selfId: "me", online: false }), w = scene();
+  const count = across(d, w, f.warnAt + SOUND.flareVoiceAfter + 0.5, f.burnAt - 0.5);
+  assert.equal(count.flareAlarm, undefined);
+  assert.equal(count.flareVoice, undefined);
+});
+
+test("you hear the sizzle only while you burn", () => {
+  const f = flareAt(0), d = createDirector({ selfId: "me", online: false }), w = scene();
+  w.t = f.burnAt + 1;
+  w.poses = posesAt(w.system, w.t);
+  const hot = w.poses.hot.pos, u = norm(sub(w.poses.sun.pos, hot)), r = w.system.byId.hot.radius;
+  const put = (dir) => {
+    w.entities.me = standing("me", "player", add(hot, scale(dir, r)), dir);
+    standOn(w.entities.me, "hot");
+  };
+  put(u);
+  assert.ok(play(d, w).loops.has("sizzle"), "in the light");
+  put(scale(u, -1));
+  assert.ok(!play(d, w).loops.has("sizzle"), "on the night side");
 });

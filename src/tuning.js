@@ -148,6 +148,7 @@ export const ROCK_LOOK = { trail: 60, trailSize: 1.6, glow: 1.3, glowOpacity: 0.
 export const SOUND = {
   range: 120, near: 6, own: 1, others: 0.7, gap: 0.5, stride: 1.6, stepSpeed: 2, maxVoices: 24, repeat: 0.05,
   announcerOthers: 0.4, hold: 0.15, voice: 1.5, master: 0.8, maxLoops: 8, loopKeep: 5,
+  flareVoiceAfter: 1.4, // s after a flare's alarm starts that the voice speaks, once the alarm is done
 };
 
 export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade: 1, feedFor: 5, flash: 0.15, feedMax: 6 };
@@ -295,6 +296,7 @@ export const LOOK = {
     swell: 0.08, corona: 0.6, coronaBoost: 1.5, glare: 1.5, bleach: 0.8,
     flash: { time: 1.2, strength: 0.6 },
     wave: { reach: 160, time: 1.6, strength: 0.3 },
+    tint: { opacity: 0.55, pulse: 3 }, // the screen's orange glow while it burns you: strongest, pulses a second
     cloud: { puffs: 40, cone: 0.35, speed: [14, 30], size: [10, 45], opacity: 0.55, color: 0xff7a2a, hot: 0xffd890 },
   },
   planets: {

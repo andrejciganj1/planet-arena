@@ -97,7 +97,7 @@ test("createAudio with a throwing AudioContext does nothing and never throws", (
 test("every sound name from sounds.js has a recipe", () => {
   for (const name of SOUNDS) assert.equal(typeof RECIPES[name], "function", `no recipe for ${name}`);
   for (const name of Object.keys(RECIPES)) assert.ok(SOUNDS.includes(name), `${name} is played by nothing`);
-  assert.deepEqual([...LOOPS].sort(), ["boost", "hookPull", "rockIncoming", "rocketFlight"]);
+  assert.deepEqual([...LOOPS].sort(), ["boost", "hookPull", "rockIncoming", "rocketFlight", "sizzle"]);
 });
 
 test("past SOUND.maxLoops only the loops nearest the listener sound", () => {

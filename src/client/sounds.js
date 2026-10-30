@@ -5,13 +5,14 @@
 import { SOUND } from "../tuning.js";
 import { add, scale, len } from "../sim/vec.js";
 import { pickupPos } from "../sim/pickups.js";
+import { flareAt, burnRate } from "../sim/flares.js";
 
 // Every sound there is; the firing sounds share their weapon's name. Loops: rocketFlight, rockIncoming,
-// hookPull, boost.
+// hookPull, boost, sizzle.
 export const SOUNDS = [
   "pistol", "shotgun", "rocket", "minigun", "sniper", "railgun", "rocketFlight", "explode", "rockIncoming", "rockBurn",
   "ding", "hurt", "death", "announcer", "boink", "pickup", "pickupBack", "step", "hookFire", "hookPull", "boost",
-  "switch", "empty", "scream",
+  "switch", "empty", "scream", "flareAlarm", "flareVoice", "flareRoar", "sizzle",
 ];
 
 // While a status screen covers the game (online: connecting, unreachable, full, version, no player yet) the
@@ -145,6 +146,15 @@ export function createDirector({ selfId, online }) {
       if (p.kind === "rocket") loops.set(`rocket:${p.id}`, { name: "rocketFlight", pos: p.pos, own: p.owner === selfId });
     }
     for (const r of world.asteroids || []) loops.set(`rock:${r.id}`, { name: "rockIncoming", pos: r.pos, own: false });
+
+    // A solar flare is for everyone, in your head: the alarm, then the voice, as the warning starts, and the roar
+    // at the burst; only on a frame that follows the last (a late join hears none of it). The sizzle while you burn.
+    const f = flareAt(world.t, world.tuning.FLARE), crossed = (at) => !gap && lastT < at && at <= world.t;
+    if (crossed(f.warnAt)) once.push({ name: "flareAlarm", pos: null, own: true });
+    if (crossed(f.warnAt + SOUND.flareVoiceAfter)) once.push({ name: "flareVoice", pos: null, own: true });
+    if (crossed(f.burnAt)) once.push({ name: "flareRoar", pos: null, own: true });
+    const me = world.entities[selfId];
+    if (me && burnRate(world, me) > 0) loops.set("sizzle", { name: "sizzle", pos: null, own: true, src: selfId });
 
     lastT = world.t;
     return { once, loops };

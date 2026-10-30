@@ -24,6 +24,8 @@ import { createDirector, heard } from "./sounds.js";
 import { createAudio } from "./audio.js";
 import { SERVER } from "./config.js";
 import { createThrust, thrustView } from "./look/gunpose.js";
+import { flareBanner } from "./look/flarepose.js";
+import { burnRate } from "../sim/flares.js";
 
 const params = new URLSearchParams(location.search);
 const server = params.has("solo") ? null : params.get("server") || (location.hostname.endsWith(".github.io") ? SERVER : null);
@@ -156,7 +158,8 @@ function frame(now) {
   const feel = thrustView(thrust.frame(p, secs, elapsed), secs);
   renderer.draw(alpha, locked ? input.pending() : { yaw: 0, pitch: 0 }, zoom, shift, secs, feel);
   const cam = renderer.camera();
-  hud.update(world, locked, secs, id, cam, feel);
+  const me = id ? world.entities[id] : null;
+  hud.update(world, locked, secs, id, cam, feel, { banner: flareBanner(world.t), burning: !!me && burnRate(world, me) > 0 });
   // Heard from the camera just drawn, so a sound comes from where it is on screen.
   audio.setListener(cam.pos, cam.forward, cam.up);
   if (sounds) {

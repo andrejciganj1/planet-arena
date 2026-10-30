@@ -2,6 +2,8 @@
 import { FLARE, LOOK } from "../../tuning.js";
 import { flareAt } from "../../sim/flares.js";
 import { hashRand } from "../../sim/weapons.js";
+import { hitCentre } from "../../sim/entity.js";
+import { dist } from "../../sim/vec.js";
 
 // The banner over the game: the warning's countdown, then the burn's order; null when there is no flare.
 export function flareBanner(t, F = FLARE) {
@@ -28,4 +30,12 @@ export function flareView(t, F = FLARE, cfg = LOOK.flare) {
     warn: f.phase === "warn" ? (t - f.warnAt) / F.warn : 0,
     burn, since: f.phase === "calm" ? -Infinity : t - f.burnAt, dir, dir2,
   };
+}
+
+// Your distance to the sun for the HUD, from your middle to its centre as the flare measures it: near when a
+// flare can reach you there.
+export function sunReadout(world, e, F = FLARE) {
+  const sun = world.system.bodies.find((b) => b.kind === "sun");
+  const d = dist(hitCentre(e), world.poses[sun.id].pos);
+  return { text: `Sun ${Math.round(d)} m`, near: d < F.reach };
 }

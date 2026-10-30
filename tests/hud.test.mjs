@@ -64,3 +64,16 @@ test("the flare banner counts down the warning, then tells you to get out of the
   assert.equal(flareBanner(f.warnAt - 1), null);
   assert.equal(flareBanner(f.endAt + 1), null);
 });
+
+test("the sun readout gives whole metres and turns orange inside the flare's reach", async () => {
+  const { sunReadout } = await import("../src/client/look/flarepose.js");
+  const tuning = await import("../src/tuning.js");
+  const { createWorld } = await import("../src/sim/world.js");
+  const { createEntity } = await import("../src/sim/entity.js");
+  const w = createWorld(tuning, { solo: false }), sun = w.poses.sun.pos, r = tuning.PLAYER.radius;
+  // Feet r below the middle, along +y from the sun: the middle is `d` m out.
+  const at = (d) => createEntity("x", "player", [sun[0], sun[1] + d - r, sun[2]], [0, 1, 0]);
+  assert.deepEqual(sunReadout(w, at(46.4)), { text: "Sun 46 m", near: true });
+  assert.deepEqual(sunReadout(w, at(149.6)), { text: "Sun 150 m", near: true });
+  assert.deepEqual(sunReadout(w, at(151)), { text: "Sun 151 m", near: false });
+});

@@ -1,9 +1,12 @@
 // The HUD: crosshair (with a ring when the hook can reach something), health, weapon and ammo, the weapons
 // you hold, booster fuel (extra fuel from a pickup in a second colour), toasts, "Click to play", hit
 // feedback (a red vignette and an arc towards the shooter), the kill feed, scores, a solar flare's banner and
-// the orange glow while it burns you, and online the name box and the connection's status screens. Names come from the server: only ever set as text.
+// the orange glow while it burns you, your distance to the sun beside the booster (orange where a flare
+// reaches), and online the name box and the connection's status screens. Names come from the server: only ever
+// set as text.
 import { BOOST, PLAYER, HOOK, WEAPON_ORDER, NET, FEEDBACK, COLOURS, LOOK } from "../tuning.js";
 import { segmentHit } from "../sim/collide.js";
+import { sunReadout } from "./look/flarepose.js";
 import { viewDir } from "../sim/entity.js";
 import { add, sub, scale, dot } from "../sim/vec.js";
 
@@ -85,7 +88,7 @@ export function createHud(root, online = false) {
   const cross = el(root, "hud crosshair");
   // Health matters even alone: your own rockets hurt you.
   const slots = WEAPON_ORDER.map((w, i) => `<span data-w="${w}">${i + 1}</span>`).join("");
-  const bottom = el(root, "hud bottom", `<div class="health">Health<div class="bar"><div></div></div></div><div class="slots">${slots}</div><div class="weapon"></div><div class="fuel">Booster<div class="bar"><div></div><div class="over"></div></div></div>`);
+  const bottom = el(root, "hud bottom", `<div class="health">Health<div class="bar"><div></div></div></div><div class="slots">${slots}</div><div class="weapon"></div><div class="fuel">Booster<span class="sun"></span><div class="bar"><div></div><div class="over"></div></div></div>`);
   const vignette = el(root, "hud vignette");
   const flames = el(root, "hud flames"); // your booster's light from below while you boost
   const burn = el(root, "hud burn"); // a solar flare's light on you
@@ -195,6 +198,9 @@ export function createHud(root, online = false) {
       flames.style.opacity = glow;
       if (glow > 0) flames.style.setProperty("--flame", hexColour(world.players[selfId]?.colour ?? COLOURS[0]));
       bottom.querySelector(".fuel").classList.toggle("burning", glow > 0.05);
+      const sunline = bottom.querySelector(".fuel .sun"), sr = sunReadout(world, p);
+      sunline.textContent = sr.text;
+      sunline.classList.toggle("near", sr.near);
       bottom.querySelector(".fuel .over").style.width = `${(100 * Math.max(0, p.fuel - BOOST.fuel)) / BOOST.fuel}%`;
       bottom.querySelector(".health .bar > div").style.width = `${p.alive ? (100 * Math.max(0, p.health)) / PLAYER.health : 0}%`;
       cross.classList.toggle("hookable", locked && hookable(world, p));

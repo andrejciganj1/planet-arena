@@ -89,13 +89,49 @@ is a server change too: deploy it with `fly deploy --ha=false`.
   more than it takes to leave most planets, so boost with care. Extra fuel from a pickup shows in blue.
 - The crosshair gets a ring when the hook can catch something.
 - You start with the pistol, which never runs out. Pickups float over fixed spots on every planet and
-  the moons: health (white with a red cross), booster fuel (orange, fills the tank to double), weapons (long
-  bars) and ammo (small boxes, in the weapon's colour). A taken pickup comes back after a while; its spot
-  shows a faint outline meanwhile. The sniper rifle is on the far planet and the railgun on the hot planet. Dying
+  the moons: health (a white case with a red cross), booster fuel (an orange can, fills the tank to double),
+  weapons (the gun itself) and ammo (a dark crate striped in the weapon's colour). A taken pickup comes back
+  after a while; its spot shows a faint ghost meanwhile. The sniper rifle is on the far planet and the railgun on the hot planet. Dying
   costs you everything but the pistol.
-- Jump pads are the discs with an arrow. Green means a launch right now lands on another body; red means
-  it won't. Stand near one to see the predicted path.
-- The dummy (orange, with a face; drawn as a head and body sphere) lives on the tiny green planet and comes back 3 s after it dies.
+- Jump pads are the metal plates with an arrow. Green lights mean a launch right now lands on another body;
+  red means it won't. Stand near one to see the predicted path.
+- The dummy (a dull grey alien) lives on the tiny green planet and comes back 3 s after it dies.
+
+## The look
+
+Stylised and rich, after Freelancer: glowing nebulas, a churning sun, planets you can tell apart (lava, jungle,
+ocean, desert, gas giant, ice, cratered moons), aliens in bubble helmets, proper guns. Everything is made here,
+by scripts in the repo or by shaders; nothing is downloaded or bought.
+
+- **Painted at load, no image files.** The sky (nebulas, a galaxy, faint stars) and every planet and moon are
+  painted by shaders into cube maps when the page opens (the planets one a frame, after the first frame, so
+  the game starts at once). The sun's surface, its corona and the glow when you look at it are shaders that
+  run every frame. Shapes and colours are in `src/client/look/` (`sky.js`, `sun.js`, `planets.js`), the
+  numbers in `LOOK` in `src/tuning.js`.
+- **Models from Blender scripts.** The alien, the six weapons and the props (pickups, pads, rocks) are built
+  by Python scripts run headless in Blender, from code and fixed seeds, so a rebuild gives the same file:
+
+  ```
+  blender -b -P tools/blender/alien.py -- --body 0.4 0.4 --head 1.25 0.55 --out assets/models/alien.glb
+  blender -b -P tools/blender/weapons.py -- --out assets/models/weapons.glb
+  blender -b -P tools/blender/props.py -- --out assets/models/props.glb
+  ```
+
+  The alien's `--body` and `--head` are `PLAYER.hit`'s spheres (the helmet is the head hit sphere), and the
+  weapons' accents are `LOOK.weapons.colors`; `tests/look.test.mjs` checks both against the files. Until a
+  model loads (or if it fails) the game draws simple shapes.
+- **Quality.** The page drops a level when frames average under 50 fps for 2 s, and climbs back only after a
+  steady stretch (longer each time a level fails, so a borderline machine settles instead of flipping). On a
+  high-density screen the lower levels draw fewer pixels (a 2x screen: 2, 1.5, then 1 per CSS pixel; never
+  under 1, so a normal screen stays sharp). Level 1 also draws one layer of the planets' close-up detail
+  instead of all and fewer octaves of the sun's churn; level 0 turns the close-up detail and the sun's screen
+  glow off and draws fewer octaves and corona streamers still.
+- **Look check** (Playwright through `npx`, static server running):
+  `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/look_check.cjs "http://localhost:8100/" shots/look`
+  takes a screenshot of every view (each planet from afar and by day and night, the sun, the sky, the alien,
+  each weapon, the props) with the clock standing still, checks a player on a night side stands out, times
+  each quality level at 1080p, checks a slowed CPU drops a level and stays there, and sums the asset bytes.
+  A pattern after the folder takes only the matching views, e.g. `'pickup|belt'`.
 
 ## Sounds
 

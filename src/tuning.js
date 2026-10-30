@@ -121,8 +121,8 @@ export const COLOURS = [0xffd23f, 0xe8505b, 0x4fb0e8, 0x6fd36b, 0xb06fe8, 0xff8a
 
 // What being hit and kills look like (seconds unless noted). Looks only. Vignette: full strength at `full`
 // damage, never above `max`; the bar over a hit player flashes white for `flash`.
-// Looks of a flying asteroid: `trail` drawn positions kept behind it, `glow` the hot shell's size as a
-// multiple of the rock's radius and `glowOpacity` how solid it is, `trailSize` the m across of each trail
+// Looks of a flying asteroid: `trail` drawn positions kept behind it, `glow` the hot haze's radius as a
+// multiple of the rock's and `glowOpacity` how solid it is, `trailSize` the m across of each trail
 // dot, colours as hex.
 export const ROCK_LOOK = { trail: 60, trailSize: 1.6, glow: 1.3, glowOpacity: 0.25, rock: 0x3a3330, hot: 0xff7a1f, trailColor: 0xffa040 };
 
@@ -142,6 +142,137 @@ export const SOUND = {
 };
 
 export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade: 1, feedFor: 5, flash: 0.15, feedMax: 6 };
+
+// The look, looks only. budget: bytes the page may download for all look assets (tools/look_check.cjs).
+// quality, the automatic step (look/quality.js): a level down when frames average over `down` s across a
+// `window` s, a level up after `up` s of windows that weren't; a frame over `pause` s is a hidden tab coming
+// back, not a slow frame, but a run of them is a very slow machine. Each time a level fails, the wait to
+// climb back into it doubles, up to `maxUp` s, so a machine fast one level down settles there; holding the
+// level for `maxUp` s trusts it again. res: the share of the screen's own resolution drawn at each level, lowest
+// first, of at most `most` pixels per CSS pixel (a 3x screen doesn't cost 9 pixels each), but never under one
+// device pixel per CSS pixel (look/quality.js pixelRatio): a 2x screen draws 1, 1.5 and 2, a 1x screen 1 at
+// every level.
+// sky (look/sky.js), painted once at load into a cube map of `size` px a face: intensity scales it all (dim,
+// so players and asteroids stand out); stars: the share of texels holding a faint distant star behind the
+// drawn ones. Each nebula: the direction it lies in, its size (radians), the two colours it shades between
+// and a seed for its shape. galaxy: its direction, size (radians to the disc's edge), tilt (degrees from
+// face on) and turn (degrees round the line of sight).
+// sun (look/sun.js): octaves of churn on the surface and of the corona's streamers at each quality level;
+// churn: how fast the surface moves; corona: how far it reaches, in sun radii; flare: the screen glow's
+// strength looking straight at the sun, drawn from level `flareFrom` up; fade: 1/s, how fast the glow
+// follows the sun going behind a planet.
+// planets (look/planets.js): bake, the cube map's px a face painted at load per planet and moon (a world's own
+// `bake` overrides it); detail, the close-up layer at each quality level (0 off, 1 one layer, 2 all); near,
+// far: m from the eye where it is full and gone. sun, light: the sunlight's colour and strength on the ground;
+// night, nightLight: the faint light on the night side (dark but never black). blob: the soft shadow under
+// figures and pickups, darkest `strength` on the ground, gone `fade` m up, widening by `spread` per m; at most
+// `max` at once. Each world: its kind, a seed for its shapes, relief (m of painted height, for the lighting
+// only), its colours (darkest or main first; see the kind's paint function for each one's role), glow (lava,
+// the island's lights), rim (the haze round its lit edge from afar) and feature (the island, the great
+// storm). Quick to change after a look: colours here, shapes in planets.js.
+// alien (look/aliens.js, the model from tools/blender/alien.py): suit, the suit colour for everyone; dummy, the
+// dummy's skin and trim; trim, how bright the suit's trim glows in the player's colour (what shows a figure on
+// a night side); rim, the bubble's glow at its edge in the same colour; sun, the sunlight on figures as a share
+// of the scene's sun light (figures use the same light as pickups, too strong for a white suit); hold, the
+// gun's size in the hand against the model's own. pose (look/alienpose.js), radians unless noted: steps,
+// strides per s at a walk (one rate at any speed, so a speed change never jumps the stride); swing, armSwing:
+// how far legs and the free arm swing at full run; head: the most the head tips with the aim; aim: the range
+// the gun arm follows the aim in (beyond it the arm would pass through the bubble); support: the free arm
+// against the gun arm; reach: the hook arm above the aim; lean when walking (at full run), just jumped, falling
+// and boosting (the body leans about the head, so a lean over about 0.12 takes the drawn torso off its hit
+// sphere: boosting reads from the trailing legs instead); tuck and dangle: the legs (left, right) just after a
+// jump and after `fall` s in the air; trail: the legs while boosting; fly: the free arm while boosting; flail:
+// the free arm while falling; ease: s, how fast a pose follows its state; boostHold: s a boost pose outlasts
+// the last fuel drop seen.
+// weapons (look/weapons.js, the models from tools/blender/weapons.py; look/gunpose.js): colors, each weapon's
+// accent, its pickup's colour too (the .glb is built with the same, tests/look.test.mjs); glow, how bright an
+// accent glows in its own colour (so a gun reads on a night side); sun, as alien.sun for the gun in view;
+// view, where the grip sits in the camera's frame (m: right, up, back), scale, the gun's size there (smaller
+// and further out than life, so a long gun neither reaches past the near plane nor swells up close; it points
+// straight ahead, so its barrel runs to the crosshair); kick: the recoil after each of your shots, back (m) and up (rad) at its start,
+// gone after `time` s, scaled per weapon by `by`; flash: s a muzzle flash shows, its size per weapon (m, in the
+// model's own size) and its colour; spin: the minigun's barrels, rad per s while firing and for `for` s after.
+// props (look/props.js, the models from tools/blender/props.py; look/proppose.js): pickups float `float` m over
+// their spot, bobbing `bob` m at `bobRate` rad/s, turning `spin` rad/s; glow: how bright their coloured parts
+// glow in their own colour; night: how much the rest glows in its own colour where the sun doesn't reach (so a
+// pickup on a night side keeps a soft glow), nightTint: and in the pickup's colour at full brightness (so a dark
+// part does too); halo: the soft light round one, m across and opacity; sun:
+// as alien.sun; weapon: a gun pickup's size against the gun in view. pads: the plate's lights, by cue (lands,
+// misses, cues hidden), how bright they glow, and the halo over the plate. rocks: the belt's colour and how much
+// one rock's shade differs from the next (a share of it); cracks: how bright a flying rock's hollows glow in ROCK_LOOK.hot;
+// rim: the hot edge round it. comets: each tail's colour, length [base, reach, most] (m: base + reach / the
+// distance to the sun, at most `most`), width at the comet and at the tip (m) and opacity; the dust tail's bend
+// (m sideways per m along, at its tip), trailing the comet's path.
+export const LOOK = {
+  budget: 4_000_000,
+  weapons: {
+    colors: { pistol: 0x8fa1b8, shotgun: 0xc98a4b, rocket: 0x5f8f4e, minigun: 0x9a9fa8, sniper: 0x4b7bc9, railgun: 0x3fe0d0 },
+    glow: 0.35, sun: 0.45,
+    view: [0.2, -0.22, -0.46], scale: 0.95,
+    kick: { time: 0.16, back: 0.035, up: 0.1, by: { pistol: 1, shotgun: 1.6, rocket: 1.4, minigun: 0.35, sniper: 1.8, railgun: 1.5 } },
+    flash: {
+      time: 0.06,
+      size: { pistol: 0.16, shotgun: 0.32, rocket: 0.36, minigun: 0.2, sniper: 0.3, railgun: 0.26 },
+      color: { pistol: 0xffd27a, shotgun: 0xffb45a, rocket: 0xff9a40, minigun: 0xffe08a, sniper: 0xfff0b0, railgun: 0x7ff6ff },
+    },
+    spin: { speed: 30, for: 0.3 },
+  },
+  alien: {
+    suit: 0xe8ebf0, dummy: 0x8a8e94, trim: 0.9, rim: 0.8, sun: 0.45, hold: 1.6,
+    pose: {
+      steps: 2.6, swing: 0.6, armSwing: 0.35, head: 0.5, aim: [-1.3, 0.7], support: -0.35, reach: 0.4,
+      lean: { walk: 0.08, jump: -0.08, fall: 0.1, boost: 0.11 },
+      tuck: [0.75, -0.2], dangle: [0.35, -0.35], trail: [-0.5, -0.35], fly: 2.0, flail: 2.4, fall: 0.6, ease: 0.08, boostHold: 0.15,
+    },
+  },
+  props: {
+    pickups: { float: 1, bob: 0.15, bobRate: 2, spin: 1, glow: 0.6, night: 0.3, nightTint: 0.06, halo: [1.8, 0.5], sun: 0.55, weapon: 2.2 },
+    pads: { lands: 0x3ee05a, misses: 0xe0443e, hidden: 0x8a8f9c, glow: 1.2, halo: [2.6, 0.3] },
+    rocks: { belt: 0x34302d, variety: 0.3, cracks: 1.6, rim: 0.4 },
+    comets: {
+      ion: { color: 0x5fa8ff, length: [12, 2400, 80], width: [0.7, 1.4], opacity: 0.55 },
+      dust: { color: 0xffe6a8, length: [8, 1500, 50], width: [2.2, 10], opacity: 0.55, bend: 0.5 },
+    },
+  },
+  quality: { down: 1 / 50, up: 10, window: 2, pause: 0.25, maxUp: 240, res: [0.5, 0.75, 1], most: 2 },
+  sky: {
+    size: 1024, intensity: 1, stars: 0.004,
+    nebulas: [
+      { dir: [-0.55, 0.12, -0.83], size: 0.95, colors: [0x5b2c9e, 0x2b63c4], seed: 1 },
+      { dir: [0.85, -0.2, 0.45], size: 0.8, colors: [0x13807e, 0x2d4fa8], seed: 2 },
+      { dir: [0.15, 0.5, 0.85], size: 0.7, colors: [0xd0601c, 0x962a5c], seed: 3 },
+      { dir: [-0.2, -0.85, -0.2], size: 0.75, colors: [0x24308c, 0x8c2f7a], seed: 4 },
+    ],
+    galaxy: { dir: [0.5, 0.82, 0.05], size: 0.2, tilt: 60, turn: 25 },
+  },
+  sun: { octaves: [2, 3, 5], streamers: [2, 4, 4], churn: 0.06, corona: 3.2, flare: 0.5, flareFrom: 1, fade: 8 },
+  planets: {
+    bake: { planet: 512, moon: 256 },
+    detail: [0, 1, 2],
+    near: 8, far: 22,
+    sun: 0xfff1d6, light: 1.35, night: 0x8090c0, nightLight: 0.08,
+    blob: { strength: 0.65, fade: 5, spread: 0.3, max: 16 },
+    worlds: {
+      hot: { world: "lava", seed: 1, relief: 0.6, colors: [0x1a1412, 0x3b2f2a, 0x5c2617, 0xff7a20], glow: 0xff5a12, rim: 0xff6a3a },
+      tiny: { world: "jungle", seed: 2, relief: 0.9, colors: [0x163d16, 0x2f7a26, 0x8cbf3a, 0x1f5f66, 0x8a7448], rim: 0x9fe8b8 },
+      mid: {
+        world: "ocean", seed: 3, relief: 0.3, feature: [0.35, 0.55, 0.76],
+        colors: [0x0f4f8c, 0x1fb4c8, 0x9fe6d2, 0xf2e2a8, 0xc9b27a, 0x2a7a6a], glow: 0xffb860, rim: 0xa8e4ff,
+      },
+      heavy: { world: "desert", seed: 4, relief: 1.2, bake: 1024, colors: [0xe8a868, 0xc87a3e, 0xa8482a, 0x4e1e14, 0xf2dcb4], rim: 0xffb478 },
+      giant: {
+        world: "gas", seed: 5, relief: 0, feature: [0.82, -0.28, 0.5],
+        colors: [0x4c3590, 0x8f74da, 0xe2d4f4, 0xb862a6, 0x261a58, 0xf0909a], rim: 0xc8a8ff,
+        ring: { colors: [0xcbb8f0, 0x9a86c8, 0xe8dcc8], opacity: 0.85 },
+      },
+      far: { world: "ice", seed: 6, relief: 0.25, colors: [0xeef8fc, 0x9ed8e2, 0x2f78c0, 0xffffff, 0x6fd3c9], rim: 0xb0fff4, aurora: [0x3cff9c, 0x8a5aff] },
+      moon: { world: "rock", seed: 7, relief: 0.6, craters: 1, colors: [0x9a948c, 0xc4beb4, 0x5c5854] },
+      "mid-moon": { world: "rock", seed: 8, relief: 0.5, craters: 0.7, colors: [0x8e98a2, 0xbcc6cf, 0x4e5862] },
+      "ring-moon": { world: "rock", seed: 9, relief: 0.5, craters: 1.3, colors: [0x9c94aa, 0xc8bfd6, 0x5a5268] },
+      "outer-moon": { world: "rock", seed: 10, relief: 0.6, craters: 0.85, colors: [0xa69e86, 0xd2c8aa, 0x625a46] },
+    },
+  },
+};
 
 // Online play. Ticks unless noted: maxLag, history, rejoin, unreachable and smooth are seconds, snap is metres.
 export const NET = {

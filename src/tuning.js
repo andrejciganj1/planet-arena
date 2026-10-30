@@ -211,7 +211,13 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // one rock's shade differs from the next (a share of it); cracks: how bright a flying rock's hollows glow in ROCK_LOOK.hot;
 // rim: the hot edge round it. comets: each tail's colour, length [base, reach, most] (m: base + reach / the
 // distance to the sun, at most `most`), width at the comet and at the tip (m) and opacity; the dust tail's bend
-// (m sideways per m along, at its tip), trailing the comet's path.
+// (m sideways per m along, at its tip), trailing the comet's path. stir: m from the sun within which a comet
+// is fully stirred (less further out: stir / distance), which grows its coma and jets; coma: the haze round
+// it, its colour, size (m across, as multiples of its radius, still and fully stirred), opacity (the same) and
+// fade (m from its surface, the eye's distance over which it fades in, so it never fogs the view on it); jets:
+// `count` plumes of gas from its sunlit side, colour, length (m, still and fully stirred), width (m across at
+// the end), opacity, sunward (a vent blows fully once the sun is this high over it, as the cosine, and fades
+// out to sunset) and back (how much a plume bends away from the sun, into the tails).
 export const LOOK = {
   budget: 4_000_000,
   weapons: {
@@ -243,6 +249,9 @@ export const LOOK = {
     comets: {
       ion: { color: 0x5fa8ff, length: [12, 2400, 80], width: [0.7, 1.4], opacity: 0.55 },
       dust: { color: 0xffe6a8, length: [8, 1500, 50], width: [2.2, 10], opacity: 0.55, bend: 0.5 },
+      stir: 40,
+      coma: { color: 0xcfeaff, size: [3.5, 7], opacity: [0.35, 0.85], fade: [2, 10] },
+      jets: { count: 3, color: 0xe2f4ff, length: [1.5, 9], width: 1.6, opacity: 0.6, sunward: 0.25, back: 0.6 },
     },
   },
   quality: { down: 1 / 50, up: 10, window: 2, pause: 0.25, maxUp: 240, res: [0.5, 0.75, 1], most: 2 },
@@ -258,7 +267,7 @@ export const LOOK = {
   },
   sun: { octaves: [2, 3, 5], streamers: [2, 4, 4], churn: 0.06, corona: 3.2, flare: 0.5, flareFrom: 1, fade: 8 },
   planets: {
-    bake: { planet: 512, moon: 256 },
+    bake: { planet: 512, moon: 256, comet: 256 },
     detail: [0, 1, 2],
     near: 8, far: 22,
     sun: 0xfff1d6, light: 1.35, night: 0x8090c0, nightLight: 0.08,
@@ -281,6 +290,11 @@ export const LOOK = {
       "mid-moon": { world: "rock", seed: 8, relief: 0.5, craters: 0.7, colors: [0x8e98a2, 0xbcc6cf, 0x4e5862] },
       "ring-moon": { world: "rock", seed: 9, relief: 0.5, craters: 1.3, colors: [0x9c94aa, 0xc8bfd6, 0x5a5268] },
       "outer-moon": { world: "rock", seed: 10, relief: 0.6, craters: 0.85, colors: [0xa69e86, 0xd2c8aa, 0x625a46] },
+      // Comets: crust (dark, light), ice (bright, blue), deep dust; craters here sets the pits' size.
+      "comet-a": { world: "comet", seed: 11, relief: 0.5, craters: 1, colors: [0x48505c, 0x6c7480, 0xe4f4ff, 0x8cc8e8, 0x262a32], rim: 0xbfe8ff },
+      "comet-b": { world: "comet", seed: 12, relief: 0.5, craters: 1.3, colors: [0x4e4a56, 0x76707e, 0xeef0ff, 0x9fb4f0, 0x2a2630], rim: 0xc8d4ff },
+      "comet-c": { world: "comet", seed: 13, relief: 0.6, craters: 0.8, colors: [0x4a5250, 0x707a76, 0xe6fff8, 0x84d8cc, 0x262c2a], rim: 0xb8fff0 },
+      "comet-d": { world: "comet", seed: 14, relief: 0.5, craters: 1.1, colors: [0x544c48, 0x7c726a, 0xfff6ea, 0xb8d4e8, 0x2e2826], rim: 0xe0ecff },
     },
   },
 };

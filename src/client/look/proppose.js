@@ -1,6 +1,7 @@
-// Pure choices for the props (no three.js, so the tests check them): which model a pickup shows, and where a
-// comet's two tails run. look/props.js draws them.
+// Pure choices for the props (no three.js, so the tests check them): which model a pickup shows, where a
+// comet's two tails run, and its coma and jets. look/props.js draws them.
 import { LOOK } from "../../tuning.js";
+import { hashRand } from "../../sim/weapons.js";
 import { add, sub, scale, dot, norm, len, dist } from "../../sim/vec.js";
 
 // The model a pickup shows: { file, node, tint }. A weapon shows that gun (from weapons.glb); ammo a crate whose
@@ -30,4 +31,34 @@ export function cometTails(pos, vel, sun, cfg = LOOK.props.comets) {
 export function tailAt(tail, s) {
   const out = s * tail.length;
   return add(add(tail.from, scale(tail.away, out)), scale(tail.lag, tail.bend * s * out));
+}
+
+// How stirred a comet is at d m from the sun: 1 within cfg.stir, falling off further out.
+export const cometStir = (d, cfg = LOOK.props.comets) => Math.min(1, cfg.stir / d);
+
+// The haze round a comet: { size (m across), opacity }, from how stirred it is and how far the eye is from its
+// surface (gap, m): it fades away as you come close, so it never fogs the view while you stand on the comet.
+export function comaLook(stir, gap, radius, cfg = LOOK.props.comets) {
+  const { size, opacity, fade } = cfg.coma, mix = (a) => a[0] + (a[1] - a[0]) * stir;
+  const k = Math.min(1, Math.max(0, (gap - fade[0]) / (fade[1] - fade[0])));
+  return { size: radius * mix(size), opacity: mix(opacity) * k * k * (3 - 2 * k) };
+}
+
+// Where on a comet its jets vent: cfg.jets.count unit directions, the same on every load, its own per comet.
+export function jetVents(id, cfg = LOOK.props.comets) {
+  const next = hashRand(`vents|${id}`);
+  return Array.from({ length: cfg.jets.count }, () => {
+    const z = 2 * next() - 1, a = 2 * Math.PI * next(), s = Math.sqrt(1 - z * z);
+    return [s * Math.cos(a), s * Math.sin(a), z];
+  });
+}
+
+// A jet this frame: { dir (unit, out of the surface and bent away from the sun), length (m), opacity }. A vent
+// blows only while the sun is on it, strongest facing the sun.
+//   at: the vent (unit, from the comet's centre); toSun: unit, from the comet to the sun
+export function jetLook(at, toSun, stir, cfg = LOOK.props.comets) {
+  const { length, opacity, sunward, back } = cfg.jets;
+  const facing = Math.min(1, Math.max(0, dot(at, toSun) / sunward));
+  const dir = norm(sub(at, scale(toSun, back * Math.max(0, dot(at, toSun)))));
+  return { dir, length: length[0] + (length[1] - length[0]) * stir, opacity: opacity * facing * stir };
 }

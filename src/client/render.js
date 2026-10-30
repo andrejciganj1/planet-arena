@@ -13,14 +13,14 @@ import { surfaceInfo } from "../sim/collide.js";
 import { add, sub, scale, lerp, norm, cross, dist, rotateAxis, rotateFromTo } from "../sim/vec.js";
 import { rng, v3, Y, haloMap } from "./look/common.js";
 import { starfield, nebulaSky, PLAIN_SPACE } from "./look/sky.js";
-import { glowSprite, sunLook } from "./look/sun.js";
+import { sunLook } from "./look/sun.js";
 import { sphereMesh, planetLooks, orbitLines } from "./look/planets.js";
 import { blobUnder, sphereShadow } from "./look/shadow.js";
 import { DUMMY_COLOUR, ALIEN_ASSETS, figureMesh, dressFigure, armFigure, styleFigure, alienMaterial, jetAt, viewArm } from "./look/aliens.js";
 import { createPoser } from "./look/alienpose.js";
 import { WEAPON_ASSETS, weaponModels, weaponSet, swapMaterials, muzzleFlash, showFlash, spinGun, shotLooks } from "./look/weapons.js";
 import { createGunWatch, viewGun, flashShown } from "./look/gunpose.js";
-import { PROP_ASSETS, pickupLook, padLook, cuePath, ropeLine, cometTailLook, asteroidBelt, flyingRocks } from "./look/props.js";
+import { PROP_ASSETS, pickupLook, padLook, cuePath, ropeLine, cometTailLook, cometHalo, asteroidBelt, flyingRocks } from "./look/props.js";
 import { cometTails } from "./look/proppose.js";
 import { loadAssets } from "./look/assets.js";
 import { threeLoaders } from "./look/loaders.js";
@@ -68,18 +68,16 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const rings = orbitLines(world.system);
   for (const r of rings) scene.add(r.ring);
 
-  // The sun first, then the planets and moons, then the comets: the order they draw from `rand` in.
+  // The sun first, then the planets, moons and comets: the order they draw from `rand` in.
   const bodies = {}, tails = [];
   const sun = sunLook(world.system.bodies.find((b) => b.kind === "sun"), rand);
   const planets = planetLooks(world.system, renderer, rand);
   for (const b of world.system.bodies) {
-    let m = b.kind === "sun" ? sun.mesh : planets.meshes[b.id];
-    if (!m) {
-      m = sphereMesh(b, rand);
-      if (b.kind === "comet") {
-        m.add(glowSprite(0xbfe8ff, b.radius * 5));
-        tails.push({ id: b.id, look: cometTailLook() });
-      }
+    const m = b.kind === "sun" ? sun.mesh : planets.meshes[b.id] ?? sphereMesh(b, rand);
+    if (b.kind === "comet") {
+      const halo = cometHalo(b);
+      m.add(halo.group);
+      tails.push({ id: b.id, look: cometTailLook(), halo });
     }
     bodies[b.id] = m;
     scene.add(m);
@@ -453,6 +451,8 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         l.material.opacity = 1 - b.age / WEAPONS.railgun.showFor;
       }
       for (; i < beams.length; i++) beams[i].visible = false;
+
+      for (const k of tails) k.halo.update(poses[k.id], poses.sun, viewer);
 
       // Pickups bob and turn above their spots.
       const t = world.t + (alpha - 1) * TICK, { float, bob, bobRate, spin } = LOOK.props.pickups;

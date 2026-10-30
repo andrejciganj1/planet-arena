@@ -19,6 +19,20 @@ export function haloMap() {
   return (haloTexture = new THREE.CanvasTexture(c));
 }
 
+// One shape for every flame and plume: an open cone from its base (at the origin) to the tip at -y, unit
+// sized, bright at the base and fading to nothing at the tip (vertex colours, for added-on materials).
+let cone = null;
+export function fadingCone() {
+  if (cone) return cone;
+  const g = new THREE.ConeGeometry(1, 1, 12, 4, true);
+  g.rotateX(Math.PI);
+  g.translate(0, -0.5, 0);
+  const pos = g.attributes.position, col = new Float32Array(3 * pos.count);
+  for (let i = 0; i < pos.count; i++) col.fill((1 + pos.getY(i)) ** 1.5, 3 * i, 3 * i + 3);
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  return (cone = g);
+}
+
 // Deterministic randomness, so every load looks the same.
 export function rng(seed) {
   let s = seed >>> 0;

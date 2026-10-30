@@ -751,3 +751,34 @@ test("your own boost: the thrust builds while fuel burns in the air and is gone 
     assert.ok(v.glow > 0 && v.glow <= thrust.glow * (1 + LOOK.alien.jet.flicker), "the glow flickers with the flames");
   }
 });
+
+test("a comet's coma and jets grow near the sun; the coma clears as you come close; jets blow only from the sunlit side", async () => {
+  const { cometStir, comaLook, jetVents, jetLook } = await import("../src/client/look/proppose.js");
+  const { comets: cfg } = LOOK.props;
+  const r = 3;
+  assert.equal(cometStir(cfg.stir / 2, cfg), 1, "fully stirred near the sun");
+  assert.ok(cometStir(300, cfg) < 0.2, "barely stirred far out");
+  const near = comaLook(1, 100, r, cfg), far = comaLook(cometStir(300, cfg), 100, r, cfg);
+  assert.ok(near.size > far.size && near.opacity > far.opacity, "a bigger, brighter coma near the sun");
+  assert.ok(far.opacity > 0, "seen from afar even out at the far end of the orbit");
+  assert.equal(comaLook(1, 0.5, r, cfg).opacity, 0, "gone when you stand on it");
+  assert.ok(comaLook(1, cfg.coma.fade[1], r, cfg).opacity > 0.95 * near.opacity, "full from far enough");
+
+  const vents = jetVents("comet-a", cfg);
+  assert.equal(vents.length, cfg.jets.count);
+  assert.notDeepEqual(vents, jetVents("comet-b", cfg), "each comet vents from its own spots");
+  const toSun = [1, 0, 0];
+  let seen = 0;
+  for (let i = 0; i < 400; i++) {
+    const a = (i / 400) * 2 * Math.PI, z = Math.cos(1.7 * a), s = Math.sqrt(1 - z * z);
+    const at = [s * Math.cos(a), s * Math.sin(a), z];
+    const lit = jetLook(at, toSun, 1, cfg), dim = jetLook(at, toSun, 0.2, cfg);
+    if (at[0] < 0) assert.equal(lit.opacity, 0, "no jet on the night side");
+    if (lit.opacity > 0) {
+      seen++;
+      assert.ok(lit.dir[0] * at[0] + lit.dir[1] * at[1] + lit.dir[2] * at[2] > 0, "a jet blows out of the surface");
+      assert.ok(lit.length > dim.length, "longer near the sun");
+    }
+  }
+  assert.ok(seen > 50, "vents facing the sun blow");
+});

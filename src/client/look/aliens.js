@@ -6,7 +6,7 @@ import { PLAYER, LOOK } from "../../tuning.js";
 import { placeAlien } from "./alienpose.js";
 import { weaponModels, weaponSet, swapMaterials, muzzleFlash, showFlash, spinGun } from "./weapons.js";
 import { flashShown } from "./gunpose.js";
-import { haloMap } from "./common.js";
+import { haloMap, fadingCone } from "./common.js";
 
 export const DUMMY_COLOUR = LOOK.alien.dummy;
 export const ALIEN_ASSETS = [{ name: "alien", url: "assets/models/alien.glb" }];
@@ -177,20 +177,6 @@ export function dressFigure(g, gltf) {
   armFigure(g, null);
 }
 
-// One flame shape for every nozzle: an open cone from the nozzle (its base, at the origin) to the tip at -y,
-// bright at the nozzle and fading to nothing at the tip (vertex colours, added onto what is behind it).
-let flameShape = null;
-function flameGeometry() {
-  if (flameShape) return flameShape;
-  const g = new THREE.ConeGeometry(1, 1, 12, 4, true);
-  g.rotateX(Math.PI);
-  g.translate(0, -0.5, 0);
-  const pos = g.attributes.position, col = new Float32Array(3 * pos.count);
-  for (let i = 0; i < pos.count; i++) col.fill((1 + pos.getY(i)) ** 1.5, 3 * i, 3 * i + 3);
-  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
-  return (flameShape = g);
-}
-
 // The booster's flames, one at each of the model's nozzles (jetL and jetR, under body, so they lean with it):
 // a white-hot core inside a longer flame in the player's colour, and a glow round the nozzle. Unlit and added
 // onto the scene, so they read on a night side. Hidden until styleFigure lights them; none if the model has
@@ -202,7 +188,7 @@ function jetFlames(nozzles) {
   const core = new THREE.MeshBasicMaterial({ ...added, color: jet.core });
   const glow = new THREE.SpriteMaterial({ map: haloMap(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: jet.glow[1] });
   for (const n of nozzles) {
-    const outer = new THREE.Mesh(flameGeometry(), flame), inner = new THREE.Mesh(flameGeometry(), core), light = new THREE.Sprite(glow);
+    const outer = new THREE.Mesh(fadingCone(), flame), inner = new THREE.Mesh(fadingCone(), core), light = new THREE.Sprite(glow);
     inner.scale.set(jet.coreShare[1], jet.coreShare[0], jet.coreShare[1]);
     outer.add(inner);
     const fire = new THREE.Group();

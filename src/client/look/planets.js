@@ -1,7 +1,6 @@
-// The planets and moons, the giant's ring, the ice world's aurora and the orbit lines (comets keep the faceted
-// sphere until they get their own look).
+// The planets, moons and comets, the giant's ring, the ice world's aurora and the orbit lines.
 //
-// Each planet and moon is a smooth sphere with one shader. Its big picture (continents, canyons, bands,
+// Each planet, moon and comet is a smooth sphere with one shader. Its big picture (continents, canyons, bands,
 // craters) is painted by a shader into a cube map per body: no download, no seam or pinch at the poles, and
 // drawing it is one texture lookup. One body is painted per frame from the second frame on, nearest first,
 // so the game never waits on it; until then a body shows its flat colour. The colour is in rgb and a height
@@ -16,10 +15,10 @@ import { LOOK } from "../../tuning.js";
 import { NOISE_GLSL, v3 } from "./common.js";
 import { SHADOW_GLSL } from "./shadow.js";
 
-const WORLDS = { lava: 1, jungle: 2, ocean: 3, desert: 4, gas: 5, ice: 6, rock: 7 };
+const WORLDS = { lava: 1, jungle: 2, ocean: 3, desert: 4, gas: 5, ice: 6, rock: 7, comet: 8 };
 const OCCLUDERS = 4; // nearest bodies tested for shadows, per body
 
-// The faceted sphere the comets still use. Its faces vary a little in shade, so running across it shows motion.
+// The faceted sphere for a body with no painted look (LOOK.planets.worlds). Its faces vary a little in shade, so running across it shows motion.
 export function sphereMesh(body, rand) {
   const geo = new THREE.IcosahedronGeometry(body.radius, 3); // already one vertex per face corner
   const base = new THREE.Color(body.color), colors = [];
@@ -209,6 +208,31 @@ vec4 world(vec3 d) {
   c = mix(c, mix(col[2], col[1], 0.3), blue);
   return vec4(c, clamp(0.6 + 0.12 * tone - 0.4 * blue, 0.0, 1.0));
 }
+#elif WORLD == 8
+// Comet: dark dusty crust in plates at their own heights (cliffs where they meet), patches of exposed blue-white
+// ice dug out of it, frost in between, and a few pits; ice and pits are low.
+vec4 world(vec3 d) {
+  vec3 q = d * 2.2 + seed, w = warp(q);
+  float tone = fbm(q * 2.0 + w * 0.7, 6);
+  vec3 c = mix(col[4], col[0], smoothstep(-0.5, 0.2, tone));
+  c = mix(c, col[1], smoothstep(0.1, 0.6, tone) * 0.6);
+  vec3 a = cells(q * 1.3 + w * 0.8);
+  float cliff = 1.0 - smoothstep(0.0, 0.06, a.y - a.x);
+  float ice = smoothstep(0.12, 0.32, fbm(q * 1.2 + w * 0.5 + 3.0, 5));
+  float frost = smoothstep(0.2, 0.5, fbm(q * 4.0 + 7.0, 4)) * (1.0 - ice);
+  c = mix(c, mix(col[3], col[2], smoothstep(-0.2, 0.4, fbm(q * 3.0 + 11.0, 3))), ice);
+  c = mix(c, col[2] * 0.8, frost * 0.3);
+  c *= 1.0 - 0.35 * cliff;
+  float h = 0.55 + 0.12 * (a.z - 0.5) + 0.06 * tone - 0.12 * ice - 0.06 * cliff;
+  vec3 cl = cells(d * 6.0 * craters + seed);
+  float x = cl.x / (0.2 + 0.25 * cl.z);
+  if (fract(cl.z * 13.7) < 0.35) {
+    float bowl = 1.0 - smoothstep(0.6, 1.0, x);
+    h -= 0.15 * bowl * (1.0 - x * x);
+    c *= 1.0 - 0.3 * bowl;
+  }
+  return vec4(c, clamp(h, 0.0, 1.0));
+}
 #else
 // Rock: a grey moon with darker plains and craters at four sizes, each with a dark bowl and a bright rim.
 vec4 world(vec3 d) {
@@ -396,6 +420,21 @@ void main() {
     #endif
   }
   #endif
+#elif WORLD == 8
+  // The ice glints in the sun, and up close sparkles; the crust is grainy dust.
+  float icy = smoothstep(0.25, 0.6, dot(albedo, vec3(0.3, 0.5, 0.2)));
+  shine = 0.45 * icy;
+  gloss = 50.0;
+  #if DETAIL > 0
+  if (fade > 0.0) {
+    float g = noise3(q * 5.0);
+    albedo *= 1.0 + 0.2 * g * fade * (1.0 - icy);
+    hm += (0.04 * noise3(q * 2.0) + 0.012 * g) * fade;
+    #if DETAIL > 1
+    albedo += 0.25 * fade * icy * smoothstep(0.75, 0.95, noise3(q * 18.0));
+    #endif
+  }
+  #endif
 #else
   #if DETAIL > 0
   if (fade > 0.0) {
@@ -573,7 +612,7 @@ export function planetLooks(system, renderer, rand, cfg = LOOK.planets) {
   let level = null;
   for (const b of system.bodies) {
     const w = cfg.worlds[b.id];
-    if (!w || (b.kind !== "planet" && b.kind !== "moon")) continue;
+    if (!w || b.kind === "sun") continue;
     skipFacets(b, rand);
     const ring = b.ring ?? system.bodies.find((p) => p.id === b.orbit?.around)?.ring;
     const ringOwner = b.ring ? b : ring && system.byId[b.orbit.around];
@@ -593,7 +632,7 @@ export function planetLooks(system, renderer, rand, cfg = LOOK.planets) {
       vertexShader: surfaceVertex, fragmentShader: surfaceFragment,
     });
     materials.push(mat);
-    const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(b.radius, b.kind === "moon" ? 16 : 28), mat);
+    const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(b.radius, b.kind === "planet" ? 28 : 16), mat);
     const look = { body: b, w, own, mesh, ringOwner, rt: null };
     if (b.ring) {
       const rw = w.ring, rmesh = ringMesh(b, rw, shared);

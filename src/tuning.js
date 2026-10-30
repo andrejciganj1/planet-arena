@@ -183,7 +183,13 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // sphere: boosting reads from the trailing legs instead); tuck and dangle: the legs (left, right) just after a
 // jump and after `fall` s in the air; trail: the legs while boosting; fly: the free arm while boosting; flail:
 // the free arm while falling; ease: s, how fast a pose follows its state; boostHold: s a boost pose outlasts
-// the last fuel drop seen.
+// the last fuel drop seen. jet: the booster's flames while boosting, one per nozzle (unlit, so they read on a
+// night side and from afar): core, the white-hot inside; length, width: the flame in m; coreShare: the core's
+// length and width against the flame's; tilt: rad the flames point back from straight down; flicker: how much
+// the length wavers, at `rate` rad/s; opacity, the flame's at the nozzle (it fades to none at the tip); glow:
+// the light round each nozzle, m across and opacity; ease: s to light or go out; trail: the exhaust left
+// behind, in game ticks (a point each), trailSize: m across each point, trailGlow: its brightness at the
+// nozzle.
 // weapons (look/weapons.js, the models from tools/blender/weapons.py; look/gunpose.js): colors, each weapon's
 // accent, its pickup's colour too (the .glb is built with the same, tests/look.test.mjs); glow, how bright an
 // accent glows in its own colour (so a gun reads on a night side); sun, as alien.sun for the gun in view;
@@ -222,8 +228,9 @@ export const LOOK = {
     pose: {
       steps: 2.6, swing: 0.6, armSwing: 0.35, head: 0.5, aim: [-1.3, 0.7], support: -0.35, reach: 0.4,
       lean: { walk: 0.08, jump: -0.08, fall: 0.1, boost: 0.11 },
-      tuck: [0.75, -0.2], dangle: [0.35, -0.35], trail: [-0.5, -0.35], fly: 2.0, flail: 2.4, fall: 0.6, ease: 0.08, boostHold: 0.15,
+      tuck: [0.75, -0.2], dangle: [0.35, -0.35], trail: [-0.7, -0.6], fly: 1.8, flail: 2.4, fall: 0.6, ease: 0.08, boostHold: 0.15,
     },
+    jet: { core: 0xfff4dc, length: 1.1, width: 0.11, coreShare: [0.5, 0.45], tilt: 0.45, flicker: 0.2, rate: 31, opacity: 1, glow: [1.1, 0.7], ease: 0.05, trail: 24, trailSize: 0.45, trailGlow: 0.55 },
   },
   props: {
     pickups: { float: 1, bob: 0.15, bobRate: 2, spin: 1, glow: 0.6, night: 0.3, nightTint: 0.06, halo: [1.8, 0.5], sun: 0.55, weapon: 2.2 },

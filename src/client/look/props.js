@@ -4,7 +4,7 @@
 // for a pickup and where the tails run are in look/proppose.js.
 import * as THREE from "three";
 import { BELT, ASTEROID, ROCK_LOOK, LOOK } from "../../tuning.js";
-import { v3, Y } from "./common.js";
+import { v3, Y, haloMap } from "./common.js";
 import { add, scale, cross, norm, len, anyPerpendicular } from "../../sim/vec.js";
 import { WEAPON_COLORS } from "./weapons.js";
 import { alienMaterial } from "./aliens.js";
@@ -35,20 +35,6 @@ function swapAll(root, make) {
   return [...mats.values()];
 }
 
-// One soft round light, shared by every halo.
-let haloTexture = null;
-function haloMap() {
-  if (haloTexture) return haloTexture;
-  const c = document.createElement("canvas");
-  c.width = c.height = 64;
-  const ctx = c.getContext("2d"), g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-  g.addColorStop(0, "rgba(255,255,255,1)");
-  g.addColorStop(0.3, "rgba(255,255,255,0.45)");
-  g.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 64, 64);
-  return (haloTexture = new THREE.CanvasTexture(c));
-}
 const haloMaterial = (color, opacity) => new THREE.SpriteMaterial({ map: haloMap(), color, opacity, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
 function halo(color, [size, opacity]) {
   const s = new THREE.Sprite(haloMaterial(color, opacity));

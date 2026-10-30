@@ -15,3 +15,10 @@ export function trailPush(trail, [x, y, z], t, max = Infinity) {
   else (trail.pts.unshift(x, y, z), (trail.t = t));
   trail.pts.length = Math.min(trail.pts.length, 3 * max);
 }
+
+// Drops a trail's oldest point once per game tick, so one left behind (a boost that stopped) fades from its
+// far end at the pace it was laid. Returns true once it is empty.
+export function trailFade(trail, t) {
+  if (trail.pts.length && trail.t !== t) (trail.pts.length -= 3), (trail.t = t);
+  return !trail.pts.length;
+}

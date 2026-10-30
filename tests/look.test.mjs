@@ -351,6 +351,13 @@ test("the exported helmet fits PLAYER.hit.head within 3 %, the body within PLAYE
   // The gun goes in the right hand, which moves with the right arm.
   const armR = glb.json.nodes.findIndex((n) => n.name === "armR");
   assert.ok(glb.json.nodes[armR].children?.includes(glb.json.nodes.findIndex((n) => n.name === "hand")), "hand is a child of armR");
+  // The booster's flames start under the pack on its back, one each side, and lean with the body.
+  const bodyNode = glb.json.nodes.findIndex((n) => n.name === "body");
+  for (const [name, side] of [["jetL", -1], ["jetR", 1]]) {
+    assert.ok(glb.json.nodes[bodyNode].children?.includes(glb.json.nodes.findIndex((n) => n.name === name)), `${name} is a child of body`);
+    const at = nodeVertices(glb, name).at;
+    assert.ok(Math.sign(at[0]) === side && at[2] > 0.15 && at[1] > 0.2 && at[1] < body.at, `${name} under the pack, at the back (${at})`);
+  }
 });
 
 // The joints the model was built with, read from the file, as placeAlien needs them.
@@ -686,4 +693,26 @@ test("comet tails point away from the sun: the ion tail straight, the dust tail 
     assert.ok(near.tails.ion.length > near.tails.dust.length, "the ion tail is the long one");
     assert.ok(near.tails.ion.width[1] < near.tails.dust.width[1], "the ion tail is the thin one");
   }
+});
+
+test("a boost's exhaust trail lasts the same game time at any frame rate and fades out after the boost", async () => {
+  const { trailPush, trailFade } = await import("../src/client/rocklook.js");
+  const { jet } = LOOK.alien;
+  // Half a second of boosting, then nothing; the clock moves in whole ticks, as the view's does.
+  const run = (fps) => {
+    const trail = { pts: [], t: -1 };
+    let full = 0, gone = null;
+    for (let f = 0; f < 2 * fps; f++) {
+      const t = Math.floor(f / fps / TICK) * TICK;
+      if (f / fps < 0.5) trailPush(trail, [f, 0, 0], t, jet.trail), (full = trail.pts.length / 3);
+      else if (trailFade(trail, t) && gone === null) gone = t;
+    }
+    return { full, gone, left: trail.pts.length };
+  };
+  const a = run(60), b = run(144);
+  assert.equal(a.full, jet.trail, "a full trail while boosting");
+  assert.equal(b.full, a.full);
+  assert.equal(a.left, 0, "the trail fades away once the boost stops");
+  assert.ok(Math.abs(a.gone - b.gone) < 1e-9, `gone at the same game time (${a.gone}, ${b.gone})`);
+  assert.ok(Math.abs(a.gone - (0.5 + jet.trail * TICK)) < 3 * TICK, `gone a trail's length after the boost (${a.gone})`);
 });

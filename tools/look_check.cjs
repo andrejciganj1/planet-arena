@@ -94,16 +94,17 @@ function views(world) {
     });
   }
   // Close up, the alien by day and by night on the ocean planet, from the front and a little to one side; then
-  // in third person, walking and aiming up, boosting, and swinging on the hook by day, seen from the side the sun
-  // lights. `state` is set on the dummy as well as where it stands; `boost` burns its fuel
-  // every frame, as a boost does. The figure stands `deg` degrees from the pole towards the sun (day) or away
+  // in third person, walking and aiming up, boosting (and as a blue player at night from 14 m), and swinging on
+  // the hook by day, seen from the side the sun
+  // lights. `state` is set on the dummy as well as where it stands, `lift` m above the ground; `boost` burns its
+  // fuel every frame, as a boost does. The figure stands `deg` degrees from the pole towards the sun (day) or away
   // (night), so the camera's up (world y) is near the figure's.
   const mid = bodies.find((b) => b.id === "mid"), mc = poses.mid, ms = v.norm(v.sub(sun, mc));
   const mHoriz = v.norm([ms[0], 0, ms[2]]);
-  const close = (name, k, deg, { side = false, dist = 4.2, state = {}, boost = false, as = null, fire = false } = {}) => {
+  const close = (name, k, deg, { side = false, dist = 4.2, state = {}, boost = false, as = null, fire = false, lift = 0 } = {}) => {
     const el = (deg * Math.PI) / 180;
     const up = v.norm(v.add(v.scale(Y, Math.cos(el)), v.scale(mHoriz, k * Math.sin(el))));
-    const pos = v.add(mc, v.scale(up, mid.radius));
+    const pos = v.add(mc, v.scale(up, mid.radius + lift));
     const across = v.norm(v.cross(mHoriz, up)), sunward = v.cross(up, across);
     // Front: facing the sun, seen from in front and a little to one side. Side: walking across the sun's
     // direction (its gun side to the sun), seen from that side, a little ahead and above.
@@ -126,7 +127,8 @@ function views(world) {
   list.push(close("alien-night", -1, 35));
   list.push(close("alien-night-blue", -1, 35, { as: 0x4fb0e8 }));
   list.push(close("alien-walk", 1, 40, { side: true, dist: 3.6, state: { walk: 7, pitch: 0.45 }, as: 0xe8505b }));
-  list.push(close("alien-boost", 1, 40, { side: true, dist: 3.6, state: { groundId: null, airTime: 0.8, pitch: 0.1 }, boost: true }));
+  list.push(close("alien-boost", 1, 40, { side: true, dist: 3.6, state: { groundId: null, airTime: 0.8, pitch: 0.1 }, boost: true, lift: 1 }));
+  list.push(close("alien-boost-far", -1, 35, { side: true, dist: 14, state: { groundId: null, airTime: 0.8, pitch: 0.1 }, boost: true, lift: 1, as: 0x4fb0e8 }));
   list.push(close("alien-hook", 1, 40, { side: true, dist: 3.6, state: { groundId: null, airTime: 1.5, pitch: 0.3, hook: { body: "mid", offset: [0, 0, 0] } } }));
   for (const w of weapons) {
     list.push(firstPerson(`fp-${w}`, 1, w, false));

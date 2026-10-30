@@ -46,7 +46,7 @@ export const BODIES = [
 // `period` s).
 export const BELT = { inner: 148, outer: 160, thick: 4, rocks: 500, size: [0.4, 1.8], period: 260 };
 
-// Asteroids: one breaks off the belt every `every` s and falls in under the usual gravity (asteroids.js).
+// Asteroids: one breaks off the belt every `every` s (the owner's choice) and falls in under the usual gravity (asteroids.js).
 // radius: m, about twice a player's height across; speed: m/s range off the belt, in a direction up to
 // `tilt` degrees above or below the orbital plane, where the planets are, and up to `aim` degrees either side
 // of straight at the sun. Kicked any way at all (aim 180) only a quarter reach the sun: the heavy planet,
@@ -55,7 +55,7 @@ export const BELT = { inner: 148, outer: 160, thick: 4, rocks: 500, size: [0.4, 
 // body a launch needs, so a body moving in can't meet it on its first tick; life: s before one that missed
 // everything is dropped. blast as the rocket's, a little bigger.
 export const ASTEROID = {
-  every: 15, radius: 1.8, speed: [8, 16], tilt: 20, aim: 25, clear: 2, life: 120,
+  every: 5, radius: 1.8, speed: [8, 16], tilt: 20, aim: 25, clear: 2, life: 120,
   blast: { splash: 5, damage: 90, knockback: 18, self: 0.5 },
 };
 

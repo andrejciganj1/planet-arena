@@ -33,17 +33,17 @@ function duel() {
 // A point in open space above the sun, far from every body at the start.
 const SPACE = [0, 80, 0];
 
-test("one launch every 15 s: 40 in the first 10 minutes, minus launches that would start inside a body", () => {
+test("one launch every 5 s (the owner's choice): 120 in the first 10 minutes, minus launches that would start inside a body", () => {
   const w = bare(), first = {};
   while (w.t < 600 + 0.5) {
     stepWorld(w, {}, TICK);
     for (const r of w.asteroids) first[r.id] ??= w.t;
   }
-  assert.equal(ASTEROID.every, 15);
-  assert.equal(w.rocksLaunched, 40);
+  assert.equal(ASTEROID.every, 5);
+  assert.equal(w.rocksLaunched, 120);
   const expected = [];
-  for (let k = 1; k <= 40; k++) if (launchOf(tuning, w.system, k)) expected.push(`rock.${k}`);
-  assert.ok(expected.length >= 30, `${expected.length} of 40 launch`);
+  for (let k = 1; k <= 120; k++) if (launchOf(tuning, w.system, k)) expected.push(`rock.${k}`);
+  assert.ok(expected.length >= 90, `${expected.length} of 120 launch`);
   assert.deepEqual(Object.keys(first).sort(), expected.sort());
   for (const id of expected) assert.ok(Math.abs(first[id] - Number(id.slice(5)) * ASTEROID.every) < TICK + 1e-6, id);
 });
@@ -258,5 +258,6 @@ test("a clock set forward launches only what falls due on the next tick, not a b
   assert.equal(w.asteroids.length, 0);
   w.t = 1050 - TICK / 2;
   stepWorld(w, {}, TICK);
-  assert.deepEqual(w.asteroids.map((r) => r.id), launchOf(tuning, w.system, 70) ? ["rock.70"] : []);
+  const k = Math.round(1050 / ASTEROID.every); // the launch due at 1050 s
+  assert.deepEqual(w.asteroids.map((r) => r.id), launchOf(tuning, w.system, k) ? [`rock.${k}`] : []);
 });

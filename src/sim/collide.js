@@ -1,12 +1,14 @@
 // Collision against the bodies: spheres (sun, planets, moons) and the comets' lumpy shapes (shape.js). Tests
 // run the same in Node and the browser, no physics engine needed.
 import { add, sub, scale, len, norm, dot } from "./vec.js";
-import { radiusAt, normalAt } from "./shape.js";
+import { radiusAt, normalAt, nearestDir } from "./shape.js";
 
 // Beyond this many metres outside a shaped body's bounding sphere, surfaceInfo gives the sphere's gap (less
 // than the real one) and skips the lumps: nothing that far off needs better (gravity's hold, contacts and
 // asteroid clearance all look within a few metres).
 export const FAR = 8;
+// Within this many metres of a shaped body's surface one step finds the nearest point; beyond, a search does.
+const NEAR = 0.3;
 
 // The gap from p to a body's surface (m, negative inside), the outward normal there and the surface point
 // in p's direction from the centre. A shaped body's gap is measured along its normal, near enough for
@@ -17,17 +19,21 @@ export function surfaceInfo(body, pose, p) {
   const l = len(v);
   const u = l > 1e-12 ? scale(v, 1 / l) : [0, 1, 0];
   if (!body.shape || l - body.radius > FAR) return { dist: l - body.radius, normal: u, point: add(c, scale(u, body.radius)) };
-  // Along the normal where p's direction meets the surface, then once more from the point that puts under p:
-  // all but exact near lumps this gentle. Further out it can drift, so it is kept between what the gap must
-  // be: no less than the bounding sphere's, no more than the way straight in to the surface.
+  // Close to the surface: straight in, then once more from the foot of the normal from p, all but exact on
+  // lumps this gentle. Further out the nearest point can be well round from straight in (a dent's walls are
+  // nearer than its floor), so it is searched for (shape.js nearestDir).
   const r0 = radiusAt(body, u);
-  let normal = normalAt(body, u, r0);
-  const w = norm(sub(v, scale(normal, (l - r0) * dot(normal, u)))), r = radiusAt(body, w);
+  let normal = normalAt(body, u, r0), w = norm(sub(v, scale(normal, (l - r0) * dot(normal, u))));
+  let r = radiusAt(body, w);
   normal = normalAt(body, w, r);
-  const point = scale(w, r);
-  let gap = dot(sub(v, point), normal);
-  if (l > r0) gap = Math.min(Math.max(gap, l - body.radius), l - r0);
-  return { dist: gap, normal, point: add(c, point) };
+  let gap = dot(sub(v, scale(w, r)), normal);
+  if (gap > NEAR) {
+    w = nearestDir(body, v, w);
+    r = radiusAt(body, w);
+    normal = normalAt(body, w, r);
+    gap = len(sub(v, scale(w, r)));
+  }
+  return { dist: gap, normal, point: add(c, scale(w, r)) };
 }
 
 export function sphereContacts(system, poses, centre, r) {
@@ -64,11 +70,13 @@ function segmentHitsShape(a, b, body, c, r) {
     const v = sub(add(a, scale(d, f)), c), lv = len(v);
     return lv - r - (lv > 1e-12 ? radiusAt(body, scale(v, 1 / lv)) : 0);
   };
-  let f = f0;
-  if (gapAt(f) <= 0 || l < 1e-12) return f;
+  let f = f0, g = gapAt(f);
+  if (g <= 0) return f;
+  if (l < 1e-12) return null;
   for (let i = 0; i < 400 && f < 1; i++) {
-    const next = Math.min(1, f + Math.max(0.5 * gapAt(f), 0.005) / l);
-    if (gapAt(next) <= 0) {
+    const next = Math.min(1, f + Math.max(0.5 * g, 0.005) / l);
+    g = gapAt(next);
+    if (g <= 0) {
       let lo = f, hi = next;
       for (let k = 0; k < 24; k++) {
         const mid = (lo + hi) / 2;

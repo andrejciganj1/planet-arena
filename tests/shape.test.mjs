@@ -99,3 +99,19 @@ test("standing on a comet, you rest on its lumpy surface with up along its slope
     assert.equal(sphereContacts(world.system, world.poses, add(e.pos, scale(e.up, PLAYER.radius)), PLAYER.radius - 0.05).length, 0, "not sunk in");
   }
 });
+
+test("a comet's gap is the true distance to its surface, near it and a few metres out", () => {
+  for (const b of comets) {
+    const c = poses[b.id].pos;
+    // The truth by brute force: the nearest of 20,000 points on the surface (about 10 cm apart).
+    const surface = directions(20000).map((u) => add(c, scale(u, radiusAt(b, u))));
+    const truth = (p) => Math.min(...surface.map((q) => len(sub(p, q))));
+    for (const u of DIRS.filter((_, i) => i % 8 === 0)) {
+      const on = add(c, scale(u, radiusAt(b, u))), n = surfaceInfo(b, poses[b.id], on).normal;
+      for (const h of [0.2, 0.5, 2, 4, 6.3, 7.9]) {
+        const p = add(on, scale(n, h)), s = surfaceInfo(b, poses[b.id], p).dist, t = truth(p);
+        assert.ok(Math.abs(s - t) < 0.01, `${b.id}: ${h} m out along the normal reads ${s.toFixed(3)}, truly ${t.toFixed(3)}`);
+      }
+    }
+  }
+});

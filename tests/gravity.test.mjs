@@ -89,14 +89,11 @@ test("inside a body's hold only its own pull counts; beyond twice the hold every
   for (const b of BODIES.filter((b) => b.hold > 0 && b.radius)) {
     // h m off the surface where u points (along the slope, as a comet's is lumpy).
     const at = (u, h) => add(add(poses[b.id].pos, scale(u, radiusAt(b, u))), scale(normalAt(b, u), h));
-    // Beyond twice the hold: out past the sphere that bounds the body (along a lumpy comet's normal, a nearby
-    // bump can be closer than the dent the normal leaves from).
-    const out = (u) => add(poses[b.id].pos, scale(u, b.radius + b.hold * 2.1));
-    const u = directions(20).find((u) => clear(b, at(u, b.hold * 0.9)) && clear(b, out(u)));
+    const u = directions(20).find((u) => clear(b, at(u, b.hold * 0.9)) && clear(b, at(u, b.hold * 2.1)));
     const inside = at(u, b.hold * 0.9);
     assert.ok(dist(gravityAt(system, poses, inside), bodyPull(b, poses[b.id], inside)) < 1e-12, b.id);
     assert.equal(dominantBody(system, poses, inside), b.id);
-    const beyond = out(u);
+    const beyond = at(u, b.hold * 2.1);
     const sum = BODIES.reduce((acc, o) => add(acc, bodyPull(o, poses[o.id], beyond)), [0, 0, 0]);
     assert.ok(dist(gravityAt(system, poses, beyond), sum) < 1e-12, b.id);
   }

@@ -50,3 +50,35 @@ export function normalAt(body, u, r = radiusAt(body, u)) {
   const slope = (t) => (radiusAt(body, norm(add(u, scale(t, e)))) - radiusAt(body, norm(add(u, scale(t, -e))))) / (2 * e * r);
   return norm(add(u, add(scale(t1, -slope(t1)), scale(t2, -slope(t2)))));
 }
+
+// The direction from the centre to the surface point nearest v (v: from the centre, outside the shape). Probes
+// rings round w0 first, as a few metres out the nearest point can lie well round from straight in (the
+// walls of a dent are nearer than its floor), then closes in with ever smaller steps.
+export function nearestDir(body, v, w0) {
+  const gap2 = (w) => {
+    const r = radiusAt(body, w), d = [v[0] - w[0] * r, v[1] - w[1] * r, v[2] - w[2] * r];
+    return dot(d, d);
+  };
+  const off = (w, t1, t2, x, y) => norm(add(w, add(scale(t1, x), scale(t2, y))));
+  let best = w0, most = gap2(w0);
+  const [a1, a2] = tangents(w0);
+  for (const a of [0.2, 0.4, 0.7]) {
+    for (let k = 0; k < 8; k++) {
+      const w = off(w0, a1, a2, a * Math.cos((k * Math.PI) / 4), a * Math.sin((k * Math.PI) / 4)), d = gap2(w);
+      if (d < most) (best = w), (most = d);
+    }
+  }
+  for (let step = 0.1, i = 0; step > 1e-4 && i < 200; i++) {
+    const [t1, t2] = tangents(best);
+    let moved = false;
+    for (const [x, y] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const w = off(best, t1, t2, step * x, step * y), d = gap2(w);
+      if (d < most) {
+        (best = w), (most = d), (moved = true);
+        break;
+      }
+    }
+    if (!moved) step /= 2;
+  }
+  return best;
+}

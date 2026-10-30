@@ -11,7 +11,7 @@ import { stepPickups } from "./pickups.js";
 import { stepHook } from "./hook.js";
 import { stepAsteroids } from "./asteroids.js";
 import { stepFlare, flareAt, exposure } from "./flares.js";
-import { add, scale, dist, norm, anyPerpendicular } from "./vec.js";
+import { add, sub, scale, dist, norm, anyPerpendicular } from "./vec.js";
 
 // Spawn candidates: an evenly spread, fixed list of directions (Fibonacci sphere).
 const SPAWN_DIRS = Array.from({ length: 48 }, (_, i) => {
@@ -36,10 +36,18 @@ export function spawnGap(world, bodyId, forId = null, safe = flareSafe(world, bo
   return list.length ? pickSpawn(world, list, forId) : pickSpawn(world, all, forId);
 }
 
+// Safe through the whole burn, not just now: bodies don't spin, so as one goes round the sun its day and
+// night line sweeps over a spot that stands still. The line moves one way, so a spot dark when the burn starts
+// and when it ends stays dark between.
 function flareSafe(world, bodyId) {
-  const phase = flareAt(world.t, world.tuning.FLARE).phase;
-  if (phase !== "warn" && phase !== "burn") return null;
-  return (cand) => exposure(world, { pos: cand.pos, up: cand.up, groundId: bodyId }) === 0;
+  const f = flareAt(world.t, world.tuning.FLARE);
+  if (f.phase !== "warn" && f.phase !== "burn") return null;
+  const c = world.poses[bodyId].pos;
+  const moments = [world.t, Math.max(world.t, f.burnAt), f.endAt].map((t) => {
+    const poses = posesAt(world.system, t);
+    return { at: { system: world.system, poses, tuning: world.tuning }, shift: sub(poses[bodyId].pos, c) };
+  });
+  return (cand) => moments.every(({ at, shift }) => exposure(at, { pos: add(cand.pos, shift), up: cand.up, groundId: bodyId }) === 0);
 }
 
 function pickSpawn(world, list, forId) {

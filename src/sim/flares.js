@@ -37,19 +37,30 @@ export function flareReach(world, p, F = world.tuning.FLARE, ground = null) {
   return F.rate * Math.min(1, (F.reach - d) / (F.reach - F.full));
 }
 
-// Standing, your own ground shades you where its slope turns from the sun's centre, exactly where the planet
-// is drawn dark; the line from your middle would still clear the horizon a few degrees further on.
-function groundShade(world, e) {
-  if (!e.groundId) return false;
+// On or just above a body (FLARE.hover m), that body shades you where its slope under you turns from the sun's
+// centre, exactly where it is drawn dark; a line from your middle would clear its horizon some way further on,
+// so a hop or a push on the night side would burn. Returns that body's id and whether it shades you.
+function under(world, e, F) {
   const sun = world.poses[world.system.bodies.find((b) => b.kind === "sun").id].pos;
-  const { normal } = surfaceInfo(world.system.byId[e.groundId], world.poses[e.groundId], e.pos);
-  return dot(normal, sub(sun, e.pos)) <= 0;
+  let id = e.groundId ?? null, best = F.hover;
+  if (!id) {
+    for (const b of world.system.bodies) {
+      if (b.kind === "sun") continue;
+      const d = surfaceInfo(b, world.poses[b.id], e.pos).dist;
+      if (d < best) (best = d), (id = b.id);
+    }
+  }
+  if (!id) return { id: null, shade: false };
+  const { normal, point } = surfaceInfo(world.system.byId[id], world.poses[id], e.pos);
+  return { id, shade: dot(normal, sub(sun, e.groundId ? e.pos : point)) <= 0 };
 }
 
-// Health/s a burn would take from e where it is ({ pos, up, groundId } is enough), whatever the phase.
+// Health/s a burn would take from e where it is ({ pos, up, groundId } is enough), whatever the phase. The
+// world may be one at another moment ({ system, poses, tuning }).
 export function exposure(world, e, F = world.tuning.FLARE) {
-  if (groundShade(world, e)) return 0;
-  return flareReach(world, hitCentre(e), F, e.groundId);
+  const near = under(world, e, F);
+  if (near.shade) return 0;
+  return flareReach(world, hitCentre(e), F, near.id);
 }
 
 // Health/s the flare takes from e now: players and the dummy, alive, in its light, during a burn.

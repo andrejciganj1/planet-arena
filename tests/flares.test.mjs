@@ -143,7 +143,8 @@ test("a moon or a comet's shadow is shelter", () => {
     const behind = add(c, scale(away, radiusAt(b, away) + 0.6));
     assert.equal(burnRate(world, floating(behind, c)), 0, `behind ${id}`);
     const side = norm(cross(away, Math.abs(away[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]));
-    const beside = add(c, scale(side, b.radius + 2));
+    // Off to one side, clear of the shadow and higher than a body's night side shelters (FLARE.hover).
+    const beside = add(c, scale(side, b.radius + FLARE.hover + 2));
     assert.ok(burnRate(world, floating(beside, c)) > 0, `beside ${id}`);
   }
 });
@@ -234,4 +235,45 @@ test("if every spot is lit, the respawn still happens", () => {
   const s = spawnGap(world, "mid", "player", () => false);
   assert.ok(s && s.pos && s.up);
   assert.ok(Math.abs(dist(s.pos, world.poses.mid.pos) - world.system.byId.mid.radius) < 1e-6);
+});
+
+test("just off the ground on the night side is still shelter: a hop or a push doesn't burn you", () => {
+  const world = createWorld(tuning);
+  burnWhere(world, () => true);
+  for (const id of ["hot", "tiny"]) {
+    const b = world.system.byId[id], c = world.poses[id].pos, s = towardSun(world, id);
+    const side = norm(cross(s, Math.abs(s[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]));
+    const dirAt = (deg) => add(scale(s, Math.cos((deg * Math.PI) / 180)), scale(side, Math.sin((deg * Math.PI) / 180)));
+    let line = 0;
+    for (let deg = 0; deg < 180; deg += 0.05) {
+      const u = dirAt(deg);
+      if (dot(u, sub(sunPos(world), add(c, scale(u, b.radius)))) < 0) break;
+      line = deg;
+    }
+    // Feet `h` m above the ground at `deg`, in the air.
+    const hovering = (deg, h) => {
+      const u = dirAt(deg);
+      return createEntity("x", "player", add(c, scale(u, b.radius + h)), u);
+    };
+    for (const deg of [5, 10, 20, 30]) for (const h of [0.01, 0.5, 1.6]) {
+      assert.equal(burnRate(world, hovering(line + deg, h)), 0, `${id}: ${h} m up, ${deg} degrees into the night`);
+    }
+    assert.ok(burnRate(world, hovering(line - 10, 1.6)) > 0, `${id}: in the air on the day side`);
+  }
+});
+
+test("a respawn during a warning stays out of the flare's reach through the whole burn", () => {
+  const world = createWorld(tuning);
+  const { respawn } = tuning.DUMMY;
+  for (let t = 0, n = 0; n < 30; n++) {
+    const f = flareAt(t);
+    for (const early of [0.2, 3, 6]) {
+      at(world, f.warnAt + early - respawn);
+      const d = world.entities.dummy;
+      d.health = 0;
+      while (world.t < f.endAt + TICK) stepWorld(world, {}, TICK);
+      assert.ok(d.alive && d.health === tuning.DUMMY.health, `flare ${f.k}: dummy back ${early} s into the warning has ${d.health.toFixed(1)}`);
+    }
+    t = f.endAt + FLARE.fade + 1;
+  }
 });

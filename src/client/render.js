@@ -4,7 +4,7 @@
 // thing looks like lives in look/ (sky, sun, planets, aliens, weapons, props); this file keeps the scene,
 // camera, lights and the frame, and moves the pieces to where the world says they are.
 import * as THREE from "three";
-import { tumble, trailPush, trailFade } from "./rocklook.js";
+import { tumble, trailPush, trailFade, rockHeat } from "./rocklook.js";
 import { PLAYER, DUMMY, ROCKET, PAD_CUE, TICK, PICKUPS, WEAPONS, FEEDBACK, ROCK_LOOK, LOOK, ASTEROID, COLOURS } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
 import { pickupReady } from "../sim/pickups.js";
@@ -414,12 +414,13 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         k.mesh.position.copy(v3(a.pos));
         rockLook.fit(k.mesh, a.id);
         k.mesh.rotation.set(...tumble(a.id, world.t), 0);
-        // One trail point per game tick (not per frame), so the trail lasts the same on any screen.
-        trailPush(k, a.pos, world.t, ROCK_LOOK.trail);
+        // One trail point per game tick (not per frame), so the trail lasts the same on any screen; each lit by
+        // how hot the rock was when it laid it, so it shows only along the fall in.
+        trailPush(k, a.pos, world.t, ROCK_LOOK.trail, rockHeat(a, world.system, world.poses));
         const last = k.pts, n = last.length / 3, pos = k.line.geometry.attributes.position, col = k.line.geometry.attributes.color;
         pos.array.set(last);
         for (let j = 0; j < n; j++) {
-          const f = 0.5 * (1 - j / n) ** 1.5; // additive dots pile up, so start dim or the near end whites out
+          const f = 0.5 * (1 - j / n) ** 1.5 * k.heats[j]; // additive dots pile up, so start dim or the near end whites out
           col.array.set([hot.r * f, hot.g * f, hot.b * f], 3 * j);
         }
         pos.needsUpdate = col.needsUpdate = true;

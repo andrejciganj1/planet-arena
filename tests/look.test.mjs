@@ -782,3 +782,19 @@ test("a comet's coma and jets grow near the sun; the coma clears as you come clo
   }
   assert.ok(seen > 50, "vents facing the sun blow");
 });
+
+test("a flying asteroid's trail glows only as it falls in on a body: none out in space or moving away", async () => {
+  const { rockHeat } = await import("../src/client/rocklook.js");
+  const tuning = await import("../src/tuning.js");
+  const { createSystem, posesAt } = await import("../src/sim/system.js");
+  const { ROCK_LOOK } = tuning, [from, full] = ROCK_LOOK.heat;
+  const system = createSystem(tuning.BODIES), poses = posesAt(system, 40);
+  const mid = system.byId.mid, c = poses.mid.pos;
+  const above = (h, v) => ({ pos: [c[0], c[1] + mid.radius + h, c[2]], vel: [poses.mid.vel[0], poses.mid.vel[1] + v, poses.mid.vel[2]] });
+  assert.equal(rockHeat({ pos: [0, 400, 0], vel: [0, -10, 0] }, system, poses), 0, "out in space");
+  assert.equal(rockHeat(above(full / 2, -10), system, poses), 1, "close in and falling");
+  assert.equal(rockHeat(above(full / 2, 10), system, poses), 0, "close in but moving away");
+  const mid1 = rockHeat(above((from + full) / 2, -10), system, poses);
+  assert.ok(mid1 > 0 && mid1 < 1, `warming on the way in (${mid1})`);
+  assert.equal(rockHeat(above(from + 1, -10), system, poses), 0, "not yet");
+});

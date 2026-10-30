@@ -125,8 +125,9 @@ export const COLOURS = [0xffd23f, 0xe8505b, 0x4fb0e8, 0x6fd36b, 0xb06fe8, 0xff8a
 // damage, never above `max`; the bar over a hit player flashes white for `flash`.
 // Looks of a flying asteroid: `trail` drawn positions kept behind it, `glow` the hot haze's radius as a
 // multiple of the rock's and `glowOpacity` how solid it is, `trailSize` the m across of each trail
-// dot, colours as hex.
-export const ROCK_LOOK = { trail: 60, trailSize: 1.6, glow: 1.3, glowOpacity: 0.25, rock: 0x3a3330, hot: 0xff7a1f, trailColor: 0xffa040 };
+// dot, colours as hex. heat: the trail shows only while the rock falls in on a body (closing on it), like a
+// meteor: none beyond heat[0] m from the surface, full within heat[1] m.
+export const ROCK_LOOK = { trail: 60, trailSize: 1.6, glow: 1.3, glowOpacity: 0.25, rock: 0x3a3330, hot: 0xff7a1f, trailColor: 0xffa040, heat: [30, 10] };
 
 // Sound, looks only. range: m beyond which nothing is heard; near: m within which a sound is at full volume;
 // own, others: gains for your sounds and everyone else's; gap: s of frame or clock jump after which changes

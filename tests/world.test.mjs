@@ -183,6 +183,8 @@ function riderOn(t, id, u) {
 test("riding a comet for a whole lap, through perihelion and aphelion, you stay on and alive", () => {
   for (const id of ["comet-a", "comet-c"]) {
     const { w, p } = riderOn(0, id, [0, 1, 0]);
+    // The ride alone: a flare at perihelion can burn the rider, a hazard of its own (tests/flares.test.mjs).
+    w.tuning = { ...w.tuning, FLARE: { ...w.tuning.FLARE, first: Infinity } };
     const ticks = Math.round(w.system.byId[id].orbit.period / TICK);
     for (let i = 0; i < ticks; i++) {
       stepWorld(w, {}, TICK);

@@ -12,7 +12,7 @@ import { flareAt, burnRate } from "../sim/flares.js";
 export const SOUNDS = [
   "pistol", "shotgun", "rocket", "minigun", "sniper", "railgun", "rocketFlight", "explode", "rockIncoming", "rockBurn",
   "ding", "hurt", "death", "announcer", "boink", "pickup", "pickupBack", "step", "hookFire", "hookPull", "boost",
-  "switch", "empty", "scream", "flareAlarm", "flareVoice", "flareRoar", "sizzle",
+  "switch", "empty", "scream", "flareAlarm", "flareVoice", "flareRoar", "sizzle", "hookCatch",
 ];
 
 // While a status screen covers the game (online: connecting, unreachable, full, version, no player yet) the
@@ -86,7 +86,7 @@ export function createDirector({ selfId, online }) {
     // The highest count heard, so a count a server correction put back doesn't sound again.
     const now = {
       ref: e, shots: was?.ref === e ? Math.max(was.shots, e.shots) : e.shots, weapon: e.weapon, hook: !!e.hook,
-      fuel: e.fuel, alive: e.alive, stride: 0, boostUntil: -Infinity,
+      fuel: e.fuel, alive: e.alive, stride: 0, boostUntil: -Infinity, shot: !!e.hookShot,
     };
     if (!quiet) {
       // The last round hands over the pistol in the same tick: that shot was the old weapon's.
@@ -95,7 +95,12 @@ export function createDirector({ selfId, online }) {
       // Another's railgun sounds from its beam event instead.
       if (mine || gun !== "railgun") for (let k = was.shots; k < e.shots; k++) once.push({ name: gun, ...eye });
       if (mine && e.weapon !== was.weapon) once.push({ name: emptied ? "empty" : "switch", pos: null, own: true, src: selfId });
-      if (e.hook && !was.hook) once.push({ name: "hookFire", ...eye });
+      if (e.hookShot && !was.shot) once.push({ name: "hookFire", ...eye });
+      // The catch clanks where the hook bit, yours too: it is out there, not in your head.
+      if (e.hook && !was.hook) {
+        const at = world.poses[e.hook.body] && add(world.poses[e.hook.body].pos, e.hook.offset);
+        if (at) once.push({ name: "hookCatch", pos: at, own: mine, src: e.id });
+      }
       const speed = len(e.vel);
       if (e.alive && e.groundId && speed > SOUND.stepSpeed) {
         now.stride = was.stride + speed * dt;

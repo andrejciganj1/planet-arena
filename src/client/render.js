@@ -22,7 +22,8 @@ import { DUMMY_COLOUR, ALIEN_ASSETS, figureMesh, dressFigure, armFigure, styleFi
 import { createPoser } from "./look/alienpose.js";
 import { WEAPON_ASSETS, weaponModels, weaponSet, swapMaterials, muzzleFlash, showFlash, spinGun, shotLooks } from "./look/weapons.js";
 import { createGunWatch, viewGun, flashShown } from "./look/gunpose.js";
-import { PROP_ASSETS, pickupLook, padLook, cuePath, ropeLine, cometTailLook, cometHalo, asteroidBelt, flyingRocks } from "./look/props.js";
+import { createGrapples } from "./look/grapple.js";
+import { PROP_ASSETS, pickupLook, padLook, cuePath, cometTailLook, cometHalo, asteroidBelt, flyingRocks } from "./look/props.js";
 import { cometTails } from "./look/proppose.js";
 import { loadAssets } from "./look/assets.js";
 import { threeLoaders } from "./look/loaders.js";
@@ -127,8 +128,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
     scene.add(look.group);
     return { pk, look };
   });
-  const { rope, ropeGeo } = ropeLine();
-  scene.add(rope);
+  const grapples = createGrapples(scene);
 
   const looks = shotLooks(), { rocketGeo, rocketMat, bulletGeo, bulletMat } = looks;
   const shots = [], blasts = [], beams = [];
@@ -475,14 +475,11 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         look.show(pickupReady(world, pk), sunAt(at));
       }
 
-      // The rope from just below the eye to the caught point (interpolated with its body).
-      rope.visible = !!p?.alive && !!p.hook;
-      if (rope.visible) {
-        const { pos, up } = mine();
-        const hand = add(pos, scale(up, PLAYER.eye - 0.4));
-        const anchor = add(poses[p.hook.body], p.hook.offset);
-        ropeGeo.setFromPoints([v3(hand), v3(anchor)]);
-      }
+      // Every hook and its rope, from just below the eye (interpolated, yours shifted as you are drawn).
+      grapples.update(world, poses, alpha, now, (e) => {
+        const { pos, up } = e === p ? mine() : between(e, alpha);
+        return add(pos, scale(up, PLAYER.eye - 0.4));
+      }, props);
 
       // A solar flare, from the match clock like everything else (?debug&at=T stills one).
       const fs = flareView(t);

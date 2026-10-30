@@ -468,6 +468,13 @@ export const RECIPES = {
     [hiss, { filter: ["highpass", 4000], peak: 0.25, d: 0.01 }],
     [tone, { wave: "triangle", f: 600, f1: 1400, peak: 0.15, d: 0.08 }],
   ]),
+  // The hook biting: a short metallic clank (two inharmonic partials over a click) and a dull knock.
+  hookCatch: (ctx, out) => shot(ctx, out, [
+    [hiss, { filter: ["bandpass", 3200, 2], peak: 0.4, d: 0.02 }],
+    [tone, { wave: "triangle", f: 1180, peak: 0.22, a: 0.002, d: 0.2 }],
+    [tone, { f: 2870, peak: 0.1, a: 0.002, d: 0.12 }],
+    [tone, { f: 140, f1: 90, peak: 0.25, a: 0.003, d: 0.1 }],
+  ]),
   // Being reeled in: soft zipper teeth (gently pulsed noise) through a resonance that rises like a bottle
   // filling, the teeth speeding up with it. Kept under the other sounds: a narrow, slow rise that ends low, a
   // lowpass over it and a sine pulse instead of a square, so it never whines. The level falls as the band

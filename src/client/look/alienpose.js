@@ -43,8 +43,8 @@ export function poseParts(e, boosting = false, cfg = LOOK.alien.pose) {
     lean = mix(cfg.lean.jump, cfg.lean.fall, k);
     armL = mix(Math.PI / 2 + aim + cfg.support, cfg.flail, k);
   }
-  // The hook arm reaches out where you look, a little above the gun.
-  if (e.hook) armL = Math.PI / 2 + Math.min(aim + cfg.reach, cfg.aim[1] + cfg.reach / 2);
+  // The hook arm reaches out where you look, a little above the gun, from the throw on.
+  if (e.hook || e.hookShot) armL = Math.PI / 2 + Math.min(aim + cfg.reach, cfg.aim[1] + cfg.reach / 2);
   return {
     legL, legR,
     armL: armL + lean,

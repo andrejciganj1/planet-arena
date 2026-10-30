@@ -1,5 +1,5 @@
 // Pure choices for the props (no three.js, so the tests check them): which model a pickup shows, where a
-// comet's two tails run, and its coma and jets. look/props.js draws them.
+// comet's two tails run, its coma and jets, and the grappling hook's pose. look/props.js draws them.
 import { LOOK } from "../../tuning.js";
 import { hashRand } from "../../sim/weapons.js";
 import { add, sub, scale, dot, norm, len, dist } from "../../sim/vec.js";
@@ -61,4 +61,13 @@ export function jetLook(at, toSun, stir, cfg = LOOK.props.comets) {
   const facing = Math.min(1, Math.max(0, dot(at, toSun) / sunward));
   const dir = norm(sub(at, scale(toSun, back * Math.max(0, dot(at, toSun)))));
   return { dir, length: length[0] + (length[1] - length[0]) * stir, opacity: opacity * facing * stir };
+}
+
+// The grappling hook's prongs and spin: state "flying" (folded, spinning), "caught" (snapping open over `snap`
+// s) or "reeling" (back to the hand, folding over `reel` s); since: s in that state. open: 0 folded, 1 dug in.
+export function hookPose(state, since, cfg = LOOK.props.hook) {
+  const ease = (k) => 1 - (1 - Math.min(1, Math.max(0, k))) ** 3;
+  if (state === "flying") return { open: 0, spin: cfg.spin * since };
+  if (state === "caught") return { open: ease(since / cfg.snap), spin: 0 };
+  return { open: 1 - Math.min(1, since / cfg.reel), spin: 0 };
 }

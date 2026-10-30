@@ -257,6 +257,9 @@ export const LOOK = {
     pickups: { float: 1, bob: 0.15, bobRate: 2, spin: 1, glow: 0.6, night: 0.3, nightTint: 0.06, halo: [1.8, 0.5], sun: 0.55, weapon: 2.2 },
     pads: { lands: 0x3ee05a, misses: 0xe0443e, hidden: 0x8a8f9c, glow: 1.2, halo: [2.6, 0.3] },
     rocks: { belt: 0x34302d, variety: 0.3, cracks: 1.6, rim: 0.4 },
+    // The grappling hook: snap and reel s to open on a catch and to come back to the hand; spin rad/s in
+    // flight; openAngle rad the prongs swing out; dust: the puff on a catch (m across at the end, s).
+    hook: { snap: 0.2, reel: 0.2, spin: 12, openAngle: 1.9, dust: { size: 2.2, life: 0.5, opacity: 0.6 } },
     comets: {
       ion: { color: 0x5fa8ff, length: [12, 2400, 80], width: [0.7, 1.4], opacity: 0.55 },
       dust: { color: 0xffe6a8, length: [8, 1500, 50], width: [2.2, 10], opacity: 0.55, bend: 0.5 },

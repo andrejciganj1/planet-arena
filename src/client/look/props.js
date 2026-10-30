@@ -1,4 +1,4 @@
-// The things around the bodies: pickups, pads and their cue path, the hook's rope, comet tails, the
+// The things around the bodies: pickups, pads and their cue path, comet tails, the
 // asteroid belt and the flying asteroids. The models (assets/models/props.glb, from tools/blender/props.py; a
 // weapon pickup shows its gun from weapons.glb) replace the simple shapes when they load; which model shows
 // for a pickup and where the tails run are in look/proppose.js.
@@ -176,14 +176,6 @@ export function cuePath() {
   const path = new THREE.Line(pathGeo, pathMat);
   path.frustumCulled = false;
   return { path, pathGeo, pathMat };
-}
-
-// The rope, from the hand to where the hook caught.
-export function ropeLine() {
-  const ropeGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-  const rope = new THREE.Line(ropeGeo, new THREE.LineBasicMaterial({ color: 0xd9d2c0 }));
-  rope.frustumCulled = false;
-  return { rope, ropeGeo };
 }
 
 // One comet tail: a tube along tailAt, rewritten each frame (a few hundred points), glowing and fading to its

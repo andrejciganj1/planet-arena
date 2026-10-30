@@ -1,4 +1,4 @@
-# The props: the health, fuel and ammo pickups, the launch pad and four rough rocks. Built from code (no hand
+# The props: the health, fuel and ammo pickups, the launch pad, four rough rocks and the grappling hook. Built from code (no hand
 # modelling) and from a fixed noise seed, so a rebuild gives the same file.
 #
 #   blender -b -P tools/blender/props.py -- --out assets/models/props.glb
@@ -6,7 +6,8 @@
 # Built in game axes (up +y) and turned into Blender's at the end; the glTF exporter turns them back. Nodes:
 # `health`, `fuel`, `ammo` (each centred on its origin, within 0.6 m of it: they float 1 m over the ground),
 # `pad` (a plate on the ground, its top at +y), `pad_arrow` (along +y from its base, turned by the page to the
-# launch direction) and `rock_0` to `rock_3` (unit sized: the farthest vertex 0.99 m out, the page scales them).
+# launch direction), `rock_0` to `rock_3` (unit sized: the farthest vertex 0.99 m out, the page scales them),
+# and the grappling hook, `hook` and `hook_prong` (see below).
 # Materials the page changes: `ammo_accent` takes the weapon's colour, `pad_light` the cue's; `cross`,
 # `fuel_glow`, `ammo_accent` and `pad_light` glow (tests/look.test.mjs checks the names and sizes).
 import argparse
@@ -187,6 +188,21 @@ noise.seed_set(7)
 ROCKS = [(1, (1.0, 0.85, 0.9)), (2, (1.0, 0.82, 0.86)), (3, (0.88, 0.92, 1.0)), (4, (1.0, 0.88, 0.8))]
 for i, (seed, stretch) in enumerate(ROCKS):
     PROPS[f"rock_{i}"] = [rock(seed, stretch)]
+
+# The grappling hook: `hook` is the nose, crown, shank and rope collar along +y (it flies nose first, the rope
+# trailing from the collar); `hook_prong` one prong, pivoting at its origin, folded back along -y with its claw out
+# along +z. The page sets three round the crown and swings them open on a catch.
+PROPS["hook"] = [
+    tube(0.0, 0.11, 0.034, "pad_metal", r1=0.006),
+    tube(-0.035, 0.0, 0.04, "trim"),
+    tube(-0.42, -0.035, 0.016, "pad_metal"),
+    tube(-0.47, -0.42, 0.03, "trim"),
+]
+PROPS["hook_prong"] = [
+    box((0, -0.14, 0.0), (0.024, 0.28, 0.024), "pad_metal", bevel=0.006),
+    box((0, -0.275, 0.045), (0.022, 0.022, 0.1), "pad_metal", bevel=0.006),
+    box((0, -0.25, 0.092), (0.018, 0.06, 0.018), "pad_metal", bevel=0.005),
+]
 
 # ---- into Blender -----------------------------------------------------------------------------------------
 

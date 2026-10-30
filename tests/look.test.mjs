@@ -843,3 +843,28 @@ test("the sun blazes until the burn ends, then dims over half a second", async (
   assert.ok(mid > 0.3 && mid < 0.7, `${mid}`);
   assert.equal(flareView(f.endAt + 0.6).burn, 0);
 });
+
+test("the hook opens as it catches and folds as it reels back", async () => {
+  const { hookPose } = await import("../src/client/look/proppose.js");
+  const { snap, reel, spin } = LOOK.props.hook;
+  assert.equal(hookPose("flying", 0.3).open, 0);
+  assert.ok(Math.abs(hookPose("flying", 0.5).spin - spin * 0.5) < 1e-9, "spins in flight");
+  assert.equal(hookPose("caught", 0).open, 0);
+  const half = hookPose("caught", snap / 2).open;
+  assert.ok(half > 0.3 && half < 1, `${half}`);
+  assert.equal(hookPose("caught", snap).open, 1);
+  assert.equal(hookPose("caught", 5).open, 1);
+  assert.equal(hookPose("reeling", 0).open, 1);
+  assert.equal(hookPose("reeling", reel).open, 0);
+});
+
+test("the props file has a grappling hook: a shank along +y about half a metre long, and a prong pivoting at the crown", () => {
+  const glb = readGlb(PROPS_GLB);
+  const hook = nodeVertices(glb, "hook").points, prong = nodeVertices(glb, "hook_prong").points;
+  const ys = hook.map((p) => p[1]);
+  assert.ok(Math.max(...ys) > 0.05 && Math.min(...ys) < -0.4 && Math.max(...ys) - Math.min(...ys) < 0.7, "shank along +y, nose forward");
+  for (const p of hook) assert.ok(Math.hypot(p[0], p[2]) < 0.06, `slim: ${p}`);
+  // Folded, the prong runs back along -y from its pivot with its claw out along +z.
+  assert.ok(Math.min(...prong.map((p) => p[1])) < -0.25 && Math.max(...prong.map((p) => p[1])) <= 0.02);
+  assert.ok(Math.max(...prong.map((p) => p[2])) > 0.08, "the claw sticks out");
+});

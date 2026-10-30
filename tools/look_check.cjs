@@ -127,6 +127,13 @@ function views(world) {
   list.push(close("alien-night", -1, 35));
   list.push(close("alien-night-blue", -1, 35, { as: 0x4fb0e8 }));
   list.push(close("alien-walk", 1, 40, { side: true, dist: 3.6, state: { walk: 7, pitch: 0.45 }, as: 0xe8505b }));
+  // Hooked onto the ground 6 m ahead: the hook dug in, prongs open, the rope from the hand.
+  const hookAt = (k, deg, ahead) => {
+    const el = (deg * Math.PI) / 180, up = v.norm(v.add(v.scale(Y, Math.cos(el)), v.scale(mHoriz, k * Math.sin(el))));
+    const fwd = v.scale(v.norm(v.cross(mHoriz, up)), -1); // the way a side view's figure faces
+    return v.scale(v.norm(v.add(up, v.scale(fwd, ahead / mid.radius))), mid.radius);
+  };
+  list.push(close("hook-caught", 1, 35, { side: true, dist: 6, state: { hook: { body: "mid", offset: hookAt(1, 35, 4), len: 4 }, pitch: -0.2 } }));
   list.push(close("alien-boost", 1, 40, { side: true, dist: 3.6, state: { groundId: null, airTime: 0.8, pitch: 0.1 }, boost: true, lift: 1 }));
   list.push(close("alien-boost-far", -1, 35, { side: true, dist: 14, state: { groundId: null, airTime: 0.8, pitch: 0.1 }, boost: true, lift: 1, as: 0x4fb0e8 }));
   list.push(close("alien-hook", 1, 40, { side: true, dist: 3.6, state: { groundId: null, airTime: 1.5, pitch: 0.3, hook: { body: "mid", offset: [0, 0, 0] } } }));

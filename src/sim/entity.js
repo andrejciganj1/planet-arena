@@ -20,7 +20,7 @@ export function createEntity(id, kind, pos, up) {
     alive: true, respawnAt: 0, weapon: "pistol", cooldown: 0, lastHitBy: null, lastHitAt: -Infinity,
     // Everyone starts, and respawns, with the pistol only. ammo[w] is rounds left; the pistol never runs out.
     weapons: ["pistol"], ammo: {}, shots: 0,
-    hook: null, hookCooldown: 0, hookHeld: false, hookArmed: false,
+    hook: null, hookShot: null, hookCooldown: 0, hookHeld: false, hookArmed: false,
     boostLock: false, padLockUntil: -Infinity, airTime: 0, groundTime: 0,
   };
 }

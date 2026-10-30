@@ -373,11 +373,12 @@ export const PADS = [
   { id: "far-c", body: "far", dir: heading(300), speed: 24 },
 ];
 
-// The hook. range: m along the view it reaches; pull: m/s^2 towards the caught point, applied only while
+// The hook. range: m along the view it reaches; fly: m/s it flies out at (0.5 s to full range, the owner's
+// number); pull: m/s^2 towards the caught point, applied only while
 // closing slower than `speed` m/s; steady: 1/s, how fast sideways motion relative to the caught body dies
 // away, so the rope reels you in instead of swinging you round it; cooldown: s after letting go (or a
 // miss) before it fires again.
-export const HOOK = { range: 25, pull: 30, speed: 15, steady: 3, cooldown: 0.5 };
+export const HOOK = { range: 25, fly: 50, pull: 30, speed: 15, steady: 3, cooldown: 0.5 };
 
 // Pickups. touch: feet within this of one take it; health: points a pack restores; fuelMax: the fuel
 // pickup fills the booster to this many tanks (the extra is used up, never refilled by standing);

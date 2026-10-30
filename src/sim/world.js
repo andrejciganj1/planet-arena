@@ -161,6 +161,7 @@ function die(world, e, cause) {
   const by = creditOf(world, e), pos = hitCentre(e);
   e.alive = false;
   e.hook = null;
+  e.hookShot = null;
   e.respawnAt = world.t + (e.kind === "dummy" ? world.tuning.DUMMY.respawn : world.tuning.PLAYER.respawn);
   world.events.push({ type: "death", id: e.id, cause, by, pos });
   // Dummy kills and deaths don't count; neither does a kill on yourself.

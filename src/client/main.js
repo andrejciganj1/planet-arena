@@ -23,6 +23,7 @@ import { createOnlineGame, storedName } from "./online.js";
 import { createDirector, heard } from "./sounds.js";
 import { createAudio } from "./audio.js";
 import { SERVER } from "./config.js";
+import { createThrust, thrustView } from "./look/gunpose.js";
 
 const params = new URLSearchParams(location.search);
 const server = params.has("solo") ? null : params.get("server") || (location.hostname.endsWith(".github.io") ? SERVER : null);
@@ -115,6 +116,7 @@ document.addEventListener("mousedown", (e) => locked && input.onButton(e.button,
 document.addEventListener("mouseup", (e) => input.onButton(e.button, false));
 document.addEventListener("wheel", (e) => locked && input.onWheel(e.deltaY), { passive: true });
 
+const thrust = createThrust(); // your own boost, felt in the view and on screen
 let last = performance.now(), acc = 0;
 function frame(now) {
   const elapsed = (now - last) / 1000;
@@ -150,9 +152,10 @@ function frame(now) {
   }
   const sounds = heard(director?.frame(world, world.events, elapsed, settings), game && statusText() !== null);
   world.events.length = 0;
-  renderer.draw(alpha, locked ? input.pending() : { yaw: 0, pitch: 0 }, zoom, shift, secs);
+  const feel = thrustView(thrust.frame(p, secs, elapsed), secs);
+  renderer.draw(alpha, locked ? input.pending() : { yaw: 0, pitch: 0 }, zoom, shift, secs, feel);
   const cam = renderer.camera();
-  hud.update(world, locked, secs, id, cam);
+  hud.update(world, locked, secs, id, cam, feel);
   // Heard from the camera just drawn, so a sound comes from where it is on screen.
   audio.setListener(cam.pos, cam.forward, cam.up);
   if (sounds) {

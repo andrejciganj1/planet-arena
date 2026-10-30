@@ -198,6 +198,9 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // straight ahead, so its barrel runs to the crosshair); kick: the recoil after each of your shots, back (m) and up (rad) at its start,
 // gone after `time` s, scaled per weapon by `by`; flash: s a muzzle flash shows, its size per weapon (m, in the
 // model's own size) and its colour; spin: the minigun's barrels, rad per s while firing and for `for` s after.
+// thrust (look/gunpose.js): your own boost in first person, easing in and out over `ease` s: fov, degrees the
+// view widens (small: a big change in view width makes some people queasy); dip, m the gun in view drops;
+// shake, m it shakes at `shakeRate` rad/s; glow, how strong the light of your flames is from below the screen.
 // props (look/props.js, the models from tools/blender/props.py; look/proppose.js): pickups float `float` m over
 // their spot, bobbing `bob` m at `bobRate` rad/s, turning `spin` rad/s; glow: how bright their coloured parts
 // glow in their own colour; night: how much the rest glows in its own colour where the sun doesn't reach (so a
@@ -232,6 +235,7 @@ export const LOOK = {
     },
     jet: { core: 0xfff4dc, length: 1.1, width: 0.11, coreShare: [0.5, 0.45], tilt: 0.45, flicker: 0.2, rate: 31, opacity: 1, glow: [1.1, 0.7], ease: 0.05, trail: 24, trailSize: 0.45, trailGlow: 0.55 },
   },
+  thrust: { ease: 0.06, fov: 4, dip: 0.02, shake: 0.004, shakeRate: 43, glow: 0.6 },
   props: {
     pickups: { float: 1, bob: 0.15, bobRate: 2, spin: 1, glow: 0.6, night: 0.3, nightTint: 0.06, halo: [1.8, 0.5], sun: 0.55, weapon: 2.2 },
     pads: { lands: 0x3ee05a, misses: 0xe0443e, hidden: 0x8a8f9c, glow: 1.2, halo: [2.6, 0.3] },

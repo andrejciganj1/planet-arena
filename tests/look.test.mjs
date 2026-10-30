@@ -716,3 +716,38 @@ test("a boost's exhaust trail lasts the same game time at any frame rate and fad
   assert.ok(Math.abs(a.gone - b.gone) < 1e-9, `gone at the same game time (${a.gone}, ${b.gone})`);
   assert.ok(Math.abs(a.gone - (0.5 + jet.trail * TICK)) < 3 * TICK, `gone a trail's length after the boost (${a.gone})`);
 });
+
+test("your own boost: the thrust builds while fuel burns in the air and is gone soon after landing, at any frame rate", async () => {
+  const { createThrust, thrustView } = await import("../src/client/look/gunpose.js");
+  const { thrust } = LOOK;
+  // Half a second boosting, a second falling, then on the ground; fuel arrives per tick, frames at fps.
+  const run = (fps) => {
+    const watch = createThrust(), e = { id: "me", alive: true, groundId: null, fuel: 1.5 };
+    const at = {};
+    for (let f = 0; f <= 2 * fps; f++) {
+      const t = f / fps, tick = Math.floor(t / TICK);
+      e.fuel = 1.5 - Math.min(tick, 30) * TICK;
+      e.groundId = t >= 1.5 ? "mid" : null;
+      const k = watch.frame(e, t, 1 / fps);
+      for (const s of [0.45, 0.85, 1.95]) if (Math.abs(t - s) < 0.5 / fps) at[s] = k;
+    }
+    return at;
+  };
+  for (const fps of [60, 144]) {
+    const at = run(fps);
+    assert.ok(at[0.45] > 0.95, `full thrust while burning at ${fps} fps (${at[0.45]})`);
+    assert.ok(at[0.85] < 0.05, `gone a moment after the fuel stops (${at[0.85]})`);
+    assert.ok(at[1.95] < 0.01, "none on the ground");
+  }
+  assert.equal(createThrust().frame({ id: "x", alive: false, groundId: null, fuel: 0 }, 0, 1 / 60), 0, "none while dead");
+
+  const rest = thrustView(0, 1.3), full = thrustView(1, 1.3);
+  assert.deepEqual([rest.fov, rest.glow, ...rest.gun], [0, 0, 0, 0, 0], "nothing at rest");
+  assert.equal(full.fov, thrust.fov, "the view widens by thrust.fov at full thrust");
+  assert.ok(full.gun[1] < 0, "the gun dips");
+  for (let t = 0; t < 2; t += 0.01) {
+    const v = thrustView(1, t);
+    assert.ok(Math.hypot(...v.gun) <= thrust.dip + 2 * thrust.shake + 1e-9, "the shake stays small");
+    assert.ok(v.glow > 0 && v.glow <= thrust.glow * (1 + LOOK.alien.jet.flicker), "the glow flickers with the flames");
+  }
+});

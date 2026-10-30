@@ -226,8 +226,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
     },
     // alpha: how far towards the next tick to draw (0..1); look: mouse turn not yet given to the sim;
     // zoom: the sniper's magnification while zoomed, else 1; shift: added to where you are drawn (online,
-    // a prediction's correction eased in); now: real seconds, for the bars' hit flash.
-    draw(alpha, look, zoom = 1, shift = null, now = 0) {
+    // a prediction's correction eased in); now: real seconds, for the bars' hit flash; feel: your own boost
+    // (look/gunpose.js thrustView), which widens the view and shakes the gun in it.
+    draw(alpha, look, zoom = 1, shift = null, now = 0, feel = null) {
       if (pinned === null && lastNow !== null && quality.frame(now - lastNow) !== level) {
         level = quality.level;
         renderer.setPixelRatio(pixelRatio(level));
@@ -237,8 +238,10 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       const dt = lastNow === null ? 0 : now - lastNow;
       lastNow = now;
       resize();
-      if (camera.fov !== 80 / zoom) {
-        camera.fov = 80 / zoom;
+      // Zoomed in, the sniper's view stays steady.
+      const fov = zoom === 1 && feel && !fixedView ? 80 + feel.fov : 80 / zoom;
+      if (camera.fov !== fov) {
+        camera.fov = fov;
         camera.updateProjectionMatrix();
       }
       const poses = {};
@@ -302,8 +305,8 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       }
       const mineShot = !free && p.alive ? watch.frame(p, now) : null;
       if (mineShot) {
-        const at = viewGun(p.weapon, mineShot.since);
-        holder.position.set(at.pos[0], at.pos[1], at.pos[2]);
+        const at = viewGun(p.weapon, mineShot.since), push = feel ? feel.gun : [0, 0, 0];
+        holder.position.set(at.pos[0] + push[0], at.pos[1] + push[1], at.pos[2] + push[2]);
         holder.rotation.x = at.pitch;
         holder.scale.setScalar(at.scale);
         if (held) spinGun(held, mineShot.since, dt);

@@ -134,6 +134,11 @@ function views(world) {
     return v.scale(v.norm(v.add(up, v.scale(fwd, ahead / mid.radius))), mid.radius);
   };
   list.push(close("hook-caught", 1, 35, { side: true, dist: 6, state: { hook: { body: "mid", offset: hookAt(1, 35, 4), len: 4 }, pitch: -0.2 } }));
+  // A rocket blast 3 m in front of a figure on Mid, a fifth of a second in (`blast`: set off once the view is
+  // ready, then `frames` frames drawn before the shot).
+  const boom = close("explosion", 1, 35, { dist: 11 });
+  boom.blast = { pos: v.add(boom.dummy.pos, v.add(v.scale(boom.dummy.up, 0.5), v.scale(boom.dummy.forward, 3))), splash: 4, frames: 12 };
+  list.push(boom);
   list.push(close("alien-boost", 1, 40, { side: true, dist: 3.6, state: { groundId: null, airTime: 0.8, pitch: 0.1 }, boost: true, lift: 1 }));
   list.push(close("alien-boost-far", -1, 35, { side: true, dist: 14, state: { groundId: null, airTime: 0.8, pitch: 0.1 }, boost: true, lift: 1, as: 0x4fb0e8 }));
   list.push(close("alien-hook", 1, 40, { side: true, dist: 3.6, state: { groundId: null, airTime: 1.5, pitch: 0.3, hook: { body: "mid", offset: [0, 0, 0] } } }));
@@ -359,6 +364,10 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
     // Measured: the figure alone, its name tag hidden.
     if (SEEN.includes(view.name)) await p.evaluate(() => window.game.renderer.setShown({ tags: false }));
     await frames(p, 30); // shaders compiled, every map painted (one a frame) and a few frames drawn
+    if (view.blast) {
+      await p.evaluate((b) => window.game.world.explosions.push({ pos: b.pos, age: 0, splash: b.splash }), view.blast);
+      await frames(p, view.blast.frames);
+    }
     const file = path.join(out, `${view.name}.png`);
     const shot = await p.screenshot({ path: file });
     if (SEEN.includes(view.name)) {

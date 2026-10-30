@@ -279,6 +279,15 @@ export const LOOK = {
     ],
     galaxy: { dir: [0.5, 0.82, 0.05], size: 0.2, tilt: 60, turn: 25 },
   },
+  // Explosions (look/blastpose.js, look/blast.js), all in s: flash, grow (the fire swelling to the blast's
+  // reach), burn (the fire dying after), ring (the shock ring running out to ringReach times the reach), sparks,
+  // life (until the smoke is gone); billow: how much bigger the smoke grows; max: blasts drawn at once;
+  // death: m, the reach drawn for a death's burst; light: the brightest a blast lights things near it, within
+  // lightRange m; sparkCount per blast; from: the lowest quality level with sparks and light.
+  blast: {
+    flash: 0.12, grow: 0.25, burn: 0.45, ring: 0.35, ringReach: 1.6, sparks: 0.6, life: 1.6, billow: 0.6, max: 12,
+    death: 2.5, light: 40, lightRange: 30, sparkCount: 28, from: 1,
+  },
   // The third-person view (look/camerapose.js): the camera back, side (right) and lift (up) m from the eye along
   // the view; pad: m it keeps off a body in the way; range: m out the crosshair looks for where a shot lands;
   // near: m from your eye within which your own figure is hidden (it would fill the screen).

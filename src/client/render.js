@@ -24,6 +24,7 @@ import { createPoser } from "./look/alienpose.js";
 import { WEAPON_ASSETS, weaponModels, weaponSet, swapMaterials, muzzleFlash, showFlash, spinGun, shotLooks } from "./look/weapons.js";
 import { createGunWatch, viewGun, flashShown } from "./look/gunpose.js";
 import { createGrapples } from "./look/grapple.js";
+import { createBlasts } from "./look/blast.js";
 import { PROP_ASSETS, pickupLook, padLook, cuePath, cometTailLook, cometHalo, asteroidBelt, flyingRocks } from "./look/props.js";
 import { cometTails } from "./look/proppose.js";
 import { loadAssets } from "./look/assets.js";
@@ -132,7 +133,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const grapples = createGrapples(scene);
 
   const looks = shotLooks(), { rocketGeo, rocketMat, bulletGeo, bulletMat } = looks;
-  const shots = [], blasts = [], beams = [];
+  const shots = [], beams = [];
+  const blastLooks = createBlasts(scene);
+  blastLooks.setLevel(level);
   const pooled = (list, make) => (i) => list[i] || (list[i] = (() => { const m = make(); scene.add(m); return m; })());
   // Flying asteroids: the trail is kept per rock id and dropped with the rock.
   const rockLook = flyingRocks();
@@ -169,7 +172,6 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   };
   const flashAt = {}; // entity id -> when its bar began to flash (real seconds: the match clock can go back)
   const shot = pooled(shots, looks.shot);
-  const blast = pooled(blasts, looks.blast);
   const beam = pooled(beams, looks.beam);
 
   function resize() {
@@ -243,6 +245,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         sun.setLevel(level);
         planets.setLevel(level);
         storm.setLevel(level);
+        blastLooks.setLevel(level);
       }
       const dt = lastNow === null ? 0 : now - lastNow;
       lastNow = now;
@@ -456,14 +459,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         rockTrails.delete(id);
       }
       i = 0;
-      for (const x of world.explosions) {
-        const m = blast(i++), k = x.age / ROCKET.showFor;
-        m.visible = true;
-        m.position.copy(v3(x.pos));
-        m.scale.setScalar(0.5 + (x.splash - 0.5) * Math.sqrt(k));
-        m.material.opacity = 0.85 * (1 - k);
-      }
-      for (; i < blasts.length; i++) blasts[i].visible = false;
+      blastLooks.update(world.explosions, now);
       i = 0;
       for (const b of world.beams) {
         const l = beam(i++);

@@ -909,3 +909,33 @@ test("the third-person crosshair is where the shot lands", async () => {
   const onMid = aimPoint(w, null, from, [0, 0, -1]);
   assert.ok(Math.abs(onMid[2] - (mid[2] + r)) < 0.01, `${onMid}`);
 });
+
+test("a blast flashes, swells to its size, turns to smoke and is gone by its life", async () => {
+  const { blastLook } = await import("../src/client/look/blastpose.js");
+  const { ROCKET } = await import("../src/tuning.js");
+  const size = 4, at = (t) => blastLook(t, size);
+  assert.equal(at(0).flash, 1);
+  assert.ok(at(0).fireSize < size && at(0).sparks === 1);
+  assert.ok(at(0.1).flash < 0.2 && at(0.1).fireSize > at(0).fireSize && at(0.1).fireSize < size);
+  assert.equal(at(0.25).fireSize, size);
+  assert.equal(at(ROCKET.showFor).fireSize, size, "at the old blast's end it still shows its reach");
+  assert.equal(at(0.25).flash, 0);
+  const late = at(0.8);
+  assert.ok(late.fire === 0 && late.smoke > 0 && late.ring === 0 && late.sparks === 0, JSON.stringify(late));
+  const gone = at(LOOK.blast.life + 0.1);
+  for (const k of ["flash", "fire", "smoke", "ring", "sparks", "light"]) assert.equal(gone[k], 0, k);
+  assert.ok(at(0.2).ringSize > 0 && at(0.2).ringSize <= 1.6 * size);
+});
+
+test("blasts reuse the oldest of a fixed pool", async () => {
+  const { pickSlot } = await import("../src/client/look/blastpose.js");
+  const slots = [];
+  for (let i = 0; i < 13; i++) {
+    const k = pickSlot(slots, 12);
+    for (let j = 0; j < slots.length; j++) if (slots[j] !== null) slots[j] += 0.1;
+    slots[k] = 0;
+  }
+  assert.equal(slots.length, 12);
+  assert.equal(pickSlot([0.5, null, 0.9], 3), 1, "a free slot first");
+  assert.equal(pickSlot([0.5, 0.2, 0.9], 3), 2, "else the oldest");
+});

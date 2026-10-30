@@ -5,7 +5,7 @@
 import { WEAPON_ORDER, NET } from "../tuning.js";
 import { NO_INPUT } from "../sim/entity.js";
 
-export const PROTOCOL = 3;
+export const PROTOCOL = 4;
 
 const num = (x) => typeof x === "number" && Number.isFinite(x);
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));

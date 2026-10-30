@@ -11,6 +11,7 @@
 // figures are the same pass.
 import * as THREE from "three";
 import { posesAt } from "../../sim/system.js";
+import { radiusAt, normalAt } from "../../sim/shape.js";
 import { LOOK } from "../../tuning.js";
 import { NOISE_GLSL, v3 } from "./common.js";
 import { SHADOW_GLSL } from "./shadow.js";
@@ -268,10 +269,18 @@ void main() {
 }`;
 
 // ---- Drawing a body.
+// A comet is lumpy (sim/shape.js): its mesh carries the shape's normals (SHAPED), which light it; the map is
+// still looked up by direction from the centre.
 const surfaceVertex = /* glsl */ `
 varying vec3 vObj, vWorld;
+#ifdef SHAPED
+varying vec3 vNorm;
+#endif
 void main() {
   vObj = position;
+  #ifdef SHAPED
+  vNorm = normal;
+  #endif
   vec4 w = modelMatrix * vec4(position, 1.0);
   vWorld = w.xyz;
   gl_Position = projectionMatrix * viewMatrix * w;
@@ -284,6 +293,9 @@ uniform vec3 base, sunPos, sunCol, night, glowCol, rimCol, feature, ringN, ringC
 uniform vec4 occ[${OCCLUDERS}], blobs[${LOOK.planets.blob.max}];
 uniform float blobK[${LOOK.planets.blob.max}];
 varying vec3 vObj, vWorld;
+#ifdef SHAPED
+varying vec3 vNorm;
+#endif
 ${NOISE_GLSL}
 ${CELLS_GLSL}
 ${SHADOW_GLSL}
@@ -318,8 +330,13 @@ vec3 bump(vec3 n, float h) {
 }
 
 void main() {
-  vec3 n = normalize(vObj), centre = vWorld - vObj;
-  vec4 tex = useMap > 0.5 ? textureCube(map, n) : vec4(base, 0.5);
+  vec3 dir = normalize(vObj), centre = vWorld - vObj;
+  vec4 tex = useMap > 0.5 ? textureCube(map, dir) : vec4(base, 0.5);
+  #ifdef SHAPED
+  vec3 n = normalize(vNorm);
+  #else
+  vec3 n = dir;
+  #endif
   vec3 albedo = tex.rgb;
   float h = tex.a, hm = h * relief;
   vec3 toEye = cameraPosition - vWorld;
@@ -455,7 +472,7 @@ void main() {
   if (relief > 0.0 && useMap > 0.5) {
     vec3 t1 = normalize(cross(n, abs(n.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0))), t2 = cross(n, t1);
     float e = 1.5 * texel;
-    vec2 sl = vec2(textureCube(map, n + t1 * e).a - h, textureCube(map, n + t2 * e).a - h) * relief / (e * radius);
+    vec2 sl = vec2(textureCube(map, dir + t1 * e).a - h, textureCube(map, dir + t2 * e).a - h) * relief / (e * radius);
     sl *= min(1.0, 1.5 / max(length(sl), 1e-4)); // the steepest walls stay lit at a slant, not black
     nb = normalize(n - t1 * sl.x - t2 * sl.y);
   }
@@ -593,7 +610,23 @@ function bake(renderer, body, w, size) {
   return null;
 }
 
-// The planets and moons of `system`. Returns { meshes: { id: mesh }, setLevel(level), update(t, poses, blobs, eye) }:
+// A body's mesh: a fine sphere, or for a comet that sphere pressed into its lumpy shape (sim/shape.js, the
+// same surface you walk on), with the shape's own normals.
+function bodyGeometry(b) {
+  const geo = new THREE.IcosahedronGeometry(b.radius, b.kind === "planet" ? 28 : b.shape ? 24 : 16);
+  if (!b.shape) return geo;
+  const pos = geo.attributes.position, nrm = geo.attributes.normal;
+  for (let i = 0; i < pos.count; i++) {
+    const l = Math.hypot(pos.getX(i), pos.getY(i), pos.getZ(i)), u = [pos.getX(i) / l, pos.getY(i) / l, pos.getZ(i) / l];
+    const r = radiusAt(b, u), n = normalAt(b, u, r);
+    pos.setXYZ(i, u[0] * r, u[1] * r, u[2] * r);
+    nrm.setXYZ(i, n[0], n[1], n[2]);
+  }
+  geo.computeBoundingSphere();
+  return geo;
+}
+
+// The planets, moons and comets of `system`. Returns { meshes: { id: mesh }, setLevel(level), update(t, poses, blobs, eye) }:
 // the caller adds the meshes to the scene and moves them; update, before each frame is drawn, sets the sun,
 // the shadows and the blob shadows ([{ at, radius, strength }], nearest first; at most cfg.blob.max) and
 // paints the next body's map.
@@ -628,11 +661,11 @@ export function planetLooks(system, renderer, rand, cfg = LOOK.planets) {
       ringOpacity: { value: ring ? cfg.worlds[ringOwner.id].ring.opacity : 0 },
     };
     const mat = new THREE.ShaderMaterial({
-      uniforms: { ...shared, ...own }, defines: { WORLD: WORLDS[w.world], DETAIL: cfg.detail.at(-1) },
+      uniforms: { ...shared, ...own }, defines: { WORLD: WORLDS[w.world], DETAIL: cfg.detail.at(-1), ...(b.shape ? { SHAPED: 1 } : {}) },
       vertexShader: surfaceVertex, fragmentShader: surfaceFragment,
     });
     materials.push(mat);
-    const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(b.radius, b.kind === "planet" ? 28 : 16), mat);
+    const mesh = new THREE.Mesh(bodyGeometry(b), mat);
     const look = { body: b, w, own, mesh, ringOwner, rt: null };
     if (b.ring) {
       const rw = w.ring, rmesh = ringMesh(b, rw, shared);

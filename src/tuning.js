@@ -33,11 +33,13 @@ export const BODIES = [
   // 3 m of any body and some comet passes close to some planet at least every 120 s (tests/system.test.mjs).
   // The two fast ones meet the inner planets often on 80 s laps. The slow one (comet-c) shares the heavy
   // planet's 5-minute lap and crosses its path where the planet is, so it passes it every lap to hop off
-  // onto. The far one (comet-d, also 5 minutes) swings out to 376 m, past the far planet's path.
-  { id: "comet-a", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 34.8, apo: 208.1, period: 80, phase: 0.317, inc: 24.4, node: 142, arg: 307, kepler: 0.41 }, color: 0xbfe8ff },
-  { id: "comet-b", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 41.2, apo: 202.2, period: 80, phase: 4.388, inc: 21.1, node: 281, arg: 246, kepler: 0.28 }, color: 0xbfe8ff },
-  { id: "comet-c", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 74.2, apo: 222.5, period: 300, phase: 2.576, inc: 10.1, node: 87, arg: 333, kepler: 0.34 }, color: 0xbfe8ff },
-  { id: "comet-d", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 44, apo: 375.6, period: 300, phase: 5.435, inc: 14.9, node: 287, arg: 289, kepler: 0.26 }, color: 0xbfe8ff },
+  // onto. The far one (comet-d, also 5 minutes) swings out to 376 m, past the far planet's path. shape: each
+  // is a lumpy potato inside its radius (sim/shape.js: squash, the half-axes as shares of the radius; dents,
+  // how many hollows, their depth and width ranges; seed lays them out), so the radius still bounds it.
+  { id: "comet-a", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, shape: { seed: 1, squash: [1, 0.8, 0.74], dents: 6, depth: [0.06, 0.15], width: [0.06, 0.16] }, orbit: { around: "sun", peri: 34.8, apo: 208.1, period: 80, phase: 0.317, inc: 24.4, node: 142, arg: 307, kepler: 0.41 }, color: 0xbfe8ff },
+  { id: "comet-b", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, shape: { seed: 2, squash: [0.78, 1, 0.82], dents: 7, depth: [0.05, 0.14], width: [0.05, 0.14] }, orbit: { around: "sun", peri: 41.2, apo: 202.2, period: 80, phase: 4.388, inc: 21.1, node: 281, arg: 246, kepler: 0.28 }, color: 0xbfe8ff },
+  { id: "comet-c", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, shape: { seed: 3, squash: [0.8, 0.76, 1], dents: 5, depth: [0.07, 0.15], width: [0.07, 0.18] }, orbit: { around: "sun", peri: 74.2, apo: 222.5, period: 300, phase: 2.576, inc: 10.1, node: 87, arg: 333, kepler: 0.34 }, color: 0xbfe8ff },
+  { id: "comet-d", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, shape: { seed: 4, squash: [1, 0.86, 0.76], dents: 7, depth: [0.05, 0.13], width: [0.05, 0.15] }, orbit: { around: "sun", peri: 44, apo: 375.6, period: 300, phase: 5.435, inc: 14.9, node: 287, arg: 289, kepler: 0.26 }, color: 0xbfe8ff },
 ];
 
 // Looks only, no collisions or gravity: you fly straight through both. The giant's `ring` is in multiples

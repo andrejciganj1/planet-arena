@@ -6,6 +6,7 @@ import { padPos } from "../src/sim/pads.js";
 import { NO_INPUT, hitCentre, createEntity, standOn } from "../src/sim/entity.js";
 import { sphereContacts, surfaceInfo } from "../src/sim/collide.js";
 import { add, sub, scale, norm, dist } from "../src/sim/vec.js";
+import { radiusAt, normalAt } from "../src/sim/shape.js";
 import { skipTo } from "./helpers.mjs";
 
 const { TICK, MAX_TICKS, VOID_RADIUS, DUMMY, PLAYER, COMET } = tuning;
@@ -173,7 +174,8 @@ function riderOn(t, id, u) {
   w.entities.dummy.alive = false;
   w.entities.dummy.respawnAt = Infinity;
   const p = w.entities.player, b = w.system.byId[id];
-  Object.assign(p, createEntity("player", "player", add(w.poses[id].pos, scale(u, b.radius)), u));
+  // On the surface where u points (a comet's is lumpy), up along its slope.
+  Object.assign(p, createEntity("player", "player", add(w.poses[id].pos, scale(u, radiusAt(b, u))), normalAt(b, u)));
   standOn(p, id);
   return { w, p };
 }

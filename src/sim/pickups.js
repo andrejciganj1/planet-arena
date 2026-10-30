@@ -1,9 +1,10 @@
 // Pickups: health, weapons, ammo and extra booster fuel at fixed spots on the bodies. Players take one by
 // standing on it, but only when it helps them, so a full player leaves it for someone who needs it.
 import { add, scale, dist } from "./vec.js";
+import { radiusAt } from "./shape.js";
 
 export function pickupPos(world, pickup, poses) {
-  return add(poses[pickup.body].pos, scale(pickup.dir, world.system.byId[pickup.body].radius));
+  return add(poses[pickup.body].pos, scale(pickup.dir, radiusAt(world.system.byId[pickup.body], pickup.dir)));
 }
 
 export const pickupReady = (world, pickup) => world.t >= (world.pickups[pickup.id]?.readyAt ?? 0);

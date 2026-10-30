@@ -9,6 +9,7 @@ import { add, sub, scale, cross, norm, len, anyPerpendicular } from "../../sim/v
 import { WEAPON_COLORS } from "./weapons.js";
 import { alienMaterial } from "./aliens.js";
 import { pickupModel, tailAt, cometStir, comaLook, jetVents, jetLook } from "./proppose.js";
+import { radiusAt } from "../../sim/shape.js";
 
 export const PROP_ASSETS = [{ name: "props", url: "assets/models/props.glb" }];
 const P = LOOK.props;
@@ -302,7 +303,7 @@ export function cometHalo(body) {
   group.add(coma);
   const jets = jetVents(body.id).map((at) => {
     const mesh = new THREE.Mesh(plumeShape(), plumeMaterial(cfg.jets.color));
-    mesh.position.set(...scale(at, body.radius * 0.97));
+    mesh.position.set(...scale(at, radiusAt(body, at) * 0.97));
     group.add(mesh);
     return { at, mesh };
   });

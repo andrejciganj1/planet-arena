@@ -6,10 +6,11 @@ import { add, scale, dist, rotateFromTo } from "./vec.js";
 import { posesAt } from "./system.js";
 import { createEntity, standOn, stepEntity, unground, hitCentre, NO_INPUT } from "./entity.js";
 import { surfaceInfo } from "./collide.js";
+import { radiusAt } from "./shape.js";
 
 // Where a pad sits: on the surface, out from the body's centre along its launch direction.
 export function padPos(world, pad, poses) {
-  return add(poses[pad.body].pos, scale(pad.dir, world.system.byId[pad.body].radius));
+  return add(poses[pad.body].pos, scale(pad.dir, radiusAt(world.system.byId[pad.body], pad.dir)));
 }
 
 export function launch(world, e, pad) {

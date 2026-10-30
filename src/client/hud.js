@@ -1,16 +1,16 @@
 // The HUD: crosshair (with a ring when the hook can reach something), health, weapon and ammo, the weapons
 // you hold, booster fuel (extra fuel from a pickup in a second colour), toasts, "Click to play", hit
-// feedback (a red vignette and an arc towards the shooter), the kill feed, scores, and online the name box
-// and the connection's status screens. Names come from the server: only ever set as text.
-import { BOOST, PLAYER, HOOK, WEAPON_ORDER, NET, FEEDBACK, COLOURS } from "../tuning.js";
+// feedback (a red vignette and an arc towards the shooter), the kill feed, scores, a solar flare's banner and
+// the orange glow while it burns you, and online the name box and the connection's status screens. Names come from the server: only ever set as text.
+import { BOOST, PLAYER, HOOK, WEAPON_ORDER, NET, FEEDBACK, COLOURS, LOOK } from "../tuning.js";
 import { segmentHit } from "../sim/collide.js";
 import { viewDir } from "../sim/entity.js";
 import { add, sub, scale, dot } from "../sim/vec.js";
 
 const NAMES = { pistol: "Pistol", shotgun: "Shotgun", rocket: "Rocket launcher", minigun: "Minigun", sniper: "Sniper rifle", railgun: "Railgun" };
-const DEATHS = { sun: "Into the sun!", void: "Lost in the void", damage: "Blown up" };
+const DEATHS = { sun: "Into the sun!", void: "Lost in the void", damage: "Blown up", flare: "Burned by the flare" };
 
-const MARKS = { sun: "☀", damage: "✹", void: "⋯" };
+const MARKS = { sun: "☀", damage: "✹", void: "⋯", flare: "☀" };
 const nameOf = (players, id) => players[id]?.name ?? (id === "dummy" ? "Dummy" : id);
 
 // Score table rows, best first: most kills, then fewer deaths, then name. players: { id: { name, kills, deaths } }.
@@ -88,6 +88,8 @@ export function createHud(root, online = false) {
   const bottom = el(root, "hud bottom", `<div class="health">Health<div class="bar"><div></div></div></div><div class="slots">${slots}</div><div class="weapon"></div><div class="fuel">Booster<div class="bar"><div></div><div class="over"></div></div></div>`);
   const vignette = el(root, "hud vignette");
   const flames = el(root, "hud flames"); // your booster's light from below while you boost
+  const burn = el(root, "hud burn"); // a solar flare's light on you
+  const flare = el(root, "hud flare", `<span class="text"></span><span class="count"></span>`);
   const score = el(root, "hud score");
   const feed = el(root, "hud feed");
   const board = el(root, "hud board");
@@ -135,7 +137,8 @@ export function createHud(root, online = false) {
     },
     // now: real seconds. camera: { pos, right, up, forward } as drawn, to aim the hit arcs; null when there is none.
     // feel: your own boost (look/gunpose.js thrustView): the flames' light and a burning fuel bar.
-    update(world, locked, now, selfId = "player", camera = null, feel = null) {
+    // sun: { banner (look/flarepose.js flareBanner), burning (you, now) } for a solar flare.
+    update(world, locked, now, selfId = "player", camera = null, feel = null, sun = null) {
       const p = world.entities[selfId];
       // Online there is no body until the first snapshot.
       for (const x of [bottom, cross, play]) x.style.display = p ? "" : "none";
@@ -167,6 +170,15 @@ export function createHud(root, online = false) {
           for (const t of [r.name, r.kills, r.deaths]) el(row, "cell").textContent = t;
         }
       }
+      const banner = sun?.banner;
+      flare.style.display = banner ? "" : "none";
+      if (banner) {
+        flare.classList.toggle("burn", banner.count === null);
+        flare.querySelector(".text").textContent = banner.text;
+        flare.querySelector(".count").textContent = banner.count ?? "";
+      }
+      const { opacity, pulse } = LOOK.flare.tint;
+      burn.style.opacity = sun?.burning && p?.alive ? opacity * (0.7 + 0.3 * Math.sin(2 * Math.PI * pulse * now)) : 0;
       if (!p) return;
       const ammo = world.tuning.WEAPONS[p.weapon].ammo ? ` ${p.ammo[p.weapon] || 0}` : "";
       bottom.querySelector(".weapon").textContent = NAMES[p.weapon] + ammo;

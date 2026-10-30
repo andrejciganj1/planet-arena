@@ -118,6 +118,13 @@ export const SPAWN_BODIES = ["tiny", "mid", "heavy", "giant"];
 // standing: s on the ground, and since the last hit, after which a fall no longer counts as the hitter's kill.
 export const KILL = { standing: 1 };
 
+// Solar flares (sim/flares.js). Flare k warns at first + k * every, give or take jitter (s), so the first comes
+// 60 to 90 s in and warnings are 60 to 120 s apart. warn: s of warning before the burst; burn: s it burns;
+// fade: s its look takes to die away after, harmless. Anyone in the sun's light burns at rate health/s
+// within full m of the sun's centre, falling linearly to nothing at reach m: Hot and Tiny full, Mid less.
+// hover: m above a body within which its night side still shelters you (a hop, a push, a low boost).
+export const FLARE = { first: 75, every: 90, jitter: 15, warn: 10, burn: 6, fade: 3, rate: 25, full: 80, reach: 150, hover: 4 };
+
 // One per player slot; index 0 is the solo player's.
 export const COLOURS = [0xffd23f, 0xe8505b, 0x4fb0e8, 0x6fd36b, 0xb06fe8, 0xff8a3d, 0x3fd9c4, 0xf08bc8];
 
@@ -142,6 +149,7 @@ export const ROCK_LOOK = { trail: 60, trailSize: 1.6, glow: 1.3, glowOpacity: 0.
 export const SOUND = {
   range: 120, near: 6, own: 1, others: 0.7, gap: 0.5, stride: 1.6, stepSpeed: 2, maxVoices: 24, repeat: 0.05,
   announcerOthers: 0.4, hold: 0.15, voice: 1.5, master: 0.8, maxLoops: 8, loopKeep: 5,
+  flareVoiceAfter: 1.4, // s after a flare's alarm starts that the voice speaks, once the alarm is done
 };
 
 export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade: 1, feedFor: 5, flash: 0.15, feedMax: 6 };
@@ -269,6 +277,28 @@ export const LOOK = {
     galaxy: { dir: [0.5, 0.82, 0.05], size: 0.2, tilt: 60, turn: 25 },
   },
   sun: { octaves: [2, 3, 5], streamers: [2, 4, 4], churn: 0.06, corona: 3.2, flare: 0.5, flareFrom: 1, fade: 8 },
+  // A solar flare as seen (look/solarflare.js), on FLARE's schedule. rise: s to full brightness at the burst;
+  // cloudFrom: the lowest quality level that draws the plasma cloud. Units of `arches` are sun radii: span (half the gap between the feet) and height
+  // ranges, tube thickness, spread of the feet round the patch, sink (feet a hair under the surface), hot
+  // (heat at the burst; over 1 is white), snap (how much they jump at the burst), bright (overall gain).
+  // beacon: a glow over each patch (sun radii) that reads from afar. second: the smaller set of arches, `apart`
+  // degrees round the sun from the main set, so everyone sees one (size: its share of the main set's; glow: its
+  // patch's brightness). swell: the sun grows by this
+  // share; corona, coronaBoost: its reach and brightness grow; glare: the glare in the eye grows; bleach:
+  // sunlight brightens by this share (and whitens); flash: the whole view whitens for `time` s in its light.
+  // wave: a shell of light running out to `reach` m in `time` s. cloud: the plasma cloud's puffs, cone (radians
+  // round the patch), speed m/s, size m from start to end, colours.
+  flare: {
+    rise: 0.25, cloudFrom: 1,
+    arches: { count: 11, span: [0.08, 0.22], height: [0.2, 0.7], thick: 0.03, spread: 0.12, sink: 0.995, hot: 1.8, snap: 0.35, bright: 4 },
+    beacon: { size: 1.4, lift: 0.25, opacity: 1, color: 0xffb060 },
+    second: { size: 0.6, count: 7, glow: 0.8, apart: 135 },
+    swell: 0.08, corona: 0.6, coronaBoost: 1.5, glare: 1.5, bleach: 0.8,
+    flash: { time: 1.2, strength: 0.6 },
+    wave: { reach: 160, time: 1.6, strength: 0.3 },
+    tint: { opacity: 0.55, pulse: 3 }, // the screen's orange glow while it burns you: strongest, pulses a second
+    cloud: { puffs: 40, cone: 0.35, speed: [14, 30], size: [10, 45], opacity: 0.55, color: 0xff7a2a, hot: 0xffd890 },
+  },
   planets: {
     bake: { planet: 512, moon: 256, comet: 256 },
     detail: [0, 1, 2],

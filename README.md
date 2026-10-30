@@ -21,6 +21,11 @@ a rock leaves the belt, glowing and trailing, aimed roughly sunward. Most burn u
 planet or moon. A flying rock explodes like a rocket on a planet, moon, comet or player, and any shot
 sets one off, with the blast counted as the shooter's. Online, the server decides where they go.
 
+Every minute or two the sun flares. A warning goes up first, on screen and spoken, with 10 s to get out of
+its light: the night side of a planet, or the shadow of a moon or comet. Then for 6 s it burns anyone it
+can see near it: quickly on the hot and tiny planets, more slowly on the mid planet's sunny side, not at all
+further out.
+
 Shots hit two spheres on a player, the head (the bubble helmet) and the body, so aim at the middle.
 Floating in space no longer kills; only leaving the system (600 m from the sun) does.
 
@@ -147,12 +152,13 @@ To check them without listening (Playwright through `npx`, static server running
 `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/sound_check.cjs "http://localhost:8100/sounds.html"`
 prints each sound's level and length and `OK` when all are audible, unclipped and short (loops steady).
 
-The two sounds from files are the announcer's "Sun kill!" (`assets/sun-kill.wav`) and the scream of an alien
-lost in space, "Noooo!" (`assets/scream.wav`): both spoken by the Norman voice by Bryce Beattie (public domain,
+The three sounds from files are the announcer's "Sun kill!" (`assets/sun-kill.wav`), its solar flare warning,
+"Imminent solar flare detected" (`assets/flare-warning.wav`), and the scream of an alien lost in space,
+"Noooo!" (`assets/scream.wav`): all spoken by the Norman voice by Bryce Beattie (public domain,
 trained on LibriVox recordings, https://brycebeattie.com/files/tts/) with
 [Piper](https://github.com/OHF-Voice/piper1-gpl) 1.8.0, used only to make the files, then trimmed. The game
 plays the announcer deeper with its own echo, and the scream higher, its "o" held on a loop, then sagging
-away like a small creature's.
+away like a small creature's. The flare warning is played like the announcer.
 
 ## Tuning
 
@@ -171,6 +177,7 @@ save you, pads have launch windows).
 | How strong a body is | its `g` (pull at the surface) and `reach` (how far the full pull lasts) in `BODIES` |
 | Where a body's own pull shields you from the sun | its `hold` in `BODIES` (metres above the surface) |
 | Orbit speed | `orbit.period` in `BODIES` (seconds per lap) |
+| Solar flares: how often, warning, burn and reach | `FLARE` |
 | Pad launch speed and direction | `PADS` (re-run the tests: pads must keep their launch windows; a pad needs to be faster than it takes to leave its planet) |
 
 Things worth knowing:

@@ -143,8 +143,9 @@ function views(world) {
 // The props: each kind of pickup on the day side and the night side of its body (the spot facing the sun most
 // and least), a pad by day with its cue shown and hidden and one by night, the belt from inside it, a flying
 // rock with its trail (`rock`: moved along `vel` two ticks a frame, so the trail grows) and a comet near the
-// sun from above its orbit (`at`: the clock then, so both tails are long).
-function propViews({ poses, pickups, pads, comet }) {
+// sun from above its orbit (`at`: the clock then, so both tails are long), and a solar flare (`flare`: its
+// times and main patch, the sun and Mid two seconds into its burn).
+function propViews({ poses, pickups, pads, comet, flare }) {
   const sun = poses.sun, list = [];
   const sunward = (body, dir) => v.dot(dir, v.norm(v.sub(sun, poses[body])));
   const across = (n) => v.norm(v.cross(n, Math.abs(n[1]) > 0.9 ? [1, 0, 0] : Y));
@@ -168,6 +169,15 @@ function propViews({ poses, pickups, pads, comet }) {
   const away = v.norm(v.sub(comet.pos, comet.sun)), up = v.norm(v.cross(away, comet.vel));
   const mid = v.add(comet.pos, v.scale(away, 30));
   list.push({ name: "comet-tails", at: comet.t, eye: v.add(mid, v.add(v.scale(up, 55), v.scale(away, -10))), target: mid });
+  // A solar flare: its main patch on the sun's edge late in the warning and at the burst, the cloud from
+  // further out, and Mid's sunny side bleached two seconds into the burn, its night side still dark.
+  const fl = flare, edge = v.norm(v.cross(Y, fl.dir));
+  const limb = v.add(fl.sun, v.add(v.scale(edge, 95), v.scale(Y, 12)));
+  list.push({ name: "flare-warn", at: fl.warnAt + 9, eye: limb, target: v.add(fl.sun, v.scale(fl.dir, 15)) });
+  list.push({ name: "flare-burst", at: fl.burnAt + 0.6, eye: limb, target: v.add(fl.sun, v.scale(fl.dir, 15)) });
+  list.push({ name: "flare-cloud", at: fl.burnAt + 3, eye: v.add(fl.sun, v.add(v.scale(edge, 170), v.scale(Y, 40))), target: v.add(fl.sun, v.scale(fl.dir, 40)) });
+  const toSun = v.norm(v.sub(fl.sun, fl.mid)), mSide = v.norm(v.cross(Y, toSun));
+  list.push({ name: "flare-mid", at: fl.burnAt + 2, eye: v.add(fl.mid, v.add(v.scale(toSun, 8), v.scale(mSide, 40))), target: fl.mid });
   return list;
 }
 
@@ -252,6 +262,8 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
     const { PLAYER, LOOK, COLOURS, WEAPON_ORDER, PICKUPS } = await import(new URL("src/tuning.js", location.href));
     const { padPos } = await import(new URL("src/sim/pads.js", location.href));
     const { posesAt } = await import(new URL("src/sim/system.js", location.href));
+    const { flareAt } = await import(new URL("src/sim/flares.js", location.href));
+    const { flareView } = await import(new URL("src/client/look/flarepose.js", location.href));
     const w = window.game.world;
     const unit = (a) => a.map((x) => x / Math.hypot(...a)), minus = (a, b) => a.map((x, i) => x - b[i]);
     // The first comet's nearest pass by the sun in one lap.
@@ -261,7 +273,11 @@ const frames = (p, n) => p.evaluate((n) => new Promise((done) => {
       const q = posesAt(w.system, t), d = Math.hypot(...minus(q[cid].pos, q.sun.pos));
       if (!comet || d < comet.d) comet = { t, d, pos: q[cid].pos, vel: q[cid].vel, sun: q.sun.pos };
     }
+    // The first solar flare: its times, its main patch and where Mid is two seconds into the burn.
+    const f = flareAt(0), during = posesAt(w.system, f.burnAt + 2);
+    const flare = { warnAt: f.warnAt, burnAt: f.burnAt, dir: flareView(f.burnAt).dir, sun: during.sun.pos, mid: during.mid.pos };
     return {
+      flare,
       bodies: w.system.bodies.map(({ id, kind, radius }) => ({ id, kind, radius })),
       poses: Object.fromEntries(Object.entries(w.poses).map(([id, q]) => [id, q.pos])),
       eye: PLAYER.eye,

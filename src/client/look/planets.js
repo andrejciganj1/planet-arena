@@ -626,14 +626,16 @@ function bodyGeometry(b) {
   return geo;
 }
 
-// The planets, moons and comets of `system`. Returns { meshes: { id: mesh }, setLevel(level), update(t, poses, blobs, eye) }:
+// The planets, moons and comets of `system`. Returns { meshes: { id: mesh }, setLevel(level), setStorm(burn),
+// update(t, poses, blobs, eye) }: setStorm whitens and brightens sunlight by a solar flare's burn (0..1);
 // the caller adds the meshes to the scene and moves them; update, before each frame is drawn, sets the sun,
 // the shadows and the blob shadows ([{ at, radius, strength }], nearest first; at most cfg.blob.max) and
 // paints the next body's map.
 export function planetLooks(system, renderer, rand, cfg = LOOK.planets) {
   const sunBody = system.bodies.find((b) => b.kind === "sun");
   const casters = system.bodies.filter((b) => b.kind !== "sun");
-  const sunCol = new THREE.Color(cfg.sun).multiplyScalar(cfg.light);
+  const sunCol = new THREE.Color(cfg.sun).multiplyScalar(cfg.light), sunBase = sunCol.clone();
+  const white = new THREE.Color(1, 1, 1);
   const night = new THREE.Color(cfg.night).multiplyScalar(cfg.nightLight);
   const shared = {
     sunPos: { value: new THREE.Vector3() }, sunR: { value: sunBody.radius }, sunCol: { value: sunCol }, night: { value: night },
@@ -719,6 +721,10 @@ export function planetLooks(system, renderer, rand, cfg = LOOK.planets) {
         m.defines.DETAIL = cfg.detail[l];
         m.needsUpdate = true;
       }
+    },
+    // Night sides stay as dark as ever, so the shelter reads at a glance.
+    setStorm(burn, f = LOOK.flare) {
+      sunCol.copy(sunBase).lerp(white.clone().multiplyScalar(cfg.light), burn).multiplyScalar(1 + f.bleach * burn);
     },
     // t: s on the match clock; poses: id -> [x, y, z]; blobs as returned by blobUnder; eye: [x, y, z].
     update(t, poses, blobs, eye) {

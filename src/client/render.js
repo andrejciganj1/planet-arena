@@ -14,6 +14,8 @@ import { add, sub, scale, lerp, norm, cross, dist, rotateAxis, rotateFromTo } fr
 import { rng, v3, Y, haloMap } from "./look/common.js";
 import { starfield, nebulaSky, PLAIN_SPACE } from "./look/sky.js";
 import { sunLook } from "./look/sun.js";
+import { flareLook } from "./look/solarflare.js";
+import { flareView } from "./look/flarepose.js";
 import { sphereMesh, planetLooks, orbitLines } from "./look/planets.js";
 import { blobUnder, sphereShadow } from "./look/shadow.js";
 import { DUMMY_COLOUR, ALIEN_ASSETS, figureMesh, dressFigure, armFigure, styleFigure, alienMaterial, jetAt, viewArm } from "./look/aliens.js";
@@ -84,6 +86,10 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   }
   for (const t of tails) scene.add(t.look.group);
   scene.add(sun.flare);
+  const storm = flareLook(world.system.bodies.find((b) => b.kind === "sun"));
+  sun.mesh.add(storm.arches);
+  storm.setLevel(level);
+  scene.add(storm.shell, storm.cloud);
   sun.setLevel(level);
   planets.setLevel(level);
   // Everything that can hide the sun, and the ground blob shadows fall on.
@@ -232,6 +238,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         renderer.setPixelRatio(pixelRatio(level));
         sun.setLevel(level);
         planets.setLevel(level);
+        storm.setLevel(level);
       }
       const dt = lastNow === null ? 0 : now - lastNow;
       lastNow = now;
@@ -477,6 +484,12 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         ropeGeo.setFromPoints([v3(hand), v3(anchor)]);
       }
 
+      // A solar flare, from the match clock like everything else (?debug&at=T stills one).
+      const fs = flareView(t);
+      sun.setStorm(fs);
+      planets.setStorm(fs.burn);
+      sunLight.intensity = 7 * (1 + LOOK.flare.bleach * fs.burn);
+      storm.update(fs, t, poses.sun);
       sun.update(t, dt, camera, poses.sun, blockers);
       planets.update(t, poses, blobsNear(p, free, alpha, poses, viewer), viewer);
       renderer.render(scene, camera);

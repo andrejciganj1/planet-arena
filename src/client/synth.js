@@ -4,7 +4,7 @@
 // Nothing touches Web Audio until a recipe is called, so node tests can load this.
 
 // The loops: they sound until stopped, the rest are one-shots of at most 1.5 s (the scream 2.5 s).
-export const LOOPS = new Set(["rocketFlight", "rockIncoming", "hookPull", "boost"]);
+export const LOOPS = new Set(["rocketFlight", "rockIncoming", "hookPull", "boost", "sizzle"]);
 
 const SILENT = 0.0003; // -70 dB: where an envelope ends, well below what anyone hears in a game
 const noiseBuffers = new WeakMap();
@@ -86,8 +86,8 @@ function tone(ctx, out, t0, o) {
   return end;
 }
 
-// The two voices, the only sounds from files (assets/sun-kill.wav and assets/scream.wav, made with Piper, see
-// README). The bytes are fetched as the page loads, so the first call needn't wait for the network; only in a
+// The voices, the only sounds from files (assets/sun-kill.wav, assets/scream.wav and assets/flare-warning.wav,
+// made with Piper, see README). The bytes are fetched as the page loads, so the first call needn't wait for the network; only in a
 // browser, since node tests load this file too. Decoding needs a context, so it waits for the first one; the
 // decoded buffer then serves every context.
 const fetched = (file) => (typeof document === "undefined" ? null
@@ -119,9 +119,11 @@ export function voiceClip(what, bytes) {
   };
 }
 
+export const VOICE_FILES = ["sun-kill.wav", "scream.wav", "flare-warning.wav"];
 const sunKill = voiceClip("announcer", fetched("sun-kill.wav"));
 const nooo = voiceClip("scream", fetched("scream.wav"));
-export const loadVoice = (ctx) => Promise.all([sunKill.load(ctx), nooo.load(ctx)]);
+const flareWarning = voiceClip("flare warning", fetched("flare-warning.wav"));
+export const loadVoice = (ctx) => Promise.all([sunKill.load(ctx), nooo.load(ctx), flareWarning.load(ctx)]);
 
 // Plays a clip now if decoded; else as soon as it is, unless that is too late to still belong to the moment.
 // Returns when it ends, or a guess while it waits.
@@ -412,6 +414,31 @@ export const RECIPES = {
   // "Sun kill!": the recorded line, deeper and with an arena echo. The first call may come before the file
   // is decoded; it then plays as soon as it is, unless that is too late to still belong to the kill.
   announcer: (ctx, out) => voiced(ctx, out, sunKill, say, 1.5),
+  // A klaxon: two tones swapping, four times, buzzy but filtered so it alarms without hurting.
+  flareAlarm: (ctx, out) => shot(ctx, out, [0, 1, 2, 3].flatMap((k) => [
+    [tone, { at: k * 0.3, wave: "sawtooth", f: k % 2 ? 587 : 784, filter: ["lowpass", 2400], peak: 0.3, a: 0.01, d: 0.26 }],
+    [tone, { at: k * 0.3, wave: "square", f: (k % 2 ? 587 : 784) / 2, filter: ["lowpass", 900], peak: 0.12, a: 0.01, d: 0.26 }],
+  ])),
+  // "Imminent solar flare detected": the announcer's voice and hall, read from its file like "Sun kill!".
+  flareVoice: (ctx, out) => voiced(ctx, out, flareWarning, say, 2.3),
+  // The burst: a deep, rolling roar that swells in and slowly darkens, under a high hiss of the light.
+  flareRoar: (ctx, out) => shot(ctx, out, [
+    [hiss, { filter: ["lowpass", 900, 0.8, 120], peak: 0.55, a: 0.12, d: 2 }],
+    [hiss, { filter: ["highpass", 5000], peak: 0.08, a: 0.05, d: 1.2 }],
+    [tone, { f: 52, f1: 30, glide: 1.6, peak: 0.45, a: 0.1, d: 1.8 }],
+  ]),
+  // Burning: a crackling fry, bright noise whose level jitters fast, over a low hot hum.
+  sizzle: (ctx, out) => looped(ctx, out, (g, t) => {
+    const crackle = ctx.createGain();
+    crackle.gain.value = 0.6;
+    crackle.connect(g);
+    return [
+      bed(ctx, crackle, t, noise(ctx), ["bandpass", 4200, 0.7], 0.35),
+      wobble(ctx, crackle.gain, t, 23, 0.4, "square"),
+      wobble(ctx, crackle.gain, t, 7.3, 0.2, "square"),
+      bed(ctx, g, t, noise(ctx), ["lowpass", 300], 0.25),
+    ];
+  }),
   // A spring: the pitch leaps up and wobbles fast, the wobble dying away.
   boink: (ctx, out) => shot(ctx, out, [
     [tone, { wave: "triangle", f: 220, f1: 560, glide: 0.12, vib: [16, 300, 1], peak: 0.55, a: 0.005, d: 0.4 }],

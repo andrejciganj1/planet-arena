@@ -1,4 +1,4 @@
-// The whole simulation: bodies on the clock, entities, asteroids, deaths in the sun and the void, respawns,
+// The whole simulation: bodies on the clock, entities, asteroids, solar flares, deaths in the sun and the void, respawns,
 // and the fixed 60 Hz tick driven from real elapsed time.
 import { createSystem, posesAt } from "./system.js";
 import { createEntity, standOn, stepEntity, hitCentre, NO_INPUT } from "./entity.js";
@@ -10,7 +10,8 @@ import { record } from "./lag.js";
 import { stepPickups } from "./pickups.js";
 import { stepHook } from "./hook.js";
 import { stepAsteroids } from "./asteroids.js";
-import { add, scale, dist, norm, anyPerpendicular } from "./vec.js";
+import { stepFlare, flareAt, exposure } from "./flares.js";
+import { add, sub, scale, dist, norm, anyPerpendicular } from "./vec.js";
 
 // Spawn candidates: an evenly spread, fixed list of directions (Fibonacci sphere).
 const SPAWN_DIRS = Array.from({ length: 48 }, (_, i) => {
@@ -27,11 +28,30 @@ function candidates(world, body) {
 // PLAYER.spawnFromOther, or as far as the body allows (the tiny planet is smaller than that). `gap` is the
 // distance to the nearest other alive entity, so a caller can compare bodies.
 // Tries candidates in a fixed order, starting further along after each spawn, so the same world always
-// gives the same point but respawns don't all land on one spot.
-export function spawnGap(world, bodyId, forId = null) {
-  const { PLAYER } = world.tuning;
+// gives the same point but respawns don't all land on one spot. During a flare's warning or burn only spots
+// out of its reach count (`safe`), unless there are none: dying again at once, with no time to react, is unfair.
+export function spawnGap(world, bodyId, forId = null, safe = flareSafe(world, bodyId)) {
   const body = world.system.byId[bodyId];
-  const list = candidates(world, body);
+  const all = candidates(world, body), list = safe ? all.filter(safe) : all;
+  return list.length ? pickSpawn(world, list, forId) : pickSpawn(world, all, forId);
+}
+
+// Safe through the whole burn, not just now: bodies don't spin, so as one goes round the sun its day and
+// night line sweeps over a spot that stands still. The line moves one way, so a spot dark when the burn starts
+// and when it ends stays dark between.
+function flareSafe(world, bodyId) {
+  const f = flareAt(world.t, world.tuning.FLARE);
+  if (f.phase !== "warn" && f.phase !== "burn") return null;
+  const c = world.poses[bodyId].pos;
+  const moments = [world.t, Math.max(world.t, f.burnAt), f.endAt].map((t) => {
+    const poses = posesAt(world.system, t);
+    return { at: { system: world.system, poses, tuning: world.tuning }, shift: sub(poses[bodyId].pos, c) };
+  });
+  return (cand) => moments.every(({ at, shift }) => exposure(at, { pos: add(cand.pos, shift), up: cand.up, groundId: bodyId }) === 0);
+}
+
+function pickSpawn(world, list, forId) {
+  const { PLAYER } = world.tuning;
   const pads = world.pads.map((p) => padPos(world, p, world.poses));
   const others = Object.values(world.entities).filter((e) => e.alive && e.id !== forId);
   const start = (world.spawns * 7) % list.length;
@@ -182,6 +202,7 @@ export function stepWorld(world, inputs, dt) {
   stepPickups(world);
   stepProjectiles(world, dt);
   stepAsteroids(world, dt);
+  stepFlare(world, dt);
   if (!world.noCues) refreshCues(world);
 
   const sun = world.system.bodies.find((b) => b.kind === "sun");
@@ -193,7 +214,7 @@ export function stepWorld(world, inputs, dt) {
     const c = hitCentre(e);
     if (dist(c, world.poses[sun.id].pos) < sun.radius + PLAYER.radius + 1e-6) die(world, e, "sun");
     else if (dist(c, world.poses[sun.id].pos) > VOID_RADIUS) die(world, e, "void");
-    else if (e.health <= 0) die(world, e, "damage");
+    else if (e.health <= 0) die(world, e, e.flareTick === world.tick ? "flare" : "damage");
   }
   for (const e of entities) {
     if (e.alive || world.t < e.respawnAt) continue;

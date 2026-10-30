@@ -33,11 +33,13 @@ export const BODIES = [
   // 3 m of any body and some comet passes close to some planet at least every 120 s (tests/system.test.mjs).
   // The two fast ones meet the inner planets often on 80 s laps. The slow one (comet-c) shares the heavy
   // planet's 5-minute lap and crosses its path where the planet is, so it passes it every lap to hop off
-  // onto. The far one (comet-d, also 5 minutes) swings out to 376 m, past the far planet's path.
-  { id: "comet-a", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 34.8, apo: 208.1, period: 80, phase: 0.317, inc: 24.4, node: 142, arg: 307, kepler: 0.41 }, color: 0xbfe8ff },
-  { id: "comet-b", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 41.2, apo: 202.2, period: 80, phase: 4.388, inc: 21.1, node: 281, arg: 246, kepler: 0.28 }, color: 0xbfe8ff },
-  { id: "comet-c", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 74.2, apo: 222.5, period: 300, phase: 2.576, inc: 10.1, node: 87, arg: 333, kepler: 0.34 }, color: 0xbfe8ff },
-  { id: "comet-d", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, orbit: { around: "sun", peri: 44, apo: 375.6, period: 300, phase: 5.435, inc: 14.9, node: 287, arg: 289, kepler: 0.26 }, color: 0xbfe8ff },
+  // onto. The far one (comet-d, also 5 minutes) swings out to 376 m, past the far planet's path. shape: each
+  // is a lumpy potato inside its radius (sim/shape.js: squash, the half-axes as shares of the radius; dents,
+  // how many hollows, their depth and width ranges; seed lays them out), so the radius still bounds it.
+  { id: "comet-a", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, shape: { seed: 1, squash: [1, 0.8, 0.74], dents: 6, depth: [0.06, 0.15], width: [0.06, 0.16] }, orbit: { around: "sun", peri: 34.8, apo: 208.1, period: 80, phase: 0.317, inc: 24.4, node: 142, arg: 307, kepler: 0.41 }, color: 0xbfe8ff },
+  { id: "comet-b", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, shape: { seed: 2, squash: [0.78, 1, 0.82], dents: 7, depth: [0.05, 0.14], width: [0.05, 0.14] }, orbit: { around: "sun", peri: 41.2, apo: 202.2, period: 80, phase: 4.388, inc: 21.1, node: 281, arg: 246, kepler: 0.28 }, color: 0xbfe8ff },
+  { id: "comet-c", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, shape: { seed: 3, squash: [0.8, 0.76, 1], dents: 5, depth: [0.07, 0.15], width: [0.07, 0.18] }, orbit: { around: "sun", peri: 74.2, apo: 222.5, period: 300, phase: 2.576, inc: 10.1, node: 87, arg: 333, kepler: 0.34 }, color: 0xbfe8ff },
+  { id: "comet-d", kind: "comet", radius: 3, g: 2, reach: 5.25, hold: 3, shape: { seed: 4, squash: [1, 0.86, 0.76], dents: 7, depth: [0.05, 0.13], width: [0.05, 0.15] }, orbit: { around: "sun", peri: 44, apo: 375.6, period: 300, phase: 5.435, inc: 14.9, node: 287, arg: 289, kepler: 0.26 }, color: 0xbfe8ff },
 ];
 
 // Looks only, no collisions or gravity: you fly straight through both. The giant's `ring` is in multiples
@@ -46,7 +48,7 @@ export const BODIES = [
 // `period` s).
 export const BELT = { inner: 148, outer: 160, thick: 4, rocks: 500, size: [0.4, 1.8], period: 260 };
 
-// Asteroids: one breaks off the belt every `every` s and falls in under the usual gravity (asteroids.js).
+// Asteroids: one breaks off the belt every `every` s (the owner's choice) and falls in under the usual gravity (asteroids.js).
 // radius: m, about twice a player's height across; speed: m/s range off the belt, in a direction up to
 // `tilt` degrees above or below the orbital plane, where the planets are, and up to `aim` degrees either side
 // of straight at the sun. Kicked any way at all (aim 180) only a quarter reach the sun: the heavy planet,
@@ -55,7 +57,7 @@ export const BELT = { inner: 148, outer: 160, thick: 4, rocks: 500, size: [0.4, 
 // body a launch needs, so a body moving in can't meet it on its first tick; life: s before one that missed
 // everything is dropped. blast as the rocket's, a little bigger.
 export const ASTEROID = {
-  every: 15, radius: 1.8, speed: [8, 16], tilt: 20, aim: 25, clear: 2, life: 120,
+  every: 5, radius: 1.8, speed: [8, 16], tilt: 20, aim: 25, clear: 2, life: 120,
   blast: { splash: 5, damage: 90, knockback: 18, self: 0.5 },
 };
 
@@ -123,8 +125,9 @@ export const COLOURS = [0xffd23f, 0xe8505b, 0x4fb0e8, 0x6fd36b, 0xb06fe8, 0xff8a
 // damage, never above `max`; the bar over a hit player flashes white for `flash`.
 // Looks of a flying asteroid: `trail` drawn positions kept behind it, `glow` the hot haze's radius as a
 // multiple of the rock's and `glowOpacity` how solid it is, `trailSize` the m across of each trail
-// dot, colours as hex.
-export const ROCK_LOOK = { trail: 60, trailSize: 1.6, glow: 1.3, glowOpacity: 0.25, rock: 0x3a3330, hot: 0xff7a1f, trailColor: 0xffa040 };
+// dot, colours as hex. heat: the trail shows only while the rock falls in on a body (closing on it), like a
+// meteor: none beyond heat[0] m from the surface, full within heat[1] m.
+export const ROCK_LOOK = { trail: 60, trailSize: 1.6, glow: 1.3, glowOpacity: 0.25, rock: 0x3a3330, hot: 0xff7a1f, trailColor: 0xffa040, heat: [30, 10] };
 
 // Sound, looks only. range: m beyond which nothing is heard; near: m within which a sound is at full volume;
 // own, others: gains for your sounds and everyone else's; gap: s of frame or clock jump after which changes
@@ -183,7 +186,13 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // sphere: boosting reads from the trailing legs instead); tuck and dangle: the legs (left, right) just after a
 // jump and after `fall` s in the air; trail: the legs while boosting; fly: the free arm while boosting; flail:
 // the free arm while falling; ease: s, how fast a pose follows its state; boostHold: s a boost pose outlasts
-// the last fuel drop seen.
+// the last fuel drop seen. jet: the booster's flames while boosting, one per nozzle (unlit, so they read on a
+// night side and from afar): core, the white-hot inside; length, width: the flame in m; coreShare: the core's
+// length and width against the flame's; tilt: rad the flames point back from straight down; flicker: how much
+// the length wavers, at `rate` rad/s; opacity, the flame's at the nozzle (it fades to none at the tip); glow:
+// the light round each nozzle, m across and opacity; ease: s to light or go out; trail: the exhaust left
+// behind, in game ticks (a point each), trailSize: m across each point, trailGlow: its brightness at the
+// nozzle.
 // weapons (look/weapons.js, the models from tools/blender/weapons.py; look/gunpose.js): colors, each weapon's
 // accent, its pickup's colour too (the .glb is built with the same, tests/look.test.mjs); glow, how bright an
 // accent glows in its own colour (so a gun reads on a night side); sun, as alien.sun for the gun in view;
@@ -192,6 +201,9 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // straight ahead, so its barrel runs to the crosshair); kick: the recoil after each of your shots, back (m) and up (rad) at its start,
 // gone after `time` s, scaled per weapon by `by`; flash: s a muzzle flash shows, its size per weapon (m, in the
 // model's own size) and its colour; spin: the minigun's barrels, rad per s while firing and for `for` s after.
+// thrust (look/gunpose.js): your own boost in first person, easing in and out over `ease` s: fov, degrees the
+// view widens (small: a big change in view width makes some people queasy); dip, m the gun in view drops;
+// shake, m it shakes at `shakeRate` rad/s; glow, how strong the light of your flames is from below the screen.
 // props (look/props.js, the models from tools/blender/props.py; look/proppose.js): pickups float `float` m over
 // their spot, bobbing `bob` m at `bobRate` rad/s, turning `spin` rad/s; glow: how bright their coloured parts
 // glow in their own colour; night: how much the rest glows in its own colour where the sun doesn't reach (so a
@@ -202,7 +214,13 @@ export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade
 // one rock's shade differs from the next (a share of it); cracks: how bright a flying rock's hollows glow in ROCK_LOOK.hot;
 // rim: the hot edge round it. comets: each tail's colour, length [base, reach, most] (m: base + reach / the
 // distance to the sun, at most `most`), width at the comet and at the tip (m) and opacity; the dust tail's bend
-// (m sideways per m along, at its tip), trailing the comet's path.
+// (m sideways per m along, at its tip), trailing the comet's path. stir: m from the sun within which a comet
+// is fully stirred (less further out: stir / distance), which grows its coma and jets; coma: the haze round
+// it, its colour, size (m across, as multiples of its radius, still and fully stirred), opacity (the same) and
+// fade (m from its surface, the eye's distance over which it fades in, so it never fogs the view on it); jets:
+// `count` plumes of gas from its sunlit side, colour, length (m, still and fully stirred), width (m across at
+// the end), opacity, sunward (a vent blows fully once the sun is this high over it, as the cosine, and fades
+// out to sunset) and back (how much a plume bends away from the sun, into the tails).
 export const LOOK = {
   budget: 4_000_000,
   weapons: {
@@ -222,9 +240,11 @@ export const LOOK = {
     pose: {
       steps: 2.6, swing: 0.6, armSwing: 0.35, head: 0.5, aim: [-1.3, 0.7], support: -0.35, reach: 0.4,
       lean: { walk: 0.08, jump: -0.08, fall: 0.1, boost: 0.11 },
-      tuck: [0.75, -0.2], dangle: [0.35, -0.35], trail: [-0.5, -0.35], fly: 2.0, flail: 2.4, fall: 0.6, ease: 0.08, boostHold: 0.15,
+      tuck: [0.75, -0.2], dangle: [0.35, -0.35], trail: [-0.7, -0.6], fly: 1.8, flail: 2.4, fall: 0.6, ease: 0.08, boostHold: 0.15,
     },
+    jet: { core: 0xfff4dc, length: 1.1, width: 0.11, coreShare: [0.5, 0.45], tilt: 0.45, flicker: 0.2, rate: 31, opacity: 1, glow: [1.1, 0.7], ease: 0.05, trail: 24, trailSize: 0.45, trailGlow: 0.55 },
   },
+  thrust: { ease: 0.06, fov: 4, dip: 0.02, shake: 0.004, shakeRate: 43, glow: 0.6 },
   props: {
     pickups: { float: 1, bob: 0.15, bobRate: 2, spin: 1, glow: 0.6, night: 0.3, nightTint: 0.06, halo: [1.8, 0.5], sun: 0.55, weapon: 2.2 },
     pads: { lands: 0x3ee05a, misses: 0xe0443e, hidden: 0x8a8f9c, glow: 1.2, halo: [2.6, 0.3] },
@@ -232,6 +252,9 @@ export const LOOK = {
     comets: {
       ion: { color: 0x5fa8ff, length: [12, 2400, 80], width: [0.7, 1.4], opacity: 0.55 },
       dust: { color: 0xffe6a8, length: [8, 1500, 50], width: [2.2, 10], opacity: 0.55, bend: 0.5 },
+      stir: 40,
+      coma: { color: 0xcfeaff, size: [3.5, 7], opacity: [0.35, 0.85], fade: [2, 10] },
+      jets: { count: 3, color: 0xe2f4ff, length: [1.5, 9], width: 1.6, opacity: 0.6, sunward: 0.25, back: 0.6 },
     },
   },
   quality: { down: 1 / 50, up: 10, window: 2, pause: 0.25, maxUp: 240, res: [0.5, 0.75, 1], most: 2 },
@@ -247,7 +270,7 @@ export const LOOK = {
   },
   sun: { octaves: [2, 3, 5], streamers: [2, 4, 4], churn: 0.06, corona: 3.2, flare: 0.5, flareFrom: 1, fade: 8 },
   planets: {
-    bake: { planet: 512, moon: 256 },
+    bake: { planet: 512, moon: 256, comet: 256 },
     detail: [0, 1, 2],
     near: 8, far: 22,
     sun: 0xfff1d6, light: 1.35, night: 0x8090c0, nightLight: 0.08,
@@ -270,6 +293,11 @@ export const LOOK = {
       "mid-moon": { world: "rock", seed: 8, relief: 0.5, craters: 0.7, colors: [0x8e98a2, 0xbcc6cf, 0x4e5862] },
       "ring-moon": { world: "rock", seed: 9, relief: 0.5, craters: 1.3, colors: [0x9c94aa, 0xc8bfd6, 0x5a5268] },
       "outer-moon": { world: "rock", seed: 10, relief: 0.6, craters: 0.85, colors: [0xa69e86, 0xd2c8aa, 0x625a46] },
+      // Comets: crust (dark, light), ice (bright, blue), deep dust; craters here sets the pits' size.
+      "comet-a": { world: "comet", seed: 11, relief: 0.5, craters: 1, colors: [0x48505c, 0x6c7480, 0xe4f4ff, 0x8cc8e8, 0x262a32], rim: 0xbfe8ff },
+      "comet-b": { world: "comet", seed: 12, relief: 0.5, craters: 1.3, colors: [0x4e4a56, 0x76707e, 0xeef0ff, 0x9fb4f0, 0x2a2630], rim: 0xc8d4ff },
+      "comet-c": { world: "comet", seed: 13, relief: 0.6, craters: 0.8, colors: [0x4a5250, 0x707a76, 0xe6fff8, 0x84d8cc, 0x262c2a], rim: 0xb8fff0 },
+      "comet-d": { world: "comet", seed: 14, relief: 0.5, craters: 1.1, colors: [0x544c48, 0x7c726a, 0xfff6ea, 0xb8d4e8, 0x2e2826], rim: 0xe0ecff },
     },
   },
 };

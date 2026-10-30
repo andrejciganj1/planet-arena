@@ -4,6 +4,35 @@ import * as THREE from "three";
 export const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 export const Y = new THREE.Vector3(0, 1, 0);
 
+// One soft round light, shared by every halo.
+let haloTexture = null;
+export function haloMap() {
+  if (haloTexture) return haloTexture;
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const ctx = c.getContext("2d"), g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.3, "rgba(255,255,255,0.45)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  return (haloTexture = new THREE.CanvasTexture(c));
+}
+
+// One shape for every flame and plume: an open cone from its base (at the origin) to the tip at -y, unit
+// sized, bright at the base and fading to nothing at the tip (vertex colours, for added-on materials).
+let cone = null;
+export function fadingCone() {
+  if (cone) return cone;
+  const g = new THREE.ConeGeometry(1, 1, 12, 4, true);
+  g.rotateX(Math.PI);
+  g.translate(0, -0.5, 0);
+  const pos = g.attributes.position, col = new Float32Array(3 * pos.count);
+  for (let i = 0; i < pos.count; i++) col.fill((1 + pos.getY(i)) ** 1.5, 3 * i, 3 * i + 3);
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  return (cone = g);
+}
+
 // Deterministic randomness, so every load looks the same.
 export function rng(seed) {
   let s = seed >>> 0;

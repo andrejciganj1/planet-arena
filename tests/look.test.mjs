@@ -351,6 +351,13 @@ test("the exported helmet fits PLAYER.hit.head within 3 %, the body within PLAYE
   // The gun goes in the right hand, which moves with the right arm.
   const armR = glb.json.nodes.findIndex((n) => n.name === "armR");
   assert.ok(glb.json.nodes[armR].children?.includes(glb.json.nodes.findIndex((n) => n.name === "hand")), "hand is a child of armR");
+  // The booster's flames start under the pack on its back, one each side, and lean with the body.
+  const bodyNode = glb.json.nodes.findIndex((n) => n.name === "body");
+  for (const [name, side] of [["jetL", -1], ["jetR", 1]]) {
+    assert.ok(glb.json.nodes[bodyNode].children?.includes(glb.json.nodes.findIndex((n) => n.name === name)), `${name} is a child of body`);
+    const at = nodeVertices(glb, name).at;
+    assert.ok(Math.sign(at[0]) === side && at[2] > 0.15 && at[1] > 0.2 && at[1] < body.at, `${name} under the pack, at the back (${at})`);
+  }
 });
 
 // The joints the model was built with, read from the file, as placeAlien needs them.
@@ -686,4 +693,108 @@ test("comet tails point away from the sun: the ion tail straight, the dust tail 
     assert.ok(near.tails.ion.length > near.tails.dust.length, "the ion tail is the long one");
     assert.ok(near.tails.ion.width[1] < near.tails.dust.width[1], "the ion tail is the thin one");
   }
+});
+
+test("a boost's exhaust trail lasts the same game time at any frame rate and fades out after the boost", async () => {
+  const { trailPush, trailFade } = await import("../src/client/rocklook.js");
+  const { jet } = LOOK.alien;
+  // Half a second of boosting, then nothing; the clock moves in whole ticks, as the view's does.
+  const run = (fps) => {
+    const trail = { pts: [], t: -1 };
+    let full = 0, gone = null;
+    for (let f = 0; f < 2 * fps; f++) {
+      const t = Math.floor(f / fps / TICK) * TICK;
+      if (f / fps < 0.5) trailPush(trail, [f, 0, 0], t, jet.trail), (full = trail.pts.length / 3);
+      else if (trailFade(trail, t) && gone === null) gone = t;
+    }
+    return { full, gone, left: trail.pts.length };
+  };
+  const a = run(60), b = run(144);
+  assert.equal(a.full, jet.trail, "a full trail while boosting");
+  assert.equal(b.full, a.full);
+  assert.equal(a.left, 0, "the trail fades away once the boost stops");
+  assert.ok(Math.abs(a.gone - b.gone) < 1e-9, `gone at the same game time (${a.gone}, ${b.gone})`);
+  assert.ok(Math.abs(a.gone - (0.5 + jet.trail * TICK)) < 3 * TICK, `gone a trail's length after the boost (${a.gone})`);
+});
+
+test("your own boost: the thrust builds while fuel burns in the air and is gone soon after landing, at any frame rate", async () => {
+  const { createThrust, thrustView } = await import("../src/client/look/gunpose.js");
+  const { thrust } = LOOK;
+  // Half a second boosting, a second falling, then on the ground; fuel arrives per tick, frames at fps.
+  const run = (fps) => {
+    const watch = createThrust(), e = { id: "me", alive: true, groundId: null, fuel: 1.5 };
+    const at = {};
+    for (let f = 0; f <= 2 * fps; f++) {
+      const t = f / fps, tick = Math.floor(t / TICK);
+      e.fuel = 1.5 - Math.min(tick, 30) * TICK;
+      e.groundId = t >= 1.5 ? "mid" : null;
+      const k = watch.frame(e, t, 1 / fps);
+      for (const s of [0.45, 0.85, 1.95]) if (Math.abs(t - s) < 0.5 / fps) at[s] = k;
+    }
+    return at;
+  };
+  for (const fps of [60, 144]) {
+    const at = run(fps);
+    assert.ok(at[0.45] > 0.95, `full thrust while burning at ${fps} fps (${at[0.45]})`);
+    assert.ok(at[0.85] < 0.05, `gone a moment after the fuel stops (${at[0.85]})`);
+    assert.ok(at[1.95] < 0.01, "none on the ground");
+  }
+  assert.equal(createThrust().frame({ id: "x", alive: false, groundId: null, fuel: 0 }, 0, 1 / 60), 0, "none while dead");
+
+  const rest = thrustView(0, 1.3), full = thrustView(1, 1.3);
+  assert.deepEqual([rest.fov, rest.glow, ...rest.gun], [0, 0, 0, 0, 0], "nothing at rest");
+  assert.equal(full.fov, thrust.fov, "the view widens by thrust.fov at full thrust");
+  assert.ok(full.gun[1] < 0, "the gun dips");
+  for (let t = 0; t < 2; t += 0.01) {
+    const v = thrustView(1, t);
+    assert.ok(Math.hypot(...v.gun) <= thrust.dip + 2 * thrust.shake + 1e-9, "the shake stays small");
+    assert.ok(v.glow > 0 && v.glow <= thrust.glow * (1 + LOOK.alien.jet.flicker), "the glow flickers with the flames");
+  }
+});
+
+test("a comet's coma and jets grow near the sun; the coma clears as you come close; jets blow only from the sunlit side", async () => {
+  const { cometStir, comaLook, jetVents, jetLook } = await import("../src/client/look/proppose.js");
+  const { comets: cfg } = LOOK.props;
+  const r = 3;
+  assert.equal(cometStir(cfg.stir / 2, cfg), 1, "fully stirred near the sun");
+  assert.ok(cometStir(300, cfg) < 0.2, "barely stirred far out");
+  const near = comaLook(1, 100, r, cfg), far = comaLook(cometStir(300, cfg), 100, r, cfg);
+  assert.ok(near.size > far.size && near.opacity > far.opacity, "a bigger, brighter coma near the sun");
+  assert.ok(far.opacity > 0, "seen from afar even out at the far end of the orbit");
+  assert.equal(comaLook(1, 0.5, r, cfg).opacity, 0, "gone when you stand on it");
+  assert.ok(comaLook(1, cfg.coma.fade[1], r, cfg).opacity > 0.95 * near.opacity, "full from far enough");
+
+  const vents = jetVents("comet-a", cfg);
+  assert.equal(vents.length, cfg.jets.count);
+  assert.notDeepEqual(vents, jetVents("comet-b", cfg), "each comet vents from its own spots");
+  const toSun = [1, 0, 0];
+  let seen = 0;
+  for (let i = 0; i < 400; i++) {
+    const a = (i / 400) * 2 * Math.PI, z = Math.cos(1.7 * a), s = Math.sqrt(1 - z * z);
+    const at = [s * Math.cos(a), s * Math.sin(a), z];
+    const lit = jetLook(at, toSun, 1, cfg), dim = jetLook(at, toSun, 0.2, cfg);
+    if (at[0] < 0) assert.equal(lit.opacity, 0, "no jet on the night side");
+    if (lit.opacity > 0) {
+      seen++;
+      assert.ok(lit.dir[0] * at[0] + lit.dir[1] * at[1] + lit.dir[2] * at[2] > 0, "a jet blows out of the surface");
+      assert.ok(lit.length > dim.length, "longer near the sun");
+    }
+  }
+  assert.ok(seen > 50, "vents facing the sun blow");
+});
+
+test("a flying asteroid's trail glows only as it falls in on a body: none out in space or moving away", async () => {
+  const { rockHeat } = await import("../src/client/rocklook.js");
+  const tuning = await import("../src/tuning.js");
+  const { createSystem, posesAt } = await import("../src/sim/system.js");
+  const { ROCK_LOOK } = tuning, [from, full] = ROCK_LOOK.heat;
+  const system = createSystem(tuning.BODIES), poses = posesAt(system, 40);
+  const mid = system.byId.mid, c = poses.mid.pos;
+  const above = (h, v) => ({ pos: [c[0], c[1] + mid.radius + h, c[2]], vel: [poses.mid.vel[0], poses.mid.vel[1] + v, poses.mid.vel[2]] });
+  assert.equal(rockHeat({ pos: [0, 400, 0], vel: [0, -10, 0] }, system, poses), 0, "out in space");
+  assert.equal(rockHeat(above(full / 2, -10), system, poses), 1, "close in and falling");
+  assert.equal(rockHeat(above(full / 2, 10), system, poses), 0, "close in but moving away");
+  const mid1 = rockHeat(above((from + full) / 2, -10), system, poses);
+  assert.ok(mid1 > 0 && mid1 < 1, `warming on the way in (${mid1})`);
+  assert.equal(rockHeat(above(from + 1, -10), system, poses), 0, "not yet");
 });

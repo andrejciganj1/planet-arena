@@ -4,23 +4,23 @@
 // thing looks like lives in look/ (sky, sun, planets, aliens, weapons, props); this file keeps the scene,
 // camera, lights and the frame, and moves the pieces to where the world says they are.
 import * as THREE from "three";
-import { tumble, trailPush } from "./rocklook.js";
-import { PLAYER, DUMMY, ROCKET, PAD_CUE, TICK, PICKUPS, WEAPONS, FEEDBACK, ROCK_LOOK, LOOK, ASTEROID } from "../tuning.js";
+import { tumble, trailPush, trailFade, rockHeat } from "./rocklook.js";
+import { PLAYER, DUMMY, ROCKET, PAD_CUE, TICK, PICKUPS, WEAPONS, FEEDBACK, ROCK_LOOK, LOOK, ASTEROID, COLOURS } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
 import { pickupReady } from "../sim/pickups.js";
 import { posesAt } from "../sim/system.js";
 import { surfaceInfo } from "../sim/collide.js";
 import { add, sub, scale, lerp, norm, cross, dist, rotateAxis, rotateFromTo } from "../sim/vec.js";
-import { rng, v3, Y } from "./look/common.js";
+import { rng, v3, Y, haloMap } from "./look/common.js";
 import { starfield, nebulaSky, PLAIN_SPACE } from "./look/sky.js";
-import { glowSprite, sunLook } from "./look/sun.js";
+import { sunLook } from "./look/sun.js";
 import { sphereMesh, planetLooks, orbitLines } from "./look/planets.js";
 import { blobUnder, sphereShadow } from "./look/shadow.js";
-import { DUMMY_COLOUR, ALIEN_ASSETS, figureMesh, dressFigure, armFigure, styleFigure, alienMaterial } from "./look/aliens.js";
+import { DUMMY_COLOUR, ALIEN_ASSETS, figureMesh, dressFigure, armFigure, styleFigure, alienMaterial, jetAt, viewArm } from "./look/aliens.js";
 import { createPoser } from "./look/alienpose.js";
 import { WEAPON_ASSETS, weaponModels, weaponSet, swapMaterials, muzzleFlash, showFlash, spinGun, shotLooks } from "./look/weapons.js";
 import { createGunWatch, viewGun, flashShown } from "./look/gunpose.js";
-import { PROP_ASSETS, pickupLook, padLook, cuePath, ropeLine, cometTailLook, asteroidBelt, flyingRocks } from "./look/props.js";
+import { PROP_ASSETS, pickupLook, padLook, cuePath, ropeLine, cometTailLook, cometHalo, asteroidBelt, flyingRocks } from "./look/props.js";
 import { cometTails } from "./look/proppose.js";
 import { loadAssets } from "./look/assets.js";
 import { threeLoaders } from "./look/loaders.js";
@@ -68,18 +68,16 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const rings = orbitLines(world.system);
   for (const r of rings) scene.add(r.ring);
 
-  // The sun first, then the planets and moons, then the comets: the order they draw from `rand` in.
+  // The sun first, then the planets, moons and comets: the order they draw from `rand` in.
   const bodies = {}, tails = [];
   const sun = sunLook(world.system.bodies.find((b) => b.kind === "sun"), rand);
   const planets = planetLooks(world.system, renderer, rand);
   for (const b of world.system.bodies) {
-    let m = b.kind === "sun" ? sun.mesh : planets.meshes[b.id];
-    if (!m) {
-      m = sphereMesh(b, rand);
-      if (b.kind === "comet") {
-        m.add(glowSprite(0xbfe8ff, b.radius * 5));
-        tails.push({ id: b.id, look: cometTailLook() });
-      }
+    const m = b.kind === "sun" ? sun.mesh : planets.meshes[b.id] ?? sphereMesh(b, rand);
+    if (b.kind === "comet") {
+      const halo = cometHalo(b);
+      m.add(halo.group);
+      tails.push({ id: b.id, look: cometTailLook(), halo });
     }
     bodies[b.id] = m;
     scene.add(m);
@@ -113,6 +111,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   camera.add(holder);
   let weapons = weaponModels(), viewMats = swapMaterials(weapons, alienMaterial), viewArmed = false;
   holder.add(...Object.values(weapons));
+  let arm = null; // your arm holding it, once the alien model loads (false if it has none)
   const viewFlash = muzzleFlash();
   const watch = createGunWatch(); // everyone's last shot, for kicks, flashes and the minigun's spin
 
@@ -145,6 +144,22 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const figures = [];
   const figure = pooled(figures, figureMesh); // everyone but you
   const poser = createPoser();
+  // Boosters' exhaust, kept per entity id: laid while one boosts, fading from the far end after.
+  const exhausts = new Map(); // id -> { points, colour, pts: [x, y, z, ...] newest first, t }
+  const exhaust = (id, colour) => {
+    let k = exhausts.get(id);
+    if (!k) {
+      const n = LOOK.alien.jet.trail, geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * n), 3));
+      geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(3 * n), 3));
+      const points = new THREE.Points(geo, new THREE.PointsMaterial({ size: LOOK.alien.jet.trailSize, map: haloMap(), vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      points.frustumCulled = false;
+      scene.add(points);
+      exhausts.set(id, (k = { points, colour: new THREE.Color(), pts: [], t: -1 }));
+    }
+    k.colour.setHex(colour);
+    return k;
+  };
   const flashAt = {}; // entity id -> when its bar began to flash (real seconds: the match clock can go back)
   const shot = pooled(shots, looks.shot);
   const blast = pooled(blasts, looks.blast);
@@ -209,8 +224,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
     },
     // alpha: how far towards the next tick to draw (0..1); look: mouse turn not yet given to the sim;
     // zoom: the sniper's magnification while zoomed, else 1; shift: added to where you are drawn (online,
-    // a prediction's correction eased in); now: real seconds, for the bars' hit flash.
-    draw(alpha, look, zoom = 1, shift = null, now = 0) {
+    // a prediction's correction eased in); now: real seconds, for the bars' hit flash; feel: your own boost
+    // (look/gunpose.js thrustView), which widens the view and shakes the gun in it.
+    draw(alpha, look, zoom = 1, shift = null, now = 0, feel = null) {
       if (pinned === null && lastNow !== null && quality.frame(now - lastNow) !== level) {
         level = quality.level;
         renderer.setPixelRatio(pixelRatio(level));
@@ -220,8 +236,10 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       const dt = lastNow === null ? 0 : now - lastNow;
       lastNow = now;
       resize();
-      if (camera.fov !== 80 / zoom) {
-        camera.fov = 80 / zoom;
+      // Zoomed in, the sniper's view stays steady.
+      const fov = zoom === 1 && feel && !fixedView ? 80 + feel.fov : 80 / zoom;
+      if (camera.fov !== fov) {
+        camera.fov = fov;
         camera.updateProjectionMatrix();
       }
       const poses = {};
@@ -268,15 +286,25 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       if (guns && !viewArmed) {
         holder.remove(...Object.values(weapons));
         ({ guns: weapons, materials: viewMats } = weaponSet(guns, alienMaterial));
+        if (arm) viewMats.push(...arm.lit);
         holder.add(...Object.values(weapons));
         viewArmed = true;
       }
       const held = !free && p.alive && zoom === 1 ? weapons[p.weapon] : null;
       for (const m of Object.values(weapons)) m.visible = m === held;
+      const alienModel = assets.get("alien");
+      if (alienModel && arm === null && (arm = viewArm(alienModel) || false)) {
+        holder.add(arm.arm);
+        viewMats.push(...arm.lit);
+      }
+      if (arm) {
+        arm.arm.visible = !!held;
+        if (held) arm.paint(world.players[p.id]?.colour ?? COLOURS[0]);
+      }
       const mineShot = !free && p.alive ? watch.frame(p, now) : null;
       if (mineShot) {
-        const at = viewGun(p.weapon, mineShot.since);
-        holder.position.set(at.pos[0], at.pos[1], at.pos[2]);
+        const at = viewGun(p.weapon, mineShot.since), push = feel ? feel.gun : [0, 0, 0];
+        holder.position.set(at.pos[0] + push[0], at.pos[1] + push[1], at.pos[2] + push[2]);
         holder.rotation.x = at.pitch;
         holder.scale.setScalar(at.scale);
         if (held) spinGun(held, mineShot.since, dt);
@@ -341,9 +369,31 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         const head = add(pos, scale(up, PLAYER.hit.head.at));
         let lit = 1;
         for (const k of blockers) lit *= sphereShadow(head, poses.sun, sunRadius, k.pos, k.radius);
-        styleFigure(m, who ? who.colour : DUMMY_COLOUR, poser.frame(d, now, dt), d.weapon, lit, watch.frame(d, now), d.shots, dt);
+        const colour = who ? who.colour : DUMMY_COLOUR;
+        styleFigure(m, colour, poser.frame(d, now, dt), d.weapon, lit, watch.frame(d, now), d.shots, dt, poser.boosting(d));
+        const jet = jetAt(m);
+        if (jet) trailPush(exhaust(id, colour), jet, world.t, LOOK.alien.jet.trail);
       }
       for (; i < figures.length; i++) figures[i].visible = false;
+      // Exhaust: one point per game tick while boosting (so it spans the same time on any screen), then
+      // fading from its far end; brightest at the nozzle, in the booster's colour.
+      for (const [id, k] of exhausts) {
+        if (trailFade(k, world.t)) { // a boost this tick laid a point already, so nothing fades
+          scene.remove(k.points);
+          k.points.geometry.dispose();
+          k.points.material.dispose();
+          exhausts.delete(id);
+          continue;
+        }
+        const n = k.pts.length / 3, pos = k.points.geometry.attributes.position, col = k.points.geometry.attributes.color;
+        pos.array.set(k.pts);
+        for (let j = 0; j < n; j++) {
+          const f = LOOK.alien.jet.trailGlow * (1 - j / n) ** 1.5;
+          col.array.set([k.colour.r * f, k.colour.g * f, k.colour.b * f], 3 * j);
+        }
+        pos.needsUpdate = col.needsUpdate = true;
+        k.points.geometry.setDrawRange(0, n);
+      }
       poser.sweep(now - 1);
       watch.sweep(now - 1);
 
@@ -364,12 +414,13 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         k.mesh.position.copy(v3(a.pos));
         rockLook.fit(k.mesh, a.id);
         k.mesh.rotation.set(...tumble(a.id, world.t), 0);
-        // One trail point per game tick (not per frame), so the trail lasts the same on any screen.
-        trailPush(k, a.pos, world.t, ROCK_LOOK.trail);
+        // One trail point per game tick (not per frame), so the trail lasts the same on any screen; each lit by
+        // how hot the rock was when it laid it, so it shows only along the fall in.
+        trailPush(k, a.pos, world.t, ROCK_LOOK.trail, rockHeat(a, world.system, world.poses));
         const last = k.pts, n = last.length / 3, pos = k.line.geometry.attributes.position, col = k.line.geometry.attributes.color;
         pos.array.set(last);
         for (let j = 0; j < n; j++) {
-          const f = 0.5 * (1 - j / n) ** 1.5; // additive dots pile up, so start dim or the near end whites out
+          const f = 0.5 * (1 - j / n) ** 1.5 * k.heats[j]; // additive dots pile up, so start dim or the near end whites out
           col.array.set([hot.r * f, hot.g * f, hot.b * f], 3 * j);
         }
         pos.needsUpdate = col.needsUpdate = true;
@@ -401,6 +452,8 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         l.material.opacity = 1 - b.age / WEAPONS.railgun.showFor;
       }
       for (; i < beams.length; i++) beams[i].visible = false;
+
+      for (const k of tails) k.halo.update(poses[k.id], poses.sun, viewer);
 
       // Pickups bob and turn above their spots.
       const t = world.t + (alpha - 1) * TICK, { float, bob, bobRate, spin } = LOOK.props.pickups;

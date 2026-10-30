@@ -5,6 +5,7 @@ import { createEntity, standOn, stepEntity, viewDir, worldVel, NO_INPUT } from "
 import { makeWorld, assertFrame, directions } from "./helpers.mjs";
 import { add, sub, scale, norm, dist, len, dot, cross } from "../src/sim/vec.js";
 import { posesAt } from "../src/sim/system.js";
+import { surfaceInfo } from "../src/sim/collide.js";
 
 // An entity standing on body `id` at unit direction u from its centre.
 function placeOn(world, id, u, name = "p") {
@@ -175,7 +176,8 @@ test("drifting into a comet side-on and glancing, fast, you land on it", () => {
       assert.equal(e.groundId, "comet-a", `t=${t0} d=${d}: caught`);
       world.step(60);
       assert.equal(e.groundId, "comet-a", `t=${t0} d=${d}: stays`);
-      const n = norm(sub(e.pos, world.poses["comet-a"].pos));
+      // Up along the ground under you (a comet is lumpy, so not always straight out from its centre).
+      const n = surfaceInfo(comet, world.poses["comet-a"], add(e.pos, scale(e.up, PLAYER.radius))).normal;
       assert.ok(dot(e.up, n) > Math.cos((10 * Math.PI) / 180), `t=${t0} d=${d}: up ${e.up}`);
     }
   }

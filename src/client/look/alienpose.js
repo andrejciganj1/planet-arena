@@ -19,7 +19,7 @@ function phaseOf(id) {
 
 // The slow part of the pose (what easing smooths) and how hard the legs swing (0 to 1). Arms and legs are
 // angles from the leaning body; the gun arm adds the lean back so it keeps to the aim whatever the lean.
-//   boosting: the booster is firing (fuel going down in the air; see createPoser)
+//   boosting: the booster is firing (fuel going down in the air; see createBoostWatch)
 export function poseParts(e, boosting = false, cfg = LOOK.alien.pose) {
   const aim = clamp(e.pitch || 0, cfg.aim[0], cfg.aim[1]);
   let legL, legR, armL, lean, walk = 0;
@@ -90,19 +90,39 @@ export function placeAlien(pose, rest, hit = PLAYER.hit) {
   };
 }
 
+// Tells boosting from fuel going down in the air (a snapshot carries no other sign of it), held `hold` s as
+// fuel arrives in steps. Per entity id.
+export function createBoostWatch(hold = LOOK.alien.pose.boostHold) {
+  const seen = new Map(); // id -> { fuel, until, at }
+  return {
+    // e: the entity as drawn; t: s of real time. Returns whether its booster is firing.
+    frame(e, t) {
+      let m = seen.get(e.id);
+      if (!m) seen.set(e.id, (m = { fuel: e.fuel, until: -Infinity, at: t }));
+      if (!e.groundId && e.fuel < m.fuel - 1e-9) m.until = t + hold;
+      m.fuel = e.fuel;
+      m.at = t;
+      return !!e.alive && !e.groundId && t < m.until;
+    },
+    drop: (id) => seen.delete(id),
+    // Forgets entities not seen since `before` (players who left).
+    sweep(before) {
+      for (const [id, m] of seen) if (m.at < before) seen.delete(id);
+    },
+  };
+}
+
 // Poses for drawn figures, eased so they never snap: other players' state arrives in snapshot steps (pitch,
-// speed and fuel jump at each one), and the switch between ground and air changes the target at once. Also
-// tells boosting from fuel going down in the air, held a moment as fuel arrives in steps.
+// speed and fuel jump at each one), and the switch between ground and air changes the target at once.
 export function createPoser(cfg = LOOK.alien.pose) {
-  const seen = new Map(); // id -> { parts, fuel, boostUntil, boosting, at }
+  const seen = new Map(); // id -> { parts, boosting, at }
+  const boosts = createBoostWatch(cfg.boostHold);
   return {
     // e: the entity as drawn; t, dt: s of real time.
     frame(e, t, dt) {
       let m = seen.get(e.id);
-      if (!m) seen.set(e.id, (m = { parts: null, fuel: e.fuel, boostUntil: -Infinity, boosting: false, at: t }));
-      if (!e.groundId && e.fuel < m.fuel - 1e-9) m.boostUntil = t + cfg.boostHold;
-      m.boosting = !e.groundId && t < m.boostUntil;
-      m.fuel = e.fuel;
+      if (!m) seen.set(e.id, (m = { parts: null, boosting: false, at: t }));
+      m.boosting = boosts.frame(e, t);
       m.at = t;
       const target = poseParts(e, m.boosting, cfg);
       if (!m.parts) m.parts = target;
@@ -114,10 +134,14 @@ export function createPoser(cfg = LOOK.alien.pose) {
     },
     boosting: (e) => !!seen.get(e.id)?.boosting,
     // Starts a figure afresh (a respawn shouldn't ease in from where it died).
-    drop: (id) => seen.delete(id),
+    drop(id) {
+      seen.delete(id);
+      boosts.drop(id);
+    },
     // Forgets figures not drawn since `before` (players who left).
     sweep(before) {
       for (const [id, m] of seen) if (m.at < before) seen.delete(id);
+      boosts.sweep(before);
     },
   };
 }

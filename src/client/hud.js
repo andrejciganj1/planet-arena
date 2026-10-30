@@ -2,7 +2,7 @@
 // you hold, booster fuel (extra fuel from a pickup in a second colour), toasts, "Click to play", hit
 // feedback (a red vignette and an arc towards the shooter), the kill feed, scores, and online the name box
 // and the connection's status screens. Names come from the server: only ever set as text.
-import { BOOST, PLAYER, HOOK, WEAPON_ORDER, NET, FEEDBACK } from "../tuning.js";
+import { BOOST, PLAYER, HOOK, WEAPON_ORDER, NET, FEEDBACK, COLOURS } from "../tuning.js";
 import { segmentHit } from "../sim/collide.js";
 import { viewDir } from "../sim/entity.js";
 import { add, sub, scale, dot } from "../sim/vec.js";
@@ -78,6 +78,8 @@ export function askName(root, saved) {
   });
 }
 
+const hexColour = (c) => `#${c.toString(16).padStart(6, "0")}`;
+
 // online: show your kills and deaths in a corner and answer to the scoreboard.
 export function createHud(root, online = false) {
   const cross = el(root, "hud crosshair");
@@ -85,6 +87,7 @@ export function createHud(root, online = false) {
   const slots = WEAPON_ORDER.map((w, i) => `<span data-w="${w}">${i + 1}</span>`).join("");
   const bottom = el(root, "hud bottom", `<div class="health">Health<div class="bar"><div></div></div></div><div class="slots">${slots}</div><div class="weapon"></div><div class="fuel">Booster<div class="bar"><div></div><div class="over"></div></div></div>`);
   const vignette = el(root, "hud vignette");
+  const flames = el(root, "hud flames"); // your booster's light from below while you boost
   const score = el(root, "hud score");
   const feed = el(root, "hud feed");
   const board = el(root, "hud board");
@@ -131,7 +134,8 @@ export function createHud(root, online = false) {
       if (text && screen.textContent !== text) screen.textContent = text;
     },
     // now: real seconds. camera: { pos, right, up, forward } as drawn, to aim the hit arcs; null when there is none.
-    update(world, locked, now, selfId = "player", camera = null) {
+    // feel: your own boost (look/gunpose.js thrustView): the flames' light and a burning fuel bar.
+    update(world, locked, now, selfId = "player", camera = null, feel = null) {
       const p = world.entities[selfId];
       // Online there is no body until the first snapshot.
       for (const x of [bottom, cross, play]) x.style.display = p ? "" : "none";
@@ -171,6 +175,10 @@ export function createHud(root, online = false) {
         s.classList.toggle("hand", p.weapon === s.dataset.w);
       }
       bottom.querySelector(".fuel .bar > div").style.width = `${(100 * Math.min(p.fuel, BOOST.fuel)) / BOOST.fuel}%`;
+      const glow = feel ? feel.glow : 0;
+      flames.style.opacity = glow;
+      if (glow > 0) flames.style.setProperty("--flame", hexColour(world.players[selfId]?.colour ?? COLOURS[0]));
+      bottom.querySelector(".fuel").classList.toggle("burning", glow > 0.05);
       bottom.querySelector(".fuel .over").style.width = `${(100 * Math.max(0, p.fuel - BOOST.fuel)) / BOOST.fuel}%`;
       bottom.querySelector(".health .bar > div").style.width = `${p.alive ? (100 * Math.max(0, p.health)) / PLAYER.health : 0}%`;
       cross.classList.toggle("hookable", locked && hookable(world, p));

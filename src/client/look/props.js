@@ -4,11 +4,12 @@
 // for a pickup and where the tails run are in look/proppose.js.
 import * as THREE from "three";
 import { BELT, ASTEROID, ROCK_LOOK, LOOK } from "../../tuning.js";
-import { v3, Y } from "./common.js";
-import { add, scale, cross, norm, len, anyPerpendicular } from "../../sim/vec.js";
+import { v3, Y, haloMap } from "./common.js";
+import { add, sub, scale, cross, norm, len, anyPerpendicular } from "../../sim/vec.js";
 import { WEAPON_COLORS } from "./weapons.js";
 import { alienMaterial } from "./aliens.js";
-import { pickupModel, tailAt } from "./proppose.js";
+import { pickupModel, tailAt, cometStir, comaLook, jetVents, jetLook } from "./proppose.js";
+import { radiusAt } from "../../sim/shape.js";
 
 export const PROP_ASSETS = [{ name: "props", url: "assets/models/props.glb" }];
 const P = LOOK.props;
@@ -35,20 +36,6 @@ function swapAll(root, make) {
   return [...mats.values()];
 }
 
-// One soft round light, shared by every halo.
-let haloTexture = null;
-function haloMap() {
-  if (haloTexture) return haloTexture;
-  const c = document.createElement("canvas");
-  c.width = c.height = 64;
-  const ctx = c.getContext("2d"), g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-  g.addColorStop(0, "rgba(255,255,255,1)");
-  g.addColorStop(0.3, "rgba(255,255,255,0.45)");
-  g.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 64, 64);
-  return (haloTexture = new THREE.CanvasTexture(c));
-}
 const haloMaterial = (color, opacity) => new THREE.SpriteMaterial({ map: haloMap(), color, opacity, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
 function halo(color, [size, opacity]) {
   const s = new THREE.Sprite(haloMaterial(color, opacity));
@@ -269,6 +256,77 @@ export function cometTailLook() {
   const group = new THREE.Group();
   group.add(dust, ion);
   return { group, update: ({ ion: i, dust: d }) => (ion.userData.set(i), dust.userData.set(d)) };
+}
+
+// One shape for every comet jet: a tube from a narrow vent (at the origin) widening to a unit-wide end at -y.
+// `along` runs 0 at the vent to 1 at the end.
+let plume = null;
+function plumeShape() {
+  if (plume) return plume;
+  const g = new THREE.CylinderGeometry(0.15, 1, 1, 14, 6, true);
+  g.translate(0, -0.5, 0);
+  const p = g.attributes.position;
+  g.setAttribute("along", new THREE.BufferAttribute(Float32Array.from({ length: p.count }, (_, i) => -p.getY(i)), 1));
+  return (plume = g);
+}
+
+// A soft plume, as the tails are: fading to its end and at its edges, where the view grazes it.
+function plumeMaterial(color) {
+  return new THREE.ShaderMaterial({
+    uniforms: { color: { value: new THREE.Color(color) }, opacity: { value: 0 } },
+    vertexShader: /* glsl */ `
+      attribute float along;
+      varying float vAlong, vFace;
+      void main() {
+        vec4 w = modelMatrix * vec4(position, 1.0);
+        vFace = abs(dot(normalize(mat3(modelMatrix) * normal), normalize(cameraPosition - w.xyz)));
+        vAlong = along;
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 color;
+      uniform float opacity;
+      varying float vAlong, vFace;
+      void main() {
+        gl_FragColor = vec4(color, opacity * pow(1.0 - vAlong, 1.6) * smoothstep(0.0, 0.08, vAlong) * vFace * vFace);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  });
+}
+
+// A comet's coma and jets, to add to the comet's mesh: { group, update(pos, sun, eye) } (positions in the
+// world). The coma is a haze round it (behind its disc, as the sprite sits at its centre); the jets are plumes
+// from its vents (look/proppose.js). Both unlit and added on.
+export function cometHalo(body) {
+  const cfg = P.comets, group = new THREE.Group();
+  const coma = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloMap(), color: cfg.coma.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  group.add(coma);
+  const jets = jetVents(body.id).map((at) => {
+    const mesh = new THREE.Mesh(plumeShape(), plumeMaterial(cfg.jets.color));
+    mesh.position.set(...scale(at, radiusAt(body, at) * 0.97));
+    group.add(mesh);
+    return { at, mesh };
+  });
+  const down = new THREE.Vector3(), d = new THREE.Vector3(0, -1, 0);
+  return {
+    group,
+    update(pos, sun, eye) {
+      const toSun = norm(sub(sun, pos)), gap = len(sub(eye, pos)) - body.radius;
+      const stir = cometStir(len(sub(sun, pos)));
+      const c = comaLook(stir, gap, body.radius);
+      coma.visible = c.opacity > 0.005;
+      coma.scale.setScalar(c.size);
+      coma.material.opacity = c.opacity;
+      for (const { at, mesh } of jets) {
+        const j = jetLook(at, toSun, stir);
+        mesh.visible = j.opacity > 0.005;
+        if (!mesh.visible) continue;
+        mesh.material.uniforms.opacity.value = j.opacity;
+        mesh.quaternion.setFromUnitVectors(d, down.set(...j.dir));
+        mesh.scale.set(cfg.jets.width, j.length, cfg.jets.width);
+      }
+    },
+  };
 }
 
 // The rocks' hollows: each vertex's `hollow`, 0 on the outer 85 % of the rock's vertices (by distance from its

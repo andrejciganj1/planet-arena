@@ -6,6 +6,7 @@ import { PLAYER, LOOK } from "../../tuning.js";
 import { placeAlien } from "./alienpose.js";
 import { weaponModels, weaponSet, swapMaterials, muzzleFlash, showFlash, spinGun } from "./weapons.js";
 import { flashShown } from "./gunpose.js";
+import { haloMap, fadingCone } from "./common.js";
 
 export const DUMMY_COLOUR = LOOK.alien.dummy;
 export const ALIEN_ASSETS = [{ name: "alien", url: "assets/models/alien.glb" }];
@@ -111,6 +112,47 @@ export function alienMaterial(src) {
   return m;
 }
 
+// Gives a figure's materials (by name) a player's colour: the skin, the trim's glow and the bubble's rim.
+// Returns the colour.
+function tint(mats, colour) {
+  const c = new THREE.Color(colour);
+  mats.get("skin")?.color.copy(c);
+  const trim = mats.get("trim");
+  if (trim) trim.emissive.copy(c).multiplyScalar(LOOK.alien.trim);
+  mats.get("glass")?.userData.rim.value.copy(c).multiplyScalar(LOOK.alien.rim);
+  return c;
+}
+
+// Your own arm in first person: the model's right arm (sleeve, glowing cuff and hand), placed so its hand
+// holds the gun in view as a figure's hand holds its gun. That is the model's `hand` node undone, at the gun's
+// size in view (1 / LOOK.alien.hold of the model's). Add it next to the guns in view. Returns { arm, lit,
+// paint(colour) } (lit: its materials, which take the sun as the gun's do), or null if the model has no arm.
+//   gltf: GLTFLoader's result for alien.glb
+export function viewArm(gltf) {
+  const src = gltf.scene.getObjectByName("armR"), hand = gltf.scene.getObjectByName("hand");
+  if (!src || !hand) return null;
+  const arm = src.clone(true), held = arm.getObjectByName("hand");
+  held.parent.remove(held);
+  const mats = new Map();
+  arm.traverse((o) => {
+    if (!o.isMesh) return;
+    if (!mats.has(o.material.name)) mats.set(o.material.name, alienMaterial(o.material));
+    o.material = mats.get(o.material.name);
+  });
+  mats.get("suit")?.color.setHex(LOOK.alien.suit);
+  hand.updateMatrix();
+  const k = 1 / LOOK.alien.hold;
+  arm.matrixAutoUpdate = false;
+  arm.matrix.makeScale(k, k, k).multiply(hand.matrix.clone().invert());
+  let shown = null;
+  return {
+    arm, lit: [...mats.values()],
+    paint(colour) {
+      if (colour !== shown) tint(mats, (shown = colour));
+    },
+  };
+}
+
 // Dresses a figure as the alien (once the model has loaded). Each figure gets its own materials, as skin, trim
 // and rim take its colour, and its own guns in the hand.
 //   gltf: GLTFLoader's result for alien.glb
@@ -130,8 +172,45 @@ export function dressFigure(g, gltf) {
   for (const name of ["body", "armL", "armR", "legL", "legR"]) rest[name] = nodes[name].position.toArray();
   g.remove(g.userData.simple);
   g.add(model);
-  g.userData.alien = { model, nodes, rest, mats, lit: [...mats.values()], guns: {}, gunMats: [], flash: muzzleFlash(), colour: null };
+  const jets = jetFlames(["jetL", "jetR"].map((name) => model.getObjectByName(name)).filter(Boolean));
+  g.userData.alien = { model, nodes, rest, mats, lit: [...mats.values()], guns: {}, gunMats: [], flash: muzzleFlash(), colour: null, jets, clock: 0 };
   armFigure(g, null);
+}
+
+// The booster's flames, one at each of the model's nozzles (jetL and jetR, under body, so they lean with it):
+// a white-hot core inside a longer flame in the player's colour, and a glow round the nozzle. Unlit and added
+// onto the scene, so they read on a night side. Hidden until styleFigure lights them; none if the model has
+// no nozzles. Returns { nozzles, flame, glow } (the last two the materials styleFigure colours).
+function jetFlames(nozzles) {
+  const { jet } = LOOK.alien;
+  const added = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, vertexColors: true };
+  const flame = new THREE.MeshBasicMaterial({ ...added, opacity: jet.opacity });
+  const core = new THREE.MeshBasicMaterial({ ...added, color: jet.core });
+  const glow = new THREE.SpriteMaterial({ map: haloMap(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: jet.glow[1] });
+  for (const n of nozzles) {
+    const outer = new THREE.Mesh(fadingCone(), flame), inner = new THREE.Mesh(fadingCone(), core), light = new THREE.Sprite(glow);
+    inner.scale.set(jet.coreShare[1], jet.coreShare[0], jet.coreShare[1]);
+    outer.add(inner);
+    const fire = new THREE.Group();
+    fire.rotation.x = -jet.tilt; // tip down and back (+z is the figure's back)
+    fire.add(outer);
+    light.scale.setScalar(jet.glow[0]);
+    n.add(fire, light);
+    n.userData.jet = { fire, outer, light };
+    fire.visible = light.visible = false;
+  }
+  return { nozzles, flame, glow, k: 0 };
+}
+
+// Where a dressed figure's flames start, in the world (the middle of its nozzles), or null if it has none or
+// they are out. Call after styleFigure, which moves them.
+export function jetAt(g) {
+  const jets = g.userData.alien?.jets;
+  if (!jets || !jets.nozzles.length || jets.k < 0.05) return null;
+  g.updateMatrixWorld(true);
+  const at = new THREE.Vector3(), p = new THREE.Vector3();
+  for (const n of jets.nozzles) at.add(n.getWorldPosition(p));
+  return at.divideScalar(jets.nozzles.length).toArray();
 }
 
 // Puts guns in a dressed figure's hand: the model's (once weapons.glb has loaded), else the simple ones. The
@@ -157,8 +236,9 @@ export function armFigure(g, gltf) {
 
 // This frame's look: colour (skin, trim and rim; hex), pose (look/alienpose.js), weapon (the held one's
 // name), sun (0..1, how much sunlight reaches the figure), shot (its last shot, { since, gun } from
-// look/gunpose.js) and seed (its shot count, which turns the flash), dt (s this frame, for the minigun's spin).
-export function styleFigure(g, colour, pose, weapon, sun, shot = null, seed = 0, dt = 0) {
+// look/gunpose.js) and seed (its shot count, which turns the flash), dt (s this frame, for the minigun's spin
+// and the flames), boosting (the booster is firing: its flames burn).
+export function styleFigure(g, colour, pose, weapon, sun, shot = null, seed = 0, dt = 0, boosting = false) {
   const a = g.userData.alien;
   if (!a) {
     g.userData.simple.userData.material.color.setHex(colour);
@@ -166,12 +246,11 @@ export function styleFigure(g, colour, pose, weapon, sun, shot = null, seed = 0,
   }
   if (a.colour !== colour) {
     a.colour = colour;
-    const c = new THREE.Color(colour);
-    a.mats.get("skin")?.color.copy(c);
-    const trim = a.mats.get("trim");
-    if (trim) trim.emissive.copy(c).multiplyScalar(LOOK.alien.trim);
-    a.mats.get("glass")?.userData.rim.value.copy(c).multiplyScalar(LOOK.alien.rim);
+    const c = tint(a.mats, colour);
+    a.jets.flame.color.copy(c);
+    a.jets.glow.color.copy(c);
   }
+  burnJets(a, boosting, dt);
   for (const m of a.lit) m.userData.sun.value = sun * LOOK.alien.sun;
   const placed = placeAlien(pose, a.rest);
   for (const name in placed) {
@@ -183,4 +262,23 @@ export function styleFigure(g, colour, pose, weapon, sun, shot = null, seed = 0,
   const held = a.guns[weapon];
   if (held && shot) spinGun(held, shot.since, dt);
   showFlash(a.flash, held, !!held && !!shot && flashShown(shot.since), shot, seed);
+}
+
+// Lights or puts out a figure's flames (easing in and out, as boosts start and stop all the time) and makes
+// them flicker: each nozzle's flame wavers in length on its own beat.
+function burnJets(a, boosting, dt) {
+  const { jet } = LOOK.alien, jets = a.jets;
+  a.clock += dt;
+  jets.k += ((boosting ? 1 : 0) - jets.k) * (1 - Math.exp(-Math.max(0, dt) / jet.ease));
+  const on = jets.k > 0.02;
+  jets.nozzles.forEach((n, i) => {
+    const { fire, outer, light } = n.userData.jet;
+    fire.visible = light.visible = on;
+    if (!on) return;
+    const t = jet.rate * a.clock + 2.1 * i;
+    const waver = 1 + jet.flicker * 0.5 * (Math.sin(t) + Math.sin(1.73 * t + 1));
+    const w = jet.width * Math.sqrt(jets.k);
+    outer.scale.set(w, jet.length * jets.k * waver, w);
+    light.scale.setScalar(jet.glow[0] * jets.k);
+  });
 }

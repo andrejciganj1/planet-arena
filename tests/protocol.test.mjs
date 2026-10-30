@@ -10,9 +10,9 @@ import { PROTOCOL, cleanInput, cleanName, entityState, applyEntity, snapshot } f
 const { TICK, COLOURS, NET } = tuning;
 const online = () => ({ ...createWorld(tuning, { solo: false }), pads: [] });
 
-test("PROTOCOL is 3", () => {
-  // The hit shape and asteroids changed the rules: an older page must be told to reload.
-  assert.equal(PROTOCOL, 3);
+test("PROTOCOL is 4", () => {
+  // Lumpy comets and an asteroid every 5 s changed the rules: an older page must be told to reload.
+  assert.equal(PROTOCOL, 4);
 });
 
 test("cleanInput keeps good input and repairs or rejects the rest", () => {

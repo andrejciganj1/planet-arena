@@ -161,8 +161,11 @@ GUNS["minigun"] = dict(
     parts=[
         box((0, Y, 0.0), (0.12, 0.12, 0.2), "casing", bevel=0.014),
         box((0, Y + 0.002, -0.03), (0.125, 0.02, 0.17), "minigun_accent", bevel=0.004),
-        tube(0.1, 0.17, 0.048, "casing", y=Y, seg=20),
-        ring(0.135, 0.048, 0.006, "minigun_accent", y=Y, seg=20, sides=6),
+        tube(0.1, 0.16, 0.048, "casing", y=Y, r1=0.04, seg=20),
+        ring(0.13, 0.046, 0.006, "minigun_accent", y=Y, seg=20, sides=6),
+        # The back faces you in first person: a dark end plate with a glowing cell, not a bare white disc.
+        tube(0.158, 0.17, 0.042, "metal", y=Y, seg=20),
+        tube(0.169, 0.174, 0.016, "minigun_accent", y=Y, seg=14),
         tube(-0.1, -0.13, 0.05, "metal", y=Y, seg=20),
         box((0.09, Y - 0.02, 0.01), (0.05, 0.1, 0.13), "minigun_accent", bevel=0.01),
         box((0, Y + 0.075, -0.06), (0.018, 0.035, 0.018), "metal", bevel=0.004),

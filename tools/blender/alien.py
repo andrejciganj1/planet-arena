@@ -8,7 +8,8 @@
 # Built in game axes (feet at the origin, up +y, facing -z) and turned into Blender's at the end; the glTF
 # exporter turns them back. Nodes: head (pivot at the helmet's centre, so it turns in place) with eyes and
 # helmet under it; body; armL and armR pivoting at the shoulders, with `hand` under armR where the gun goes
-# (its -z along the arm); legL and legR pivoting at the hips. Materials: skin and trim are tinted per player
+# (its -z along the arm); legL and legR pivoting at the hips; jetL and jetR under body at the booster's two
+# nozzles, where its flames start. Materials: skin and trim are tinted per player
 # in the page; suit, eye, glass and shine are the same for everyone.
 import argparse
 import math
@@ -253,6 +254,13 @@ bpy.context.scene.collection.objects.link(hand)
 hand.parent = objects["armR"]
 hand.location = to_b((HAND[0] - SHOULDER[0], HAND[1] - SHOULDER[1], 0.0))
 hand.rotation_euler = (-math.pi / 2, 0.0, 0.0)
+
+# The booster's flames start at the bottom of its two nozzles (the trim bumps under the pack).
+for name, sx in (("jetL", -1), ("jetR", 1)):
+    jet = bpy.data.objects.new(name, None)
+    bpy.context.scene.collection.objects.link(jet)
+    jet.parent = objects["body"]
+    jet.location = to_b((sx * 0.06 * U, 0.34 * U - B, 0.22 * U))
 
 bpy.ops.export_scene.gltf(
     filepath=args.out, export_format="GLB", export_yup=True, export_texcoords=False, export_normals=True,

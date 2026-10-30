@@ -3,6 +3,7 @@
 import { createSystem, posesAt } from "./system.js";
 import { createEntity, standOn, stepEntity, hitCentre, NO_INPUT } from "./entity.js";
 import { surfaceInfo, sphereContacts } from "./collide.js";
+import { radiusAt, normalAt } from "./shape.js";
 import { padPos, touchPads, refreshCues } from "./pads.js";
 import { fire, stepProjectiles } from "./weapons.js";
 import { record } from "./lag.js";
@@ -19,7 +20,7 @@ const SPAWN_DIRS = Array.from({ length: 48 }, (_, i) => {
 
 function candidates(world, body) {
   const c = world.poses[body.id].pos;
-  return SPAWN_DIRS.map((u) => ({ pos: add(c, scale(u, body.radius)), up: u }));
+  return SPAWN_DIRS.map((u) => ({ pos: add(c, scale(u, radiusAt(body, u))), up: normalAt(body, u) }));
 }
 
 // A point on bodyId's surface clear of pads and other bodies, and far from the other entities: at least

@@ -10,6 +10,15 @@ shadow falls pays.
 Success: a flare is unmistakable (seen, read and heard), a player who reacts in time always has a way out, and
 a careless one near the sun dies.
 
+## Changed with the plan (owner approved)
+
+- The warning voice is a file in the same public-domain Norman voice as "Sun kill!" (made with Piper), played
+  like the announcer, not the browser's speech.
+- The flare's damage shows no hit flash and plays no "hurt" sound (it ticks 60 times a second); the orange
+  tint and the sizzle are its feedback, and it never counts as anyone's hit.
+- Flares come 60 to 120 s apart from one warning to the next, the first no earlier than 60 s.
+- The shadow line starts at the movement sphere's centre, as the sun death uses.
+
 ## Decided by the owner
 
 - A warning first: written on screen and spoken, "Imminent solar flare detected".

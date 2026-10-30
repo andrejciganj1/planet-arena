@@ -118,6 +118,12 @@ export const SPAWN_BODIES = ["tiny", "mid", "heavy", "giant"];
 // standing: s on the ground, and since the last hit, after which a fall no longer counts as the hitter's kill.
 export const KILL = { standing: 1 };
 
+// Solar flares (sim/flares.js). Flare k warns at first + k * every, give or take jitter (s), so the first comes
+// 60 to 90 s in and warnings are 60 to 120 s apart. warn: s of warning before the burst; burn: s it burns;
+// fade: s its look takes to die away after, harmless. Anyone in the sun's light burns at rate health/s
+// within full m of the sun's centre, falling linearly to nothing at reach m: Hot and Tiny full, Mid less.
+export const FLARE = { first: 75, every: 90, jitter: 15, warn: 10, burn: 6, fade: 3, rate: 25, full: 80, reach: 150 };
+
 // One per player slot; index 0 is the solo player's.
 export const COLOURS = [0xffd23f, 0xe8505b, 0x4fb0e8, 0x6fd36b, 0xb06fe8, 0xff8a3d, 0x3fd9c4, 0xf08bc8];
 

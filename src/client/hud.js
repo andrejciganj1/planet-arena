@@ -8,9 +8,9 @@ import { viewDir } from "../sim/entity.js";
 import { add, sub, scale, dot } from "../sim/vec.js";
 
 const NAMES = { pistol: "Pistol", shotgun: "Shotgun", rocket: "Rocket launcher", minigun: "Minigun", sniper: "Sniper rifle", railgun: "Railgun" };
-const DEATHS = { sun: "Into the sun!", void: "Lost in the void", damage: "Blown up" };
+const DEATHS = { sun: "Into the sun!", void: "Lost in the void", damage: "Blown up", flare: "Burned by the flare" };
 
-const MARKS = { sun: "☀", damage: "✹", void: "⋯" };
+const MARKS = { sun: "☀", damage: "✹", void: "⋯", flare: "☀" };
 const nameOf = (players, id) => players[id]?.name ?? (id === "dummy" ? "Dummy" : id);
 
 // Score table rows, best first: most kills, then fewer deaths, then name. players: { id: { name, kills, deaths } }.

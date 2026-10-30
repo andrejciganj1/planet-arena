@@ -1,4 +1,4 @@
-// The whole simulation: bodies on the clock, entities, asteroids, deaths in the sun and the void, respawns,
+// The whole simulation: bodies on the clock, entities, asteroids, solar flares, deaths in the sun and the void, respawns,
 // and the fixed 60 Hz tick driven from real elapsed time.
 import { createSystem, posesAt } from "./system.js";
 import { createEntity, standOn, stepEntity, hitCentre, NO_INPUT } from "./entity.js";
@@ -10,6 +10,7 @@ import { record } from "./lag.js";
 import { stepPickups } from "./pickups.js";
 import { stepHook } from "./hook.js";
 import { stepAsteroids } from "./asteroids.js";
+import { stepFlare } from "./flares.js";
 import { add, scale, dist, norm, anyPerpendicular } from "./vec.js";
 
 // Spawn candidates: an evenly spread, fixed list of directions (Fibonacci sphere).
@@ -182,6 +183,7 @@ export function stepWorld(world, inputs, dt) {
   stepPickups(world);
   stepProjectiles(world, dt);
   stepAsteroids(world, dt);
+  stepFlare(world, dt);
   if (!world.noCues) refreshCues(world);
 
   const sun = world.system.bodies.find((b) => b.kind === "sun");
@@ -193,7 +195,7 @@ export function stepWorld(world, inputs, dt) {
     const c = hitCentre(e);
     if (dist(c, world.poses[sun.id].pos) < sun.radius + PLAYER.radius + 1e-6) die(world, e, "sun");
     else if (dist(c, world.poses[sun.id].pos) > VOID_RADIUS) die(world, e, "void");
-    else if (e.health <= 0) die(world, e, "damage");
+    else if (e.health <= 0) die(world, e, e.flareTick === world.tick ? "flare" : "damage");
   }
   for (const e of entities) {
     if (e.alive || world.t < e.respawnAt) continue;

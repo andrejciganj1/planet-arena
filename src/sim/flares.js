@@ -70,13 +70,15 @@ export function burnRate(world, e, F = world.tuning.FLARE) {
 }
 
 // The burn, once a tick. No hit events and no credit: it would flash and sound 60 times a second, and
-// nobody shot you. The browser's cosmetic world never hurts anyone. flareTick marks a death as the flare's.
+// nobody shot you. The browser's cosmetic world never hurts anyone.
 export function stepFlare(world, dt) {
   if (world.cosmetic || flareAt(world.t, world.tuning.FLARE).phase !== "burn") return;
   for (const e of Object.values(world.entities)) {
     const rate = burnRate(world, e);
     if (rate <= 0) continue;
+    const was = e.health;
     e.health -= rate * dt;
-    e.flareTick = world.tick;
+    // The flare claims a death only when its own burn took the last of the health (a rocket's kill stays one).
+    if (was > 0 && e.health <= 0) e.flareTick = world.tick;
   }
 }

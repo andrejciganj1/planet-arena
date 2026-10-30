@@ -27,6 +27,7 @@ export function createDirector({ selfId, online }) {
   const seen = new Map(); // entity id -> what it was last frame
   let ready = new Map(); // pickup id -> readyAt last frame
   let lastT = null, spots = null;
+  const said = { alarm: -1, voice: -1, roar: -1 }; // the last flare (k) each was played for: a clock resync can't replay it
   const mineShot = (id) => typeof id === "string" && id.startsWith(`${selfId}.`);
   // Your own sounds are in your head: the listener is the drawn camera (interpolated, shifted by online
   // corrections), so a place at your eye would pan your own gun along your motion. Another's are where they are.
@@ -149,10 +150,15 @@ export function createDirector({ selfId, online }) {
 
     // A solar flare is for everyone, in your head: the alarm, then the voice, as the warning starts, and the roar
     // at the burst; only on a frame that follows the last (a late join hears none of it). The sizzle while you burn.
-    const f = flareAt(world.t, world.tuning.FLARE), crossed = (at) => !gap && lastT < at && at <= world.t;
-    if (crossed(f.warnAt)) once.push({ name: "flareAlarm", pos: null, own: true });
-    if (crossed(f.warnAt + SOUND.flareVoiceAfter)) once.push({ name: "flareVoice", pos: null, own: true });
-    if (crossed(f.burnAt)) once.push({ name: "flareRoar", pos: null, own: true });
+    const f = flareAt(world.t, world.tuning.FLARE);
+    const cue = (key, at, name) => {
+      if (gap || said[key] === f.k || !(lastT < at && at <= world.t)) return;
+      said[key] = f.k;
+      once.push({ name, pos: null, own: true });
+    };
+    cue("alarm", f.warnAt, "flareAlarm");
+    cue("voice", f.warnAt + SOUND.flareVoiceAfter, "flareVoice");
+    cue("roar", f.burnAt, "flareRoar");
     const me = world.entities[selfId];
     if (me && burnRate(world, me) > 0) loops.set("sizzle", { name: "sizzle", pos: null, own: true, src: selfId });
 

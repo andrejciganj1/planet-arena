@@ -816,7 +816,7 @@ test("the flare's look follows the schedule", async () => {
       last = v.warn;
     }
     for (let s = f.burnAt + 0.5; s < f.endAt - 1; s += 0.25) assert.equal(flareView(s).burn, 1, `blazing at ${s - f.burnAt}`);
-    assert.equal(flareView(f.endAt + 0.01).burn, 0);
+    assert.equal(flareView(f.endAt + 0.51).burn, 0); // dimmed half a second after the burn
     assert.ok(Math.abs(flareView(f.endAt + 1).since - (f.endAt + 1 - f.burnAt)) < 1e-9);
     t = f.endAt + FLARE.fade + 1;
   }
@@ -832,4 +832,14 @@ test("the two patches stand 130 to 140 degrees apart", async () => {
     assert.ok(Math.abs(Math.hypot(...dir) - 1) < 1e-9 && Math.abs(Math.hypot(...dir2) - 1) < 1e-9);
     t = f.endAt + 4;
   }
+});
+
+test("the sun blazes until the burn ends, then dims over half a second", async () => {
+  const { flareView } = await import("../src/client/look/flarepose.js");
+  const { flareAt } = await import("../src/sim/flares.js");
+  const f = flareAt(0);
+  assert.equal(flareView(f.endAt - 0.05).burn, 1);
+  const mid = flareView(f.endAt + 0.25).burn;
+  assert.ok(mid > 0.3 && mid < 0.7, `${mid}`);
+  assert.equal(flareView(f.endAt + 0.6).burn, 0);
 });

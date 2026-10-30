@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import * as tuning from "../src/tuning.js";
 import { flareAt, burnRate, exposure } from "../src/sim/flares.js";
 import { createWorld, stepWorld, spawnGap } from "../src/sim/world.js";
+import { explode } from "../src/sim/weapons.js";
 import { createEntity, standOn } from "../src/sim/entity.js";
 import { posesAt } from "../src/sim/system.js";
 import { radiusAt } from "../src/sim/shape.js";
@@ -276,4 +277,16 @@ test("a respawn during a warning stays out of the flare's reach through the whol
     }
     t = f.endAt + FLARE.fade + 1;
   }
+});
+
+test("a rocket kill in a burn is a rocket kill", () => {
+  const world = createWorld(tuning);
+  const f = flareAt(0);
+  at(world, f.burnAt + 1);
+  const e = stand(world, "player", "hot", towardSun(world, "hot"));
+  e.health = 5;
+  explode(world, e.pos, "dummy");
+  world.events = [];
+  stepWorld(world, {}, TICK);
+  assert.equal(world.events.find((ev) => ev.type === "death" && ev.id === "player")?.cause, "damage");
 });

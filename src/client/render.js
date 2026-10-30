@@ -64,7 +64,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   // three.js r160 lights are physically based (diffuse divided by pi), hence the large numbers. The night
   // side of a planet must stay readable.
   scene.add(new THREE.AmbientLight(0xa3acd0, 0.45));
-  const sunLight = new THREE.PointLight(0xfff1d6, 7, 0, 0);
+  const sunLight = new THREE.PointLight(0xfff1d6, LOOK.sun.light, 0, 0);
   scene.add(sunLight, starfield(rand));
 
   const rings = orbitLines(world.system);
@@ -488,7 +488,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       const fs = flareView(t);
       sun.setStorm(fs);
       planets.setStorm(fs.burn);
-      sunLight.intensity = 7 * (1 + LOOK.flare.bleach * fs.burn);
+      sunLight.intensity = LOOK.sun.light * (1 + LOOK.flare.bleach * fs.burn);
       storm.update(fs, t, poses.sun);
       sun.update(t, dt, camera, poses.sun, blockers);
       planets.update(t, poses, blobsNear(p, free, alpha, poses, viewer), viewer);

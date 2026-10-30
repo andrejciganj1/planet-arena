@@ -16,6 +16,7 @@ import { starfield, nebulaSky, PLAIN_SPACE } from "./look/sky.js";
 import { sunLook } from "./look/sun.js";
 import { flareLook } from "./look/solarflare.js";
 import { flareView } from "./look/flarepose.js";
+import { thirdCamera, aimPoint } from "./look/camerapose.js";
 import { sphereMesh, planetLooks, orbitLines } from "./look/planets.js";
 import { blobUnder, sphereShadow } from "./look/shadow.js";
 import { DUMMY_COLOUR, ALIEN_ASSETS, figureMesh, dressFigure, armFigure, styleFigure, alienMaterial, jetAt, viewArm } from "./look/aliens.js";
@@ -208,9 +209,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
     return blobList.sort(byDistance);
   };
 
-  let shown = { orbits: true, cues: true, tags: true };
+  let shown = { orbits: true, cues: true, tags: true, third: false }, aim = null;
   return {
-    // Your own choices (O and P): { orbits, cues }. Cues cover the dashed path and the pad's light. tags: name
+    // Your own choices (O, P and V): { orbits, cues, third }. Cues cover the dashed path and the pad's light. tags: name
     // tags and bars over others (the look check hides them to measure a figure alone).
     setShown(s) {
       shown = { ...shown, ...s };
@@ -224,6 +225,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
     // The quality level drawn at and the last frame's draw calls and triangles (the look check's measure).
     stats: () => ({ level, calls: renderer.info.render.calls, triangles: renderer.info.render.triangles }),
     // The camera as last drawn: { pos, right, up, forward }, for the HUD's hit arcs.
+    // In third person, where the crosshair goes: the screen point (CSS px from the canvas's top left) where a
+    // shot from your eye lands; null in first person (the middle of the screen).
+    crosshair: () => aim,
     camera() {
       const m = camera.matrixWorld.elements;
       return { pos: [m[12], m[13], m[14]], right: [m[0], m[1], m[2]], up: [m[4], m[5], m[6]], forward: [-m[8], -m[9], -m[10]] };
@@ -270,6 +274,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         return { pos: shift ? add(pos, shift) : pos, up };
       };
       const free = fixedView || (!p && OVERVIEW);
+      // Third person: over the shoulder, while alive and not zoomed (the sniper's zoom is first person).
+      const third = !free && shown.third && p.alive && zoom === 1;
+      aim = null;
       if (free) {
         camera.position.set(free[0], free[1], free[2]);
         camera.up.set(0, 1, 0);
@@ -281,9 +288,15 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         const pitch = Math.min(MAX_PITCH, Math.max(-MAX_PITCH, p.pitch + look.pitch));
         const dir = add(scale(fwd, Math.cos(pitch)), scale(up, Math.sin(pitch)));
         const eye = add(pos, scale(up, PLAYER.eye));
-        camera.position.copy(v3(eye));
+        const at = third ? thirdCamera(eye, dir, up, world.system, world.poses) : eye;
+        camera.position.copy(v3(at));
         camera.up.copy(v3(up));
-        camera.lookAt(v3(add(eye, dir)));
+        camera.lookAt(v3(add(at, dir)));
+        if (third) {
+          camera.updateMatrixWorld();
+          const s = v3(aimPoint(world, p, eye, dir)).project(camera), r = canvas.getBoundingClientRect();
+          aim = s.z < 1 ? { x: ((s.x + 1) / 2) * r.width, y: ((1 - s.y) / 2) * r.height } : null;
+        }
       }
       // Figures are lit by the sun only where no body hides it from their head, as the ground is; the gun in
       // view where none hides it from your eye.
@@ -297,7 +310,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         holder.add(...Object.values(weapons));
         viewArmed = true;
       }
-      const held = !free && p.alive && zoom === 1 ? weapons[p.weapon] : null;
+      const held = !free && !third && p.alive && zoom === 1 ? weapons[p.weapon] : null;
       for (const m of Object.values(weapons)) m.visible = m === held;
       const alienModel = assets.get("alien");
       if (alienModel && arm === null && (arm = viewArm(alienModel) || false)) {
@@ -358,7 +371,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       const alien = assets.get("alien");
       let i = 0;
       for (const [id, d] of Object.entries(world.entities)) {
-        if (d === p) continue;
+        // In first person you are the view, not a figure in it; in third person too while the camera is pressed
+        // in close (looking steeply up or against a wall), where your figure would fill the screen.
+        if (d === p && (!third || camera.position.distanceTo(v3(add(mine().pos, scale(mine().up, PLAYER.eye)))) < LOOK.third.near)) continue;
         if (!d.alive) {
           poser.drop(id); // a respawn starts its pose afresh
           continue;
@@ -368,9 +383,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         if (alien && !m.userData.alien) dressFigure(m, alien);
         if (guns && m.userData.alien && !m.userData.alien.armed) armFigure(m, guns);
         const who = world.players[id];
-        m.userData.tag.visible = shown.tags;
+        m.userData.tag.visible = shown.tags && d !== p;
         m.userData.tag.userData.show(who ? who.name : "Dummy", d.health / (d.kind === "dummy" ? DUMMY.health : PLAYER.health), now >= flashAt[id] && now - flashAt[id] < FEEDBACK.flash);
-        const { pos, up } = between(d, alpha);
+        const { pos, up } = d === p ? mine() : between(d, alpha);
         const fwd = norm(rotateFromTo(d.forward, d.up, up)), right = cross(fwd, up);
         m.matrix.makeBasis(v3(right), v3(up), v3(scale(fwd, -1))).setPosition(v3(pos));
         const head = add(pos, scale(up, PLAYER.hit.head.at));
@@ -454,7 +469,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         const l = beam(i++);
         l.visible = true;
         // Your own beam starts at the railgun's muzzle, not your eye, or you would see it end-on as a dot.
-        const from = b.owner === p?.id && !free ? weapons.railgun.userData.muzzle.getWorldPosition(new THREE.Vector3()) : v3(b.from);
+        const from = b.owner === p?.id && !free && !third ? weapons.railgun.userData.muzzle.getWorldPosition(new THREE.Vector3()) : v3(b.from);
         l.geometry.setFromPoints([from, v3(b.to)]);
         l.material.opacity = 1 - b.age / WEAPONS.railgun.showFor;
       }

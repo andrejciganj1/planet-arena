@@ -54,8 +54,8 @@ test("sound and hits are on by default and toggle like the others", () => {
   }
 });
 
-test("O, P, M and H each toggle a setting and say which way it went", () => {
-  assert.deepEqual(TOGGLES, { KeyO: "orbits", KeyP: "cues", KeyM: "sound", KeyH: "hits" });
+test("O, P, M, H and V each toggle a setting and say which way it went", () => {
+  assert.deepEqual(TOGGLES, { KeyO: "orbits", KeyP: "cues", KeyM: "sound", KeyH: "hits", KeyV: "third" });
   assert.equal(toggleText("orbits", false), "Orbit lines off");
   assert.equal(toggleText("orbits", true), "Orbit lines on");
   assert.equal(toggleText("cues", false), "Pad cues off");
@@ -63,4 +63,12 @@ test("O, P, M and H each toggle a setting and say which way it went", () => {
   assert.equal(toggleText("sound", true), "Sound on");
   assert.equal(toggleText("hits", false), "Hit sound off");
   assert.equal(toggleText("hits", true), "Hit sound on");
+});
+
+test("V toggles the third-person view, which starts off", () => {
+  const s = createSettings(memory());
+  assert.equal(TOGGLES.KeyV, "third");
+  assert.equal(s.get("third"), false);
+  assert.equal(s.toggle("third"), true);
+  assert.equal(toggleText("third", true), "Third person on");
 });

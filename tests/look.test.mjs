@@ -868,3 +868,44 @@ test("the props file has a grappling hook: a shank along +y about half a metre l
   assert.ok(Math.min(...prong.map((p) => p[1])) < -0.25 && Math.max(...prong.map((p) => p[1])) <= 0.02);
   assert.ok(Math.max(...prong.map((p) => p[2])) > 0.08, "the claw sticks out");
 });
+
+test("the third-person camera sits back, right and up of the eye, and never inside a body", async () => {
+  const { thirdCamera } = await import("../src/client/look/camerapose.js");
+  const { createSystem, posesAt } = await import("../src/sim/system.js");
+  const tuning = await import("../src/tuning.js");
+  const system = createSystem(tuning.BODIES), poses = posesAt(system, 0), { back, side, lift } = LOOK.third;
+  // Open space, far above the sun.
+  const eye = [0, 400, 0], dir = [0, 0, -1], up = [0, 1, 0];
+  const cam = thirdCamera(eye, dir, up, system, poses);
+  const right = [1, 0, 0];
+  const want = eye.map((x, i) => x - dir[i] * back + right[i] * side + up[i] * lift);
+  assert.ok(Math.hypot(...cam.map((x, i) => x - want[i])) < 1e-9, `${cam}`);
+  // Pressed against Mid's moon, looking straight away from it: the camera's spot would be inside it.
+  const b = system.byId["mid-moon"], c = poses["mid-moon"].pos, n = [0, 1, 0];
+  const near = c.map((x, i) => x + n[i] * (b.radius + 0.5));
+  const tight = thirdCamera(near, n, [1, 0, 0], system, poses);
+  for (const k of system.bodies) {
+    const d = Math.hypot(...tight.map((x, i) => x - poses[k.id].pos[i])) - k.radius;
+    assert.ok(d > 0.2, `${k.id}: ${d}`);
+  }
+  assert.ok(tight.map((x, i) => (x - near[i]) * n[i]).reduce((a, x) => a + x) < 0.01, "pulled in towards the eye, not through");
+});
+
+test("the third-person crosshair is where the shot lands", async () => {
+  const { aimPoint } = await import("../src/client/look/camerapose.js");
+  const tuning = await import("../src/tuning.js");
+  const { createWorld } = await import("../src/sim/world.js");
+  const { createEntity } = await import("../src/sim/entity.js");
+  const w = createWorld(tuning, { solo: false });
+  const eye = [0, 400, 0], dir = [0, 0, -1];
+  assert.deepEqual(aimPoint(w, null, eye, dir), [0, 400, -300], "nothing: 300 m out");
+  // A player 5 m ahead, a little off the line but in it with their body.
+  w.entities.you = createEntity("you", "player", [0.2, 400 - tuning.PLAYER.hit.body.at, -5], [0, 1, 0]);
+  const hit = aimPoint(w, null, eye, dir);
+  assert.ok(hit[2] > -5 && hit[2] < -4, `${hit}`);
+  // A body ahead: Mid, from 40 m out.
+  const mid = w.poses.mid.pos, r = w.system.byId.mid.radius;
+  const from = [mid[0], mid[1], mid[2] + r + 40];
+  const onMid = aimPoint(w, null, from, [0, 0, -1]);
+  assert.ok(Math.abs(onMid[2] - (mid[2] + r)) < 0.01, `${onMid}`);
+});

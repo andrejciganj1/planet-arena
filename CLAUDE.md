@@ -27,7 +27,7 @@ A physics arena shooter across a small solar system, in the browser. Spec:
   `PLAYER.hit`). Planets, sun and sky are painted by shaders at load, no image files.
 - Controls: click to capture the mouse; mouse look, WASD move, space jump (held in the air: booster),
   left mouse fire, right mouse hook (held), 1 to 6 weapons (pistol, shotgun, rocket launcher, minigun, sniper
-  rifle, railgun), wheel cycles held weapons, Shift zooms the sniper rifle, O shows or hides orbit lines, P pad cues, M sound on or off, H the hit sound.
+  rifle, railgun), wheel cycles held weapons, Shift zooms the sniper rifle, V third person, O shows or hides orbit lines, P pad cues, M sound on or off, H the hit sound.
 
 ## Constraints
 

@@ -142,6 +142,11 @@ function views(world) {
     list.push(firstPerson(`fp-${w}-fire`, 1, w, true));
   }
   list.push(firstPerson("fp-night-railgun", -1, "railgun", true));
+  // Third person: over the shoulder with the rocket launcher, and looking steeply up, where the camera's spot
+  // would be underground and it is pulled in.
+  list.push({ ...firstPerson("third-person", 1, "rocket", false), shown: { third: true } });
+  const steep = firstPerson("third-person-tight", 1, "rocket", false);
+  list.push({ ...steep, fp: { ...steep.fp, pitch: 1.2 }, shown: { third: true } });
   for (const w of weapons) list.push(close(`hold-${w}`, 1, 40, { side: true, dist: 3, state: { weapon: w, pitch: 0.15 }, as: 0x4fb0e8, fire: true }));
   list.push(...propViews(world));
   return list;

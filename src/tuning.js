@@ -279,6 +279,10 @@ export const LOOK = {
     ],
     galaxy: { dir: [0.5, 0.82, 0.05], size: 0.2, tilt: 60, turn: 25 },
   },
+  // The third-person view (look/camerapose.js): the camera back, side (right) and lift (up) m from the eye along
+  // the view; pad: m it keeps off a body in the way; range: m out the crosshair looks for where a shot lands;
+  // near: m from your eye within which your own figure is hidden (it would fill the screen).
+  third: { back: 3.5, side: 0.7, lift: 0.4, pad: 0.3, range: 300, near: 1.5 },
   sun: { octaves: [2, 3, 5], streamers: [2, 4, 4], churn: 0.06, corona: 3.2, flare: 0.5, flareFrom: 1, fade: 8, light: 7 },
   // A solar flare as seen (look/solarflare.js), on FLARE's schedule. rise: s to full brightness at the burst;
   // dim: s it takes to dim once the burn ends;

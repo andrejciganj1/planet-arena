@@ -81,9 +81,10 @@ is a server change too: deploy it with `fly deploy --ha=false`.
 | W A S D | Run |
 | Space | Jump; in the air, hold it to fire the booster (after a jump, let go and press again) |
 | Left mouse | Fire |
-| Right mouse | Hook: hold to pull yourself to the planet, moon or comet you aim at (25 m); let go to fly on |
+| Right mouse | Hook: hold to throw it (it flies 25 m in half a second; lead a moving target) and pull yourself to the planet, moon or comet it catches; let go to fly on |
 | 1 to 6 / wheel | Pistol, shotgun, rocket launcher, minigun, sniper rifle, railgun (the wheel skips ones you don't hold) |
 | Shift | Zoom, with the sniper rifle |
+| V | First or third person (over the shoulder; the crosshair shows where your shot lands; the browser remembers) |
 | O | Show or hide the orbit lines (the browser remembers) |
 | P | Show or hide the pad cues; hidden, pads look neutral (the browser remembers) |
 | M | Sound on or off (the browser remembers) |

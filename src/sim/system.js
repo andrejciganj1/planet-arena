@@ -10,25 +10,37 @@ const DEG = Math.PI / 180;
 // closest point), turned by arg within that plane, tilted by inc, then turned about y by node.
 // Timing: M = E - kepler * e * sin E. kepler 1 is Kepler's law (very fast at peri, a crawl at apo); 0 moves
 // evenly in E. In between keeps a rush past the sun without the long slow stretch far out.
-function ellipse({ peri, apo, period, phase, inc, node, arg, kepler = 1 }, t) {
-  const a = (peri + apo) / 2, e = (apo - peri) / (apo + peri), b = a * Math.sqrt(1 - e * e), n = (2 * Math.PI) / period;
+// Each orbit's shape and turn are worked out once (pad cues ask for thousands of poses a second).
+const shapes = new WeakMap();
+function shapeOf(o) {
+  let s = shapes.get(o);
+  if (s) return s;
+  const a = (o.peri + o.apo) / 2, e = (o.apo - o.peri) / (o.apo + o.peri);
+  const cw = Math.cos(o.arg * DEG), sw = Math.sin(o.arg * DEG), ci = Math.cos(o.inc * DEG), si = Math.sin(o.inc * DEG);
+  const cn = Math.cos(o.node * DEG), sn = Math.sin(o.node * DEG);
+  s = { a, e, b: a * Math.sqrt(1 - e * e), n: (2 * Math.PI) / o.period, k: (o.kepler ?? 1) * e, cw, sw, ci, si, cn, sn };
+  shapes.set(o, s);
+  return s;
+}
+
+function ellipse(o, t) {
+  const { a, e, b, n, k, cw, sw, ci, si, cn, sn } = shapeOf(o);
   // Mean anomaly wrapped first, so hours into a match it stays exact.
-  const M = (((phase + n * t) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  const M = (((o.phase + n * t) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  // Newton's method, stopped once a step no longer moves it (a handful of steps; never more than 12).
   let E = M;
-  const k = kepler * e;
-  for (let i = 0; i < 12; i++) E -= (E - k * Math.sin(E) - M) / (1 - k * Math.cos(E));
-  const dE = n / (1 - k * Math.cos(E));
-  const turn = ([x, y]) => {
-    const cw = Math.cos(arg * DEG), sw = Math.sin(arg * DEG), ci = Math.cos(inc * DEG), si = Math.sin(inc * DEG);
-    const cn = Math.cos(node * DEG), sn = Math.sin(node * DEG);
+  for (let i = 0; i < 12; i++) {
+    const step = (E - k * Math.sin(E) - M) / (1 - k * Math.cos(E));
+    E -= step;
+    if (Math.abs(step) < 1e-13) break;
+  }
+  const sE = Math.sin(E), cE = Math.cos(E), dE = n / (1 - k * cE);
+  const turn = (x, y) => {
     const x1 = x * cw - y * sw, z1 = x * sw + y * cw;
-    const y2 = z1 * si, z2 = z1 * ci;
-    return [x1 * cn - z2 * sn, y2, x1 * sn + z2 * cn];
+    const z2 = z1 * ci;
+    return [x1 * cn - z2 * sn, z1 * si, x1 * sn + z2 * cn];
   };
-  return {
-    pos: turn([a * (Math.cos(E) - e), b * Math.sin(E)]),
-    vel: turn([-a * Math.sin(E) * dE, b * Math.cos(E) * dE]),
-  };
+  return { pos: turn(a * (cE - e), b * sE), vel: turn(-a * sE * dE, b * cE * dE) };
 }
 
 export function createSystem(bodies) {

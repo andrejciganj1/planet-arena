@@ -144,3 +144,31 @@ test("an ellipse orbit without kepler times like kepler 1, not NaN", () => {
     assert.ok(dist(p, posesAt(b, t)["comet-a"].pos) < 1e-9, `equals kepler 1 at ${t}`);
   }
 });
+
+test("the faster orbit maths gives the same poses as the original, to a nanometre", async () => {
+  const tuning = await import("../src/tuning.js");
+  const DEG = Math.PI / 180;
+  // The original comet orbit, kept here as the reference.
+  const ellipse = ({ peri, apo, period, phase, inc, node, arg, kepler = 1 }, t) => {
+    const a = (peri + apo) / 2, e = (apo - peri) / (apo + peri), b = a * Math.sqrt(1 - e * e), n = (2 * Math.PI) / period;
+    const M = (((phase + n * t) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    let E = M;
+    const k = kepler * e;
+    for (let i = 0; i < 12; i++) E -= (E - k * Math.sin(E) - M) / (1 - k * Math.cos(E));
+    const turn = ([x, y]) => {
+      const cw = Math.cos(arg * DEG), sw = Math.sin(arg * DEG), ci = Math.cos(inc * DEG), si = Math.sin(inc * DEG);
+      const cn = Math.cos(node * DEG), sn = Math.sin(node * DEG);
+      const x1 = x * cw - y * sw, z1 = x * sw + y * cw;
+      return [x1 * cn - z1 * ci * sn, z1 * si, x1 * sn + z1 * ci * cn];
+    };
+    return turn([a * (Math.cos(E) - e), b * Math.sin(E)]);
+  };
+  const system = createSystem(tuning.BODIES);
+  for (let t = 0; t < 25200; t += 37.7) {
+    const poses = posesAt(system, t);
+    for (const b of system.bodies.filter((x) => x.orbit?.peri)) {
+      const want = ellipse(b.orbit, t).map((x, i) => x + poses[b.orbit.around].pos[i]);
+      assert.ok(Math.hypot(...want.map((x, i) => x - poses[b.id].pos[i])) < 1e-9, `${b.id} at ${t}`);
+    }
+  }
+});

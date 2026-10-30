@@ -10,15 +10,18 @@ const DEG = Math.PI / 180;
 // closest point), turned by arg within that plane, tilted by inc, then turned about y by node.
 // Timing: M = E - kepler * e * sin E. kepler 1 is Kepler's law (very fast at peri, a crawl at apo); 0 moves
 // evenly in E. In between keeps a rush past the sun without the long slow stretch far out.
-// Each orbit's shape and turn are worked out once (pad cues ask for thousands of poses a second).
+// Each orbit's shape and turn are worked out once (pad cues ask for thousands of poses a second), and again
+// whenever one of its numbers changes (tools/comet_search.mjs edits orbits in place).
 const shapes = new WeakMap();
+const KEYS = ["peri", "apo", "period", "inc", "node", "arg", "kepler"];
 function shapeOf(o) {
   let s = shapes.get(o);
-  if (s) return s;
+  if (s && KEYS.every((k) => s.from[k] === o[k])) return s;
   const a = (o.peri + o.apo) / 2, e = (o.apo - o.peri) / (o.apo + o.peri);
   const cw = Math.cos(o.arg * DEG), sw = Math.sin(o.arg * DEG), ci = Math.cos(o.inc * DEG), si = Math.sin(o.inc * DEG);
   const cn = Math.cos(o.node * DEG), sn = Math.sin(o.node * DEG);
   s = { a, e, b: a * Math.sqrt(1 - e * e), n: (2 * Math.PI) / o.period, k: (o.kepler ?? 1) * e, cw, sw, ci, si, cn, sn };
+  s.from = Object.fromEntries(KEYS.map((k) => [k, o[k]]));
   shapes.set(o, s);
   return s;
 }

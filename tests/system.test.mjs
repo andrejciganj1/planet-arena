@@ -172,3 +172,13 @@ test("the faster orbit maths gives the same poses as the original, to a nanometr
     }
   }
 });
+
+test("changing a comet's orbit in place moves the comet: nothing remembers the old shape", async () => {
+  const tuning = await import("../src/tuning.js");
+  const bodies = tuning.BODIES.map((b) => ({ ...b, orbit: b.orbit && { ...b.orbit } }));
+  const system = createSystem(bodies), comet = bodies.find((b) => b.kind === "comet");
+  posesAt(system, 50);
+  comet.orbit.period *= 4;
+  const fresh = createSystem(bodies.map((b) => ({ ...b, orbit: b.orbit && { ...b.orbit } })));
+  assert.ok(dist(posesAt(system, 50)[comet.id].pos, posesAt(fresh, 50)[comet.id].pos) < 1e-9);
+});

@@ -54,7 +54,8 @@ export function createSystem(bodies) {
     order.push(b);
   };
   bodies.forEach(visit);
-  return { bodies, byId, order };
+  // The sun, found once: many hot paths need it every tick.
+  return { bodies, byId, order, sun: bodies.find((b) => b.kind === "sun") };
 }
 
 export function posesAt(system, t) {

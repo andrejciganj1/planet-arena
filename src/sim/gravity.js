@@ -5,7 +5,7 @@
 // Hold: within `hold` metres of a body's surface only that body pulls, and the others fade back in over
 // the next `hold` metres. Scripted planets don't fall towards the sun the way real ones would, so without
 // this the sun's full pull would tear an ordinary jump off a small planet.
-import { sub, add, scale, len, norm } from "./vec.js";
+import { sub, add, scale, len } from "./vec.js";
 import { surfaceInfo } from "./collide.js";
 
 export function bodyPull(body, pose, p) {

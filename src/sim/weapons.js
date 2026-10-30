@@ -137,7 +137,7 @@ export function detonate(world, rock, ownerId, lag = 0) {
 export function stepProjectiles(world, dt) {
   const { SHOT, VOID_RADIUS, ASTEROID } = world.tuning;
   const { system, poses } = world;
-  const sun = system.bodies.find((b) => b.kind === "sun");
+  const sun = system.sun;
   const keep = [];
   for (const p of world.projectiles) {
     p.vel = add(p.vel, scale(gravityAt(system, poses, p.pos), dt));

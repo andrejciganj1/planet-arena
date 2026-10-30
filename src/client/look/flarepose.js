@@ -35,7 +35,7 @@ export function flareView(t, F = FLARE, cfg = LOOK.flare) {
 // Your distance to the sun for the HUD, from your middle to its centre as the flare measures it: near when a
 // flare can reach you there.
 export function sunReadout(world, e, F = FLARE) {
-  const sun = world.system.bodies.find((b) => b.kind === "sun");
+  const sun = world.system.sun;
   const d = dist(hitCentre(e), world.poses[sun.id].pos);
   return { text: `Sun ${Math.round(d)} m`, near: d < F.reach };
 }

@@ -5,7 +5,7 @@
 // camera, lights and the frame, and moves the pieces to where the world says they are.
 import * as THREE from "three";
 import { tumble, trailPush, trailFade, rockHeat } from "./rocklook.js";
-import { PLAYER, DUMMY, ROCKET, PAD_CUE, TICK, PICKUPS, WEAPONS, FEEDBACK, ROCK_LOOK, LOOK, ASTEROID, COLOURS } from "../tuning.js";
+import { PLAYER, DUMMY, PAD_CUE, TICK, PICKUPS, WEAPONS, FEEDBACK, ROCK_LOOK, LOOK, ASTEROID, COLOURS } from "../tuning.js";
 import { padPos } from "../sim/pads.js";
 import { pickupReady } from "../sim/pickups.js";
 import { posesAt } from "../sim/system.js";
@@ -75,7 +75,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
 
   // The sun first, then the planets, moons and comets: the order they draw from `rand` in.
   const bodies = {}, tails = [];
-  const sun = sunLook(world.system.bodies.find((b) => b.kind === "sun"), rand);
+  const sun = sunLook(world.system.sun, rand);
   const planets = planetLooks(world.system, renderer, rand);
   for (const b of world.system.bodies) {
     const m = b.kind === "sun" ? sun.mesh : planets.meshes[b.id] ?? sphereMesh(b, rand);
@@ -89,7 +89,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   }
   for (const t of tails) scene.add(t.look.group);
   scene.add(sun.flare);
-  const storm = flareLook(world.system.bodies.find((b) => b.kind === "sun"));
+  const storm = flareLook(world.system.sun);
   sun.mesh.add(storm.arches);
   storm.setLevel(level);
   scene.add(storm.shell, storm.cloud);
@@ -97,7 +97,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   planets.setLevel(level);
   // Everything that can hide the sun, and the ground blob shadows fall on.
   const blockers = world.system.bodies.filter((b) => b.kind !== "sun").map((b) => ({ id: b.id, pos: null, radius: b.radius }));
-  const sunRadius = world.system.bodies.find((b) => b.kind === "sun").radius;
+  const sunRadius = world.system.sun.radius;
   const belt = asteroidBelt(rand);
   scene.add(belt.group);
   // Its own random stream, so the shared one (and every body made from it) is as it was.

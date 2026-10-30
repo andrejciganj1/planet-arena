@@ -23,7 +23,7 @@ export function flareAt(t, F = FLARE) {
 // True when nothing stands between p and the sun's centre (bodies by their real shapes; asteroids and
 // players cast no shadow). `ground`, a body id, is left out: its own shade is judged by its slope.
 export function sunlit(world, p, ground = null) {
-  const sun = world.system.bodies.find((b) => b.kind === "sun");
+  const sun = world.system.sun;
   const system = ground ? { bodies: world.system.bodies.filter((b) => b.id !== ground), byId: world.system.byId } : world.system;
   const hit = segmentHit(system, world.poses, p, world.poses[sun.id].pos);
   return !hit || hit.id === sun.id;
@@ -31,7 +31,7 @@ export function sunlit(world, p, ground = null) {
 
 // Health/s the flare would take from a point in its light, whatever the phase: full near the sun, fading out.
 export function flareReach(world, p, F = world.tuning.FLARE, ground = null) {
-  const sun = world.system.bodies.find((b) => b.kind === "sun");
+  const sun = world.system.sun;
   const d = dist(p, world.poses[sun.id].pos);
   if (d >= F.reach || !sunlit(world, p, ground)) return 0;
   return F.rate * Math.min(1, (F.reach - d) / (F.reach - F.full));
@@ -41,7 +41,7 @@ export function flareReach(world, p, F = world.tuning.FLARE, ground = null) {
 // centre, exactly where it is drawn dark; a line from your middle would clear its horizon some way further on,
 // so a hop or a push on the night side would burn. Returns that body's id and whether it shades you.
 function under(world, e, F) {
-  const sun = world.poses[world.system.bodies.find((b) => b.kind === "sun").id].pos;
+  const sun = world.poses[world.system.sun.id].pos;
   let id = e.groundId ?? null, best = F.hover;
   if (!id) {
     for (const b of world.system.bodies) {

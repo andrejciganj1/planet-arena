@@ -39,7 +39,7 @@ export function stepAsteroids(world, dt) {
     const rock = launchOf(world.tuning, system, k);
     if (rock) world.asteroids.push({ ...rock, age: 0, owner: null });
   }
-  const sun = system.bodies.find((b) => b.kind === "sun");
+  const sun = system.sun;
   for (const rock of [...world.asteroids]) {
     if (!world.asteroids.includes(rock)) continue; // set off this tick by another rock's blast
     rock.vel = add(rock.vel, scale(gravityAt(system, poses, rock.pos), dt));

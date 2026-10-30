@@ -71,3 +71,20 @@ export function hookPose(state, since, cfg = LOOK.props.hook) {
   if (state === "caught") return { open: ease(since / cfg.snap), spin: 0 };
   return { open: 1 - Math.min(1, since / cfg.reel), spin: 0 };
 }
+
+// A ring of rocks round the sun (the belt, and the outer ring past the edge of the game), as plain numbers:
+// { pos, scale, axis, rate, shade } each. Eleven draws a rock from `rand`, in a fixed order: the belt takes
+// them from the renderer's shared stream, so changing the count or order would change every body made after.
+//   cfg: { inner, outer, thick, rocks, size: [least, most] } (m)
+export function beltRocks(rand, cfg, variety = LOOK.props.rocks.variety) {
+  const rocks = [];
+  for (let i = 0; i < cfg.rocks; i++) {
+    const r = cfg.inner + rand() * (cfg.outer - cfg.inner), a = rand() * 2 * Math.PI;
+    const s = cfg.size[0] + rand() * (cfg.size[1] - cfg.size[0]);
+    const pos = [r * Math.cos(a), (rand() - 0.5) * cfg.thick, r * Math.sin(a)];
+    const scale = [s, s * (0.6 + rand() * 0.4), s * (0.7 + rand() * 0.3)];
+    const axis = [rand() - 0.5, rand() - 0.5, rand() - 0.5];
+    rocks.push({ pos, scale, axis: norm(axis), rate: 0.2 + rand() * 0.8, shade: 1 + (rand() - 0.5) * 2 * variety });
+  }
+  return rocks;
+}

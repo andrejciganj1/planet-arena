@@ -959,3 +959,30 @@ test("the Milky Way is a band right round the sky, brightest along its middle an
     assert.ok(milkyBand(u) < 0.25, `${d}: ${milkyBand(u)}`);
   }
 });
+
+test("the outer ring is a wide band of big rocks at 680 to 740 m, beyond the void, and the belt draws as before", async () => {
+  const { beltRocks } = await import("../src/client/look/proppose.js");
+  const { seeded: rng } = await import("../src/sim/world.js"); // any seeded stream; common.js's needs three.js
+  const { BELT, VOID_RADIUS } = await import("../src/tuning.js");
+  const R = LOOK.outerRing, rocks = beltRocks(rng(R.seed), R);
+  assert.equal(rocks.length, R.rocks);
+  assert.ok(R.inner > VOID_RADIUS, "scenery past the edge of the game");
+  for (const k of rocks) {
+    const r = Math.hypot(k.pos[0], k.pos[2]);
+    assert.ok(r >= R.inner && r <= R.outer && Math.abs(k.pos[1]) <= R.thick / 2, `${k.pos}`);
+    assert.ok(k.scale[0] >= R.size[0] && k.scale[0] <= R.size[1]);
+  }
+  // The belt takes 11 draws a rock from the renderer's shared stream, in the order it always did, so every
+  // body made after it looks as it did.
+  let n = 0;
+  const counted = () => ((n = (n + 1) % 7), 0.05 + n * 0.13);
+  const draws = (() => { let c = 0; const r = rng(3); return [() => (c++, r()), () => c]; })();
+  beltRocks(draws[0], BELT);
+  assert.equal(draws[1](), 11 * BELT.rocks);
+  const first = beltRocks(counted, { ...BELT, rocks: 1 })[0];
+  // Draws 0.18, 0.31, 0.44, 0.57, ...: radius, angle, size, height in that order.
+  const r = BELT.inner + 0.18 * (BELT.outer - BELT.inner), a = 0.31 * 2 * Math.PI;
+  assert.ok(Math.abs(first.pos[0] - r * Math.cos(a)) < 1e-9 && Math.abs(first.pos[2] - r * Math.sin(a)) < 1e-9);
+  assert.ok(Math.abs(first.pos[1] - (0.57 - 0.5) * BELT.thick) < 1e-9);
+  assert.ok(Math.abs(first.scale[0] - (BELT.size[0] + 0.44 * (BELT.size[1] - BELT.size[0]))) < 1e-9);
+});

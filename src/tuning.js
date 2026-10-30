@@ -292,6 +292,9 @@ export const LOOK = {
     flash: 0.12, grow: 0.25, burn: 0.45, ring: 0.35, ringReach: 1.6, sparks: 0.6, life: 1.6, billow: 0.6, max: 12,
     death: 2.5, light: 40, lightRange: 30, sparkCount: 28, from: 1,
   },
+  // The outer ring: scenery past the edge of the game (VOID_RADIUS), drawn like the belt with bigger rocks and
+  // its own random seed; m and s as BELT; from: the lowest quality level that draws it.
+  outerRing: { inner: 680, outer: 740, thick: 30, rocks: 700, size: [2, 8], period: 2400, seed: 31, from: 1 },
   // The third-person view (look/camerapose.js): the camera back, side (right) and lift (up) m from the eye along
   // the view; pad: m it keeps off a body in the way; range: m out the crosshair looks for where a shot lands;
   // near: m from your eye within which your own figure is hidden (it would fill the screen).

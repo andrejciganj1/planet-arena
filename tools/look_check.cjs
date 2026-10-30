@@ -69,6 +69,9 @@ function views(world) {
   }
   list.push({ name: "sun", eye: v.add(sun, v.scale(v.norm([1, 0.35, 0.6]), 90)), target: sun });
   list.push({ name: "sky", eye: [0, 60, 0], target: [300, 900, 200] });
+  // The outer ring from near the edge of the game, and from the far planet's orbit.
+  list.push({ name: "outer-ring", eye: [60, 40, 560], target: [-80, -5, 715] });
+  list.push({ name: "outer-ring-far", eye: [0, 50, 330], target: [200, 0, 700] });
   // The Milky Way towards its core, from out past the far planet so no body is in the way.
   list.push({ name: "milky-way", eye: [0, 30, 380], target: [0, 120, 1380] });
   // The dummy on the tiny planet's night side, seen from 30 m and from high up, so the dark ground is behind it.

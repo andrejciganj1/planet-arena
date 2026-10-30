@@ -100,6 +100,10 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
   const sunRadius = world.system.bodies.find((b) => b.kind === "sun").radius;
   const belt = asteroidBelt(rand);
   scene.add(belt.group);
+  // Its own random stream, so the shared one (and every body made from it) is as it was.
+  const outerRing = asteroidBelt(rng(LOOK.outerRing.seed), LOOK.outerRing, { tumble: false });
+  outerRing.group.visible = level >= LOOK.outerRing.from;
+  scene.add(outerRing.group);
 
   // Pads ride on their bodies: keep each pad's offset from its body's centre.
   const pads = world.pads.map((pad) => {
@@ -246,6 +250,7 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
         planets.setLevel(level);
         storm.setLevel(level);
         blastLooks.setLevel(level);
+        outerRing.group.visible = level >= LOOK.outerRing.from;
       }
       const dt = lastNow === null ? 0 : now - lastNow;
       lastNow = now;
@@ -267,8 +272,9 @@ export function createRenderer(world, canvas, fixedView = null, selfId = "player
       // Tails point away from the sun and grow as the comet nears it; the dust tail trails the path.
       for (const t of tails) t.look.update(cometTails(poses[t.id], world.poses[t.id].vel, poses.sun));
       const props = assets.get("props");
-      if (props) belt.dress(props), rockLook.dress(props);
+      if (props) belt.dress(props), rockLook.dress(props), outerRing.dress(props);
       belt.update(world.t + (alpha - 1) * TICK);
+      outerRing.update(world.t + (alpha - 1) * TICK);
 
       const p = world.entities[self()];
       // You, interpolated and shifted.

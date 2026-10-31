@@ -86,10 +86,10 @@ function tone(ctx, out, t0, o) {
   return end;
 }
 
-// The voices, the only sounds from files (assets/sun-kill.wav, assets/scream.wav and assets/flare-incoming.wav,
-// made with Piper, see README). The bytes are fetched as the page loads, so the first call needn't wait for the network; only in a
-// browser, since node tests load this file too. Decoding needs a context, so it waits for the first one; the
-// decoded buffer then serves every context.
+// The voices, the only sounds from files (assets/sun-kill.wav, assets/scream.wav and
+// assets/flare-incoming.wav, made with Piper, see README). The bytes are fetched as the page loads, so the
+// first call needn't wait for the network; only in a browser, since node tests load this file too. Decoding
+// needs a context, so it waits for the first one; the decoded buffer then serves every context.
 const fetched = (file) => (typeof document === "undefined" ? null
   : fetch(new URL(`../../assets/${file}`, import.meta.url))
     .then((r) => (r.ok ? r.arrayBuffer() : null))

@@ -158,6 +158,8 @@ test("a runner who steps onto the pad off-centre while the cue is on lands on th
     for (const t of times) {
       for (const side of [0, 1, 2, 3]) {
         const w = { ...createWorld(tuning), pads: [pad] };
+        // The launch alone: a flare in flight could burn the runner, which the cue doesn't foresee.
+        w.tuning = { ...w.tuning, FLARE: { ...w.tuning.FLARE, first: Infinity } };
         skipTo(w, t);
         w.entities.dummy.alive = false;
         w.entities.dummy.respawnAt = Infinity;

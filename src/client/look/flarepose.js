@@ -8,7 +8,7 @@ import { dist } from "../../sim/vec.js";
 // The banner over the game: the warning's countdown, then the burn's order; null when there is no flare.
 export function flareBanner(t, F = FLARE) {
   const f = flareAt(t, F);
-  if (f.phase === "warn") return { text: "IMMINENT SOLAR FLARE DETECTED", count: Math.ceil(f.burnAt - t) };
+  if (f.phase === "warn") return { text: "SOLAR FLARE INCOMING", count: Math.ceil(f.burnAt - t) };
   if (f.phase === "burn") return { text: "SOLAR FLARE: GET OUT OF THE LIGHT", count: null };
   return null;
 }

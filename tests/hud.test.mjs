@@ -58,8 +58,8 @@ test("the flare banner counts down the warning, then tells you to get out of the
   const { flareBanner } = await import("../src/client/look/flarepose.js");
   const { flareAt } = await import("../src/sim/flares.js");
   const f = flareAt(0);
-  assert.deepEqual(flareBanner(f.warnAt + 1), { text: "IMMINENT SOLAR FLARE DETECTED", count: 9 });
-  assert.deepEqual(flareBanner(f.warnAt + 9.5), { text: "IMMINENT SOLAR FLARE DETECTED", count: 1 });
+  assert.deepEqual(flareBanner(f.warnAt + 1), { text: "SOLAR FLARE INCOMING", count: 4 });
+  assert.deepEqual(flareBanner(f.warnAt + 4.5), { text: "SOLAR FLARE INCOMING", count: 1 });
   assert.deepEqual(flareBanner(f.burnAt + 1), { text: "SOLAR FLARE: GET OUT OF THE LIGHT", count: null });
   assert.equal(flareBanner(f.warnAt - 1), null);
   assert.equal(flareBanner(f.endAt + 1), null);

@@ -21,7 +21,7 @@ a rock leaves the belt, glowing and trailing, aimed roughly sunward. Most burn u
 planet or moon. A flying rock explodes like a rocket on a planet, moon, comet or player, and any shot
 sets one off, with the blast counted as the shooter's. Online, the server decides where they go.
 
-Every minute or two the sun flares. A warning goes up first, on screen and spoken, with 10 s to get out of
+Every minute or two the sun flares. A warning goes up first, on screen and spoken, with 5 s to get out of
 its light: the night side of a planet, or the shadow of a moon or comet. Then for 6 s it burns anyone it
 can see near it: quickly on the hot and tiny planets, more slowly on the mid planet's sunny side, not at all
 further out.
@@ -153,13 +153,15 @@ To check them without listening (Playwright through `npx`, static server running
 `NODE_PATH=$(dirname $(find ~/.npm/_npx -maxdepth 3 -path '*node_modules/playwright' | head -1)) node tools/sound_check.cjs "http://localhost:8100/sounds.html"`
 prints each sound's level and length and `OK` when all are audible, unclipped and short (loops steady).
 
-The three sounds from files are the announcer's "Sun kill!" (`assets/sun-kill.wav`), its solar flare warning,
-"Imminent solar flare detected" (`assets/flare-warning.wav`), and the scream of an alien lost in space,
-"Noooo!" (`assets/scream.wav`): all spoken by the Norman voice by Bryce Beattie (public domain,
+The three sounds from files are the announcer's "Sun kill!" (`assets/sun-kill.wav`), the scream of an alien
+lost in space, "Noooo!" (`assets/scream.wav`), and the ship's adviser warning "Solar flare incoming"
+(`assets/flare-warning.wav`). The first two are spoken by the Norman voice by Bryce Beattie (public domain,
 trained on LibriVox recordings, https://brycebeattie.com/files/tts/) with
 [Piper](https://github.com/OHF-Voice/piper1-gpl) 1.8.0, used only to make the files, then trimmed. The game
 plays the announcer deeper with its own echo, and the scream higher, its "o" held on a loop, then sagging
-away like a small creature's. The flare warning is played like the announcer.
+away like a small creature's. The flare warning is spoken by the LJSpeech voice by Bryce Beattie (public
+domain, trained on the LJ Speech dataset, same page), made the same way; the game plays it like a ship's
+intercom.
 
 ## Tuning
 

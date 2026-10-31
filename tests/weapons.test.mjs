@@ -115,6 +115,8 @@ const blastUnder = (w, e, owner) => explode(w, e.pos, owner);
 test("a rocket under the dummy on the tiny planet sends it into the sun", () => {
   for (const t of [0, 45, 90]) {
     const w = padless();
+    // The blast alone: a flare in the fall could burn the dummy first, a hazard of its own (flares.test.mjs).
+    w.tuning = { ...w.tuning, FLARE: { ...w.tuning.FLARE, first: Infinity } };
     run(w, t);
     put(w, "player", "mid", [0, 1, 0]);
     const d = put(w, "dummy", "tiny", sunward(w, "tiny"));

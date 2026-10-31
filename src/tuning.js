@@ -149,7 +149,6 @@ export const ROCK_LOOK = { trail: 60, trailSize: 1.6, glow: 1.3, glowOpacity: 0.
 export const SOUND = {
   range: 120, near: 6, own: 1, others: 0.7, gap: 0.5, stride: 1.6, stepSpeed: 2, maxVoices: 24, repeat: 0.05,
   announcerOthers: 0.4, hold: 0.15, voice: 1.5, master: 0.8, maxLoops: 8, loopKeep: 5,
-  flareVoiceAfter: 1.4, // s after a flare's alarm starts that the voice speaks, once the alarm is done
 };
 
 export const FEEDBACK = { vignetteFade: 0.4, vignetteMax: 0.7, full: 50, arcFade: 1, feedFor: 5, flash: 0.15, feedMax: 6 };

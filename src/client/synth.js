@@ -86,8 +86,8 @@ function tone(ctx, out, t0, o) {
   return end;
 }
 
-// The voices, the only sounds from files (assets/sun-kill.wav, assets/scream.wav and
-// assets/flare-incoming.wav, made with Piper, see README). The bytes are fetched as the page loads, so the
+// The two voices, the only sounds from files (assets/sun-kill.wav and assets/scream.wav, made with Piper, see
+// README). The bytes are fetched as the page loads, so the
 // first call needn't wait for the network; only in a browser, since node tests load this file too. Decoding
 // needs a context, so it waits for the first one; the decoded buffer then serves every context.
 const fetched = (file) => (typeof document === "undefined" ? null
@@ -119,11 +119,9 @@ export function voiceClip(what, bytes) {
   };
 }
 
-export const VOICE_FILES = ["sun-kill.wav", "scream.wav", "flare-incoming.wav"];
 const sunKill = voiceClip("announcer", fetched("sun-kill.wav"));
 const nooo = voiceClip("scream", fetched("scream.wav"));
-const flareWarning = voiceClip("flare warning", fetched("flare-incoming.wav"));
-export const loadVoice = (ctx) => Promise.all([sunKill.load(ctx), nooo.load(ctx), flareWarning.load(ctx)]);
+export const loadVoice = (ctx) => Promise.all([sunKill.load(ctx), nooo.load(ctx)]);
 
 // Plays a clip now if decoded; else as soon as it is, unless that is too late to still belong to the moment.
 // Returns when it ends, or a guess while it waits.
@@ -165,58 +163,6 @@ function say(ctx, out, t, line) {
   }
   src.start(t);
   return { end: t + len + ECHO[ECHO.length - 1][0] };
-}
-
-// The ship's adviser: a calm woman's voice on the intercom. Narrowed to a speaker's band with a lift where
-// speech is clearest, a faint shimmer (two slowly wavering copies a few ms behind: a processed, digital edge)
-// and one short, dark slap back from the hull. All ours; the file stays a plain voice.
-const ADVISE = { level: 0.62, band: [260, 5200], lift: [2600, 5], shimmer: [[0.011, 0.3], [0.017, 0.22]], wave: [0.7, 0.0015], slap: [0.085, 0.16, 2800] };
-
-function advise(ctx, out, t, line) {
-  const src = ctx.createBufferSource();
-  src.buffer = line;
-  const lo = ctx.createBiquadFilter(), hi = ctx.createBiquadFilter(), lift = ctx.createBiquadFilter();
-  lo.type = "highpass";
-  lo.frequency.value = ADVISE.band[0];
-  hi.type = "lowpass";
-  hi.frequency.value = ADVISE.band[1];
-  lift.type = "peaking";
-  [lift.frequency.value, lift.gain.value] = ADVISE.lift;
-  src.connect(lo);
-  lo.connect(lift);
-  lift.connect(hi);
-  // The copies and the slap add up over the line's own peak: the whole voice a little down so it never clips.
-  const down = ctx.createGain();
-  down.gain.value = ADVISE.level;
-  down.connect(out);
-  out = down;
-  hi.connect(out);
-  const lfo = ctx.createOscillator(), depth = ctx.createGain();
-  [lfo.frequency.value, depth.gain.value] = ADVISE.wave;
-  lfo.connect(depth);
-  for (const [delay, gain] of ADVISE.shimmer) {
-    const d = ctx.createDelay(0.1), g = ctx.createGain();
-    d.delayTime.value = delay;
-    depth.connect(d.delayTime);
-    g.gain.value = gain;
-    hi.connect(d);
-    d.connect(g);
-    g.connect(out);
-  }
-  const [after, level, cutoff] = ADVISE.slap, d = ctx.createDelay(0.5), f = ctx.createBiquadFilter(), g = ctx.createGain();
-  d.delayTime.value = after;
-  f.type = "lowpass";
-  f.frequency.value = cutoff;
-  g.gain.value = level;
-  hi.connect(d);
-  d.connect(f);
-  f.connect(g);
-  g.connect(out);
-  src.start(t);
-  lfo.start(t);
-  const end = t + line.duration + after + 0.05;
-  lfo.stop(end);
-  return { end };
 }
 
 // The scream: a small creature, not a sped-up man. The file is one short "No!"; its "o" is held by looping
@@ -471,8 +417,6 @@ export const RECIPES = {
     [tone, { at: k * 0.3, wave: "sawtooth", f: k % 2 ? 587 : 784, filter: ["lowpass", 2400], peak: 0.3, a: 0.01, d: 0.26 }],
     [tone, { at: k * 0.3, wave: "square", f: (k % 2 ? 587 : 784) / 2, filter: ["lowpass", 900], peak: 0.12, a: 0.01, d: 0.26 }],
   ])),
-  // "Solar flare incoming": a ship's adviser on the intercom (see advise).
-  flareVoice: (ctx, out) => voiced(ctx, out, flareWarning, advise, 2),
   // The burst: a deep, rolling roar that swells in and slowly darkens, under a high hiss of the light.
   flareRoar: (ctx, out) => shot(ctx, out, [
     [hiss, { filter: ["lowpass", 900, 0.8, 120], peak: 0.55, a: 0.12, d: 2 }],

@@ -12,8 +12,8 @@ a careless one near the sun dies.
 
 ## Changed after the playtest preview (owner, 2026-10-31)
 
-- The warning is 5 s, spoken "Solar flare incoming" by a woman's voice in the style of a ship's adviser (the
-  public-domain LJSpeech voice, processed like an intercom), with the banner "SOLAR FLARE INCOMING".
+- The warning is 5 s, with the banner "SOLAR FLARE INCOMING" and the alarm; no voice (a woman's voice was
+  tried and dropped by the owner).
 
 ## Changed with the plan (owner approved)
 

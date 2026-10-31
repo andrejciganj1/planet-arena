@@ -10,9 +10,9 @@ import { PROTOCOL, cleanInput, cleanName, entityState, applyEntity, snapshot } f
 const { TICK, COLOURS, NET } = tuning;
 const online = () => ({ ...createWorld(tuning, { solo: false }), pads: [] });
 
-test("PROTOCOL is 6", () => {
-  // The hook flying out changed the rules: an older page must be told to reload.
-  assert.equal(PROTOCOL, 6);
+test("PROTOCOL is 7", () => {
+  // The flare's warning shortened to 5 s: an older page must be told to reload.
+  assert.equal(PROTOCOL, 7);
 });
 
 test("cleanInput keeps good input and repairs or rejects the rest", () => {

@@ -37,10 +37,10 @@ test("no flare warns before 60 s, and warnings come 60 to 120 s apart", () => {
   }
 });
 
-test("each flare warns 10 s, burns 6 s, then fades 3 s", () => {
+test("each flare warns 5 s, burns 6 s, then fades 3 s", () => {
   for (const warnAt of warnings(5000).slice(0, 50)) {
     const f = flareAt(warnAt + 0.01);
-    assert.equal(f.burnAt, f.warnAt + 10);
+    assert.equal(f.burnAt, f.warnAt + 5); // the owner's 5 s warning
     assert.equal(f.endAt, f.burnAt + 6);
     assert.equal(f.phase, "warn");
     assert.equal(flareAt(f.burnAt + 0.01).phase, "burn");
@@ -99,6 +99,7 @@ test("the burn falls off with distance: full to 80 m, nothing past 150 m", () =>
 
 test("standing on Hot's sunny side you die in 4 to 5 s", () => {
   const world = createWorld(tuning);
+  world.pads = []; // no launch pad under the spot to fling the player off
   const f = burnWhere(world, () => true);
   at(world, f.burnAt - TICK / 2);
   const e = stand(world, "player", "hot", towardSun(world, "hot"));
@@ -186,6 +187,7 @@ test("the dummy burns; a cosmetic world burns nobody", () => {
 
 test("a flare death credits the last hitter as falling into the sun does", () => {
   const world = createWorld(tuning);
+  world.pads = []; // no launch pad under the spot to fling the player off
   const f = flareAt(0);
   at(world, f.burnAt);
   const e = stand(world, "player", "hot", towardSun(world, "hot"));

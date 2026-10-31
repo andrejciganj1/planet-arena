@@ -42,7 +42,7 @@ test("the list of sounds is the one Task 3 makes recipes for", () => {
   assert.deepEqual([...SOUNDS].sort(), [
     "pistol", "shotgun", "rocket", "minigun", "sniper", "railgun", "rocketFlight", "explode", "rockIncoming", "rockBurn",
     "ding", "hurt", "death", "announcer", "boink", "pickup", "pickupBack", "step", "hookFire", "hookPull", "boost",
-    "switch", "empty", "scream", "flareAlarm", "flareVoice", "flareRoar", "sizzle", "hookCatch",
+    "switch", "empty", "scream", "flareAlarm", "flareRoar", "sizzle", "hookCatch",
   ].sort());
   for (const w of tuning.WEAPON_ORDER) assert.ok(SOUNDS.includes(w), `${w} fires a sound of its own name`);
 });
@@ -442,19 +442,17 @@ function across(d, w, t0, t1) {
   return count;
 }
 
-test("a flare's warning sounds the alarm and the voice once, and its burst roars once", () => {
+test("a flare's warning sounds the alarm once, and its burst roars once", () => {
   const f = flareAt(0), d = createDirector({ selfId: "me", online: false }), w = scene();
   const count = across(d, w, f.warnAt - 1, f.burnAt + 1);
   assert.equal(count.flareAlarm, 1);
-  assert.equal(count.flareVoice, 1);
   assert.equal(count.flareRoar, 1);
 });
 
 test("joining mid-warning plays no late alarm", () => {
   const f = flareAt(0), d = createDirector({ selfId: "me", online: false }), w = scene();
-  const count = across(d, w, f.warnAt + SOUND.flareVoiceAfter + 0.5, f.burnAt - 0.5);
+  const count = across(d, w, f.warnAt + 1, f.burnAt - 0.5);
   assert.equal(count.flareAlarm, undefined);
-  assert.equal(count.flareVoice, undefined);
 });
 
 test("you hear the sizzle only while you burn", () => {
@@ -475,7 +473,6 @@ test("you hear the sizzle only while you burn", () => {
 test("a clock that jumps back over a warning doesn't sound it again", () => {
   const f = flareAt(0), d = createDirector({ selfId: "me", online: false }), w = scene();
   const first = across(d, w, f.warnAt - 0.5, f.warnAt + 0.5);
-  const again = across(d, w, f.warnAt - 2, f.warnAt + SOUND.flareVoiceAfter + 1);
+  const again = across(d, w, f.warnAt - 2, f.warnAt + 1);
   assert.equal((first.flareAlarm || 0) + (again.flareAlarm || 0), 1);
-  assert.equal(again.flareVoice || 0, 1, "the voice was still due");
 });

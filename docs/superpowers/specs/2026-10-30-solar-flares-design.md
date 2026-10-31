@@ -10,6 +10,11 @@ shadow falls pays.
 Success: a flare is unmistakable (seen, read and heard), a player who reacts in time always has a way out, and
 a careless one near the sun dies.
 
+## Changed after the playtest preview (owner, 2026-10-31)
+
+- The warning is 5 s, with the banner "SOLAR FLARE INCOMING" and the alarm; no voice (a woman's voice was
+  tried and dropped by the owner).
+
 ## Changed with the plan (owner approved)
 
 - The warning voice is a file in the same public-domain Norman voice as "Sun kill!" (made with Piper), played

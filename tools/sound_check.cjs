@@ -8,7 +8,7 @@
 // loaded before rendering, so a missing file fails its sound as too quiet.
 // Usage: NODE_PATH=... node tools/sound_check.cjs <url of sounds.html>
 const { chromium } = require("playwright");
-const LONGEST = { scream: 2.5, flareVoice: 2.6, flareRoar: 2.5, flareAlarm: 1.5 }; // s; every other one-shot 1.5
+const LONGEST = { scream: 2.5, flareRoar: 2.5, flareAlarm: 1.5 }; // s; every other one-shot 1.5
 (async () => {
   const b = await chromium.launch({ channel: "chrome" });
   const p = await b.newPage();

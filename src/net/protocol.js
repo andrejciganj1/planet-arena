@@ -5,8 +5,8 @@
 import { WEAPON_ORDER, NET } from "../tuning.js";
 import { NO_INPUT } from "../sim/entity.js";
 
-// Bumped whenever the rules change, so an older page is told to reload (6: the hook flies out).
-export const PROTOCOL = 6;
+// Bumped whenever the rules change, so an older page is told to reload (7: a 5 s flare warning).
+export const PROTOCOL = 7;
 
 const num = (x) => typeof x === "number" && Number.isFinite(x);
 const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));

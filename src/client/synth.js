@@ -86,10 +86,10 @@ function tone(ctx, out, t0, o) {
   return end;
 }
 
-// The voices, the only sounds from files (assets/sun-kill.wav, assets/scream.wav and assets/flare-warning.wav,
-// made with Piper, see README). The bytes are fetched as the page loads, so the first call needn't wait for the network; only in a
-// browser, since node tests load this file too. Decoding needs a context, so it waits for the first one; the
-// decoded buffer then serves every context.
+// The two voices, the only sounds from files (assets/sun-kill.wav and assets/scream.wav, made with Piper, see
+// README). The bytes are fetched as the page loads, so the
+// first call needn't wait for the network; only in a browser, since node tests load this file too. Decoding
+// needs a context, so it waits for the first one; the decoded buffer then serves every context.
 const fetched = (file) => (typeof document === "undefined" ? null
   : fetch(new URL(`../../assets/${file}`, import.meta.url))
     .then((r) => (r.ok ? r.arrayBuffer() : null))
@@ -119,11 +119,9 @@ export function voiceClip(what, bytes) {
   };
 }
 
-export const VOICE_FILES = ["sun-kill.wav", "scream.wav", "flare-warning.wav"];
 const sunKill = voiceClip("announcer", fetched("sun-kill.wav"));
 const nooo = voiceClip("scream", fetched("scream.wav"));
-const flareWarning = voiceClip("flare warning", fetched("flare-warning.wav"));
-export const loadVoice = (ctx) => Promise.all([sunKill.load(ctx), nooo.load(ctx), flareWarning.load(ctx)]);
+export const loadVoice = (ctx) => Promise.all([sunKill.load(ctx), nooo.load(ctx)]);
 
 // Plays a clip now if decoded; else as soon as it is, unless that is too late to still belong to the moment.
 // Returns when it ends, or a guess while it waits.
@@ -419,8 +417,6 @@ export const RECIPES = {
     [tone, { at: k * 0.3, wave: "sawtooth", f: k % 2 ? 587 : 784, filter: ["lowpass", 2400], peak: 0.3, a: 0.01, d: 0.26 }],
     [tone, { at: k * 0.3, wave: "square", f: (k % 2 ? 587 : 784) / 2, filter: ["lowpass", 900], peak: 0.12, a: 0.01, d: 0.26 }],
   ])),
-  // "Imminent solar flare detected": the announcer's voice and hall, read from its file like "Sun kill!".
-  flareVoice: (ctx, out) => voiced(ctx, out, flareWarning, say, 2.3),
   // The burst: a deep, rolling roar that swells in and slowly darkens, under a high hiss of the light.
   flareRoar: (ctx, out) => shot(ctx, out, [
     [hiss, { filter: ["lowpass", 900, 0.8, 120], peak: 0.55, a: 0.12, d: 2 }],

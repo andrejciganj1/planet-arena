@@ -86,7 +86,7 @@ function tone(ctx, out, t0, o) {
   return end;
 }
 
-// The voices, the only sounds from files (assets/sun-kill.wav, assets/scream.wav and assets/flare-warning.wav,
+// The voices, the only sounds from files (assets/sun-kill.wav, assets/scream.wav and assets/flare-incoming.wav,
 // made with Piper, see README). The bytes are fetched as the page loads, so the first call needn't wait for the network; only in a
 // browser, since node tests load this file too. Decoding needs a context, so it waits for the first one; the
 // decoded buffer then serves every context.
@@ -119,10 +119,10 @@ export function voiceClip(what, bytes) {
   };
 }
 
-export const VOICE_FILES = ["sun-kill.wav", "scream.wav", "flare-warning.wav"];
+export const VOICE_FILES = ["sun-kill.wav", "scream.wav", "flare-incoming.wav"];
 const sunKill = voiceClip("announcer", fetched("sun-kill.wav"));
 const nooo = voiceClip("scream", fetched("scream.wav"));
-const flareWarning = voiceClip("flare warning", fetched("flare-warning.wav"));
+const flareWarning = voiceClip("flare warning", fetched("flare-incoming.wav"));
 export const loadVoice = (ctx) => Promise.all([sunKill.load(ctx), nooo.load(ctx), flareWarning.load(ctx)]);
 
 // Plays a clip now if decoded; else as soon as it is, unless that is too late to still belong to the moment.

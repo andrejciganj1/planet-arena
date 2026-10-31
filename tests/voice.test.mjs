@@ -47,7 +47,7 @@ test("the engine loads the announcer's voice when the context is made and when i
 
 test("the flare's warning is a voice file like the announcer's: 22.05 kHz mono 16-bit, short and small", async () => {
   const { readFileSync } = await import("node:fs");
-  const b = readFileSync(new URL("../assets/flare-warning.wav", import.meta.url));
+  const b = readFileSync(new URL("../assets/flare-incoming.wav", import.meta.url));
   const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
   assert.equal(v.getUint16(22, true), 1, "mono");
   assert.equal(v.getUint32(24, true), 22050, "22.05 kHz");
@@ -56,5 +56,5 @@ test("the flare's warning is a voice file like the announcer's: 22.05 kHz mono 1
   assert.ok(secs > 1 && secs < 2.2, `${secs} s`);
   assert.ok(b.byteLength < 200000);
   const { VOICE_FILES } = await import("../src/client/synth.js");
-  assert.ok(VOICE_FILES.includes("flare-warning.wav"), "the page loads it");
+  assert.ok(VOICE_FILES.includes("flare-incoming.wav"), "the page loads it");
 });

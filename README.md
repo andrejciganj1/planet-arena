@@ -155,7 +155,7 @@ prints each sound's level and length and `OK` when all are audible, unclipped an
 
 The three sounds from files are the announcer's "Sun kill!" (`assets/sun-kill.wav`), the scream of an alien
 lost in space, "Noooo!" (`assets/scream.wav`), and the ship's adviser warning "Solar flare incoming"
-(`assets/flare-warning.wav`). The first two are spoken by the Norman voice by Bryce Beattie (public domain,
+(`assets/flare-incoming.wav`). The first two are spoken by the Norman voice by Bryce Beattie (public domain,
 trained on LibriVox recordings, https://brycebeattie.com/files/tts/) with
 [Piper](https://github.com/OHF-Voice/piper1-gpl) 1.8.0, used only to make the files, then trimmed. The game
 plays the announcer deeper with its own echo, and the scream higher, its "o" held on a loop, then sagging
